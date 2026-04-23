@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest } from '@/lib/supabase'
 
+function randomColor() {
+  const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a']
+  return colors[Math.floor(Math.random() * colors.length)]
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null)
   const [categories, setCategories] = useState<Category[]>([])
@@ -94,8 +99,12 @@ export default function Dashboard() {
 
   async function addCategory() {
     if (!newCategory.name || !user) return
-    await supabase.from('categories').insert({ user_id: user.id, ...newCategory })
-    setNewCategory({ name: '', color: '#4da6ff' })
+    await supabase.from('categories').insert({
+      user_id: user.id,
+      name: newCategory.name,
+      color: randomColor(),
+    })
+    setNewCategory({ name: '', color: '' })
     setShowAddCategory(false)
     loadData(user.id)
   }
@@ -186,11 +195,17 @@ export default function Dashboard() {
             <span style={{ marginLeft: 'auto', fontSize: 11, color: '#444' }}>{channels.length}</span>
           </div>
           {categories.map(cat => (
-            <div key={cat.id} onClick={() => setFilterCat(cat.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 13, color: filterCat === cat.id ? '#f0f0f0' : '#666' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0, display: 'inline-block' }} />
-              {cat.name}
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#444' }}>{channels.filter(c => c.category_id === cat.id).length}</span>
+            <div key={cat.id}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6, fontSize: 13, color: filterCat === cat.id ? '#f0f0f0' : '#666' }}>
+              <span onClick={() => setFilterCat(cat.id)} style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0, display: 'inline-block', cursor: 'pointer' }} />
+              <span onClick={() => setFilterCat(cat.id)} style={{ flex: 1, cursor: 'pointer' }}>{cat.name}</span>
+              <span style={{ fontSize: 11, color: '#444' }}>{channels.filter(c => c.category_id === cat.id).length}</span>
+              <span onClick={() => deleteCategory(cat.id)}
+                style={{ color: '#444', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3 }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#ff4757')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#444')}>
+                ✕
+              </span>
             </div>
           ))}
         </div>
@@ -255,9 +270,8 @@ export default function Dashboard() {
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>새 카테고리</div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <input value={newCategory.name} onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
+                      onKeyDown={e => e.key === 'Enter' && addCategory()}
                       placeholder="카테고리 이름" style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                    <input type="color" value={newCategory.color} onChange={e => setNewCategory({ ...newCategory, color: e.target.value })}
-                      style={{ width: 40, height: 36, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'transparent' }} />
                     <button onClick={addCategory}
                       style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                       추가
