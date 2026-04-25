@@ -62,6 +62,9 @@ export async function POST(req: Request) {
       const videos = await getYesterdayVideos(channelId)
 
       for (const video of videos) {
+        // API 한도 방지를 위한 딜레이
+        await new Promise(r => setTimeout(r, 1500))
+
         // 자막 + 설명 추출
         const { transcript, description } = await getTranscript(video.videoId)
 
