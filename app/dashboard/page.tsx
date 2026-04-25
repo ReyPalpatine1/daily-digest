@@ -87,11 +87,18 @@ export default function Dashboard() {
   }
 
   async function addChannel() {
-    if (!newChannel.url || !user) return
+    if (!newChannel.url.trim()) {
+      alert('채널 URL을 입력해 주세요.')
+      return
+    }
+    if (!newChannel.alias.trim()) {
+      alert('채널 별칭을 입력해 주세요.')
+      return
+    }
     await supabase.from('channels').insert({
       user_id: user.id,
-      url: newChannel.url,
-      alias: newChannel.alias || newChannel.url,
+      url: newChannel.url.trim(),
+      alias: newChannel.alias.trim(),
       emoji: newChannel.emoji,
       category_id: newChannel.category_id || null,
     })
@@ -108,10 +115,13 @@ export default function Dashboard() {
   }
 
   async function addCategory() {
-    if (!newCategory.name || !user) return
+    if (!newCategory.name.trim()) {
+      alert('카테고리 이름을 입력해 주세요.')
+      return
+    }
     await supabase.from('categories').insert({
       user_id: user.id,
-      name: newCategory.name,
+      name: newCategory.name.trim(),
       color: randomColor(categories.map(c => c.color)),
     })
     setNewCategory({ name: '', color: '' })
@@ -325,6 +335,10 @@ export default function Dashboard() {
                     <input value={newCategory.name} onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
                       onKeyDown={e => e.key === 'Enter' && addCategory()}
                       placeholder="카테고리 이름" style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
+                    <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }}
+                      style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13 }}>
+                      취소
+                    </button>
                     <button onClick={addCategory}
                       style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                       추가
