@@ -73,13 +73,15 @@ export default function Dashboard() {
 
   async function loadData(userId: string) {
     const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }] = await Promise.all([
-      supabase.from('categories').select('*').eq('user_id', userId).order('name', { ascending: true }),
-      supabase.from('channels').select('*').eq('user_id', userId).order('alias', { ascending: true }),
+      supabase.from('categories').select('*').eq('user_id', userId),
+      supabase.from('channels').select('*').eq('user_id', userId),
       supabase.from('settings').select('*').eq('user_id', userId).single(),
       supabase.from('digests').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(200),
     ])
-    setCategories(cats ?? [])
-    setChannels(chs ?? [])
+    const sortedCats = (cats ?? []).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    const sortedChs = (chs ?? []).sort((a, b) => a.alias.localeCompare(b.alias, 'ko'))
+    setCategories(sortedCats)
+    setChannels(sortedChs)
     setSettings(sets)
     setDigests(digs ?? [])
   }
