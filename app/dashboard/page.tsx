@@ -101,7 +101,8 @@ export default function Dashboard() {
   }
 
   async function deleteChannel(id: string) {
-    if (!confirm('이 채널을 삭제할까요?')) return
+    const channel = channels.find(c => c.id === id)
+    if (!confirm(`${channel?.alias} 채널을 삭제할까요?`)) return
     await supabase.from('channels').delete().eq('id', id)
     loadData(user.id)
   }
@@ -119,8 +120,8 @@ export default function Dashboard() {
   }
 
   async function deleteCategory(id: string) {
-    if (!confirm('카테고리를 삭제할까요?\n포함된 채널은 삭제되지 않고 미분류로 이동됩니다.')) return
-    // 해당 카테고리 채널들 미분류로 이동
+    const category = categories.find(c => c.id === id)
+    if (!confirm(`${category?.name} 카테고리를 삭제할까요?\n포함된 채널은 삭제되지 않고 미분류로 이동됩니다.`)) return
     await supabase.from('channels').update({ category_id: null }).eq('category_id', id)
     await supabase.from('categories').delete().eq('id', id)
     loadData(user.id)
