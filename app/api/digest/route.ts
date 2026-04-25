@@ -96,6 +96,7 @@ export async function POST(req: Request) {
           key_points: summary.keyPoints,
           timeline: summary.timeline,
           is_breaking: isBreaking,
+          summary_basis: summary.summaryBasis,
         })
 
         // 속보 즉시 발송

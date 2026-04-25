@@ -62,6 +62,9 @@ function buildEmailHtml(items: DigestItem[], userName: string): string {
           <div style="font-size:12px;color:#999;margin-bottom:12px">
             🕐 ${formatTime(item.video.publishedAt)} 업로드
           </div>
+          <div style="font-size:11px;color:#999;margin-bottom:6px">
+            📌 ${item.summary.summaryBasis ?? '요약'}
+          </div>
           <p style="font-size:14px;color:#333;line-height:1.7;margin:0 0 12px">
             ${item.summary.summary}
           </p>
