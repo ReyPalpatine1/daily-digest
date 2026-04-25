@@ -59,12 +59,22 @@ ${content || '(자막 및 설명 없음)'}
     )
 
     const data = await res.json()
+    if (data.error) {
+      console.log('❌ Gemini API 에러:', JSON.stringify(data.error))
+      throw new Error(data.error.message)
+    }
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!text) {
+      console.log('❌ Gemini 응답 비어있음:', JSON.stringify(data))
+      throw new Error('빈 응답')
+    }
     const clean = text.replace(/```json|```/g, '').trim()
+    console.log('📝 Gemini 응답 일부:', clean.slice(0, 200))
     const parsed = JSON.parse(clean)
 
     return { ...parsed, summaryBasis }
-  } catch {
+  } catch (e) {
+    console.log('❌ Gemini 요약 에러:', e)
     return {
       summary: '요약을 가져오지 못했습니다.',
       keyPoints: [],
