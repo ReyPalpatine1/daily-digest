@@ -22,6 +22,10 @@ export default function Dashboard() {
   const [showAddCategory, setShowAddCategory] = useState(false)
   const [filterCat, setFilterCat] = useState<string | null>(null)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'breaking'>('all')
+  const [historySearch, setHistorySearch] = useState('')
+  const [historyDate, setHistoryDate] = useState('')
+  const [historyChannel, setHistoryChannel] = useState('')
+  const [historyCategory, setHistoryCategory] = useState('')
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
   const [newKeyword, setNewKeyword] = useState('')
@@ -193,7 +197,17 @@ export default function Dashboard() {
 
   const filteredChannels = filterCat ? channels.filter(c => c.category_id === filterCat) : channels
   const getCatById = (id: string | null) => categories.find(c => c.id === id)
-  const filteredDigests = historyFilter === 'breaking' ? digests.filter(d => d.is_breaking) : digests
+  const filteredDigests = digests.filter(d => {
+    if (historyFilter === 'breaking' && !d.is_breaking) return false
+    if (historySearch && !d.video_title.toLowerCase().includes(historySearch.toLowerCase()) && !d.summary?.toLowerCase().includes(historySearch.toLowerCase())) return false
+    if (historyDate && !d.created_at.startsWith(historyDate)) return false
+    if (historyChannel && d.channel_alias !== historyChannel) return false
+    if (historyCategory && d.category_name !== historyCategory) return false
+    return true
+  })
+
+  const uniqueChannels = [...new Set(digests.map(d => d.channel_alias))].sort()
+  const uniqueCategories = [...new Set(digests.map(d => d.category_name))].filter(Boolean).sort()
 
   const s = { background: '#0a0a0a', color: '#f0f0f0', minHeight: '100vh', display: 'flex', fontFamily: 'sans-serif' }
 
@@ -508,19 +522,63 @@ export default function Dashboard() {
           {/* 열람 기록 탭 */}
           {activeTab === 'history' && (
             <>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-                {[
-                  { key: 'all', label: '전체' },
-                  { key: 'breaking', label: '🚨 속보만' },
-                ].map(f => (
-                  <div key={f.key} onClick={() => setHistoryFilter(f.key as any)}
-                    style={{ padding: '7px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', background: historyFilter === f.key ? '#1a1a1a' : 'transparent', color: historyFilter === f.key ? '#f0f0f0' : '#666' }}>
-                    {f.label}
+              <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  {[
+                    { key: 'all', label: '전체' },
+                    { key: 'breaking', label: '🚨 속보만' },
+                  ].map(f => (
+                    <div key={f.key} onClick={() => setHistoryFilter(f.key as any)}
+                      style={{ padding: '7px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', background: historyFilter === f.key ? '#1a1a1a' : 'transparent', color: historyFilter === f.key ? '#f0f0f0' : '#666', border: '1px solid #333' }}>
+                      {f.label}
+                    </div>
+                  ))}
+                  <div style={{ marginLeft: 'auto', fontSize: 13, color: '#666', display: 'flex', alignItems: 'center' }}>
+                    총 {filteredDigests.length}개
                   </div>
-                ))}
-                <div style={{ marginLeft: 'auto', fontSize: 13, color: '#666', display: 'flex', alignItems: 'center' }}>
-                  총 {filteredDigests.length}개
                 </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8 }}>
+                  <input
+                    value={historySearch}
+                    onChange={e => setHistorySearch(e.target.value)}
+                    placeholder="🔍 제목 또는 내용 검색"
+                    style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}
+                  />
+                  <input
+                    type="date"
+                    value={historyDate}
+                    onChange={e => setHistoryDate(e.target.value)}
+                    style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}
+                  />
+                  <select
+                    value={historyChannel}
+                    onChange={e => setHistoryChannel(e.target.value)}
+                    style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}>
+                    <option value="">모든 채널</option>
+                    {uniqueChannels.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+                  </select>
+                  <select
+                    value={historyCategory}
+                    onChange={e => setHistoryCategory(e.target.value)}
+                    style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}>
+                    <option value="">모든 카테고리</option>
+                    {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+
+                {(historySearch || historyDate || historyChannel || historyCategory) && (
+                  <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={() => {
+                      setHistorySearch('')
+                      setHistoryDate('')
+                      setHistoryChannel('')
+                      setHistoryCategory('')
+                    }} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 12 }}>
+                      필터 초기화
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
