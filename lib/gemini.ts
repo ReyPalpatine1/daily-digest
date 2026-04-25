@@ -1,5 +1,3 @@
-import { YoutubeTranscript } from 'youtube-transcript'
-
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 
 export type SummaryResult = {
@@ -80,23 +78,44 @@ export async function getTranscript(videoId: string): Promise<{ transcript: stri
   let transcript = ''
   let description = ''
 
-  // 1. youtube-transcript 라이브러리로 시도
+  // Supadata API로 자막 추출
   try {
-    const items = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'ko' })
-    transcript = items.map(i => i.text).join(' ')
-    console.log(`✅ 한국어 자막 추출 성공: ${videoId}`)
-  } catch {
-    // 한국어 자막 없으면 기본 언어로 시도
-    try {
-      const items = await YoutubeTranscript.fetchTranscript(videoId)
-      transcript = items.map(i => i.text).join(' ')
-      console.log(`✅ 기본 자막 추출 성공: ${videoId}`)
-    } catch {
-      console.log(`❌ 자막 추출 실패: ${videoId}`)
+    const res = await fetch(
+      `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&lang=ko&text=true`,
+      {
+        headers: {
+          'x-api-key': process.env.SUPADATA_API_KEY!,
+        },
+      }
+    )
+
+    if (res.ok) {
+      const data = await res.json()
+      transcript = data.content ?? ''
+      console.log(`✅ Supadata 자막 추출 성공: ${videoId}`)
+    } else {
+      // 한국어 없으면 기본 언어로 재시도
+      const fallback = await fetch(
+        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true`,
+        {
+          headers: {
+            'x-api-key': process.env.SUPADATA_API_KEY!,
+          },
+        }
+      )
+      if (fallback.ok) {
+        const data = await fallback.json()
+        transcript = data.content ?? ''
+        console.log(`✅ Supadata 기본 자막 추출 성공: ${videoId}`)
+      } else {
+        console.log(`❌ Supadata 자막 추출 실패: ${videoId}`)
+      }
     }
+  } catch (e) {
+    console.log(`❌ Supadata 에러: ${videoId}`, e)
   }
 
-  // 2. 영상 설명 추출 시도
+  // 영상 설명 추출 시도
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
