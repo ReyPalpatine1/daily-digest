@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest } from '@/lib/supabase'
 
-function randomColor() {
-  const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a']
-  return colors[Math.floor(Math.random() * colors.length)]
+function randomColor(usedColors: string[] = []) {
+  const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
+  const available = colors.filter(c => !usedColors.includes(c))
+  const pool = available.length > 0 ? available : colors
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 export default function Dashboard() {
@@ -97,6 +99,7 @@ export default function Dashboard() {
   }
 
   async function deleteChannel(id: string) {
+    if (!confirm('이 채널을 삭제할까요?')) return
     await supabase.from('channels').delete().eq('id', id)
     loadData(user.id)
   }
@@ -106,7 +109,7 @@ export default function Dashboard() {
     await supabase.from('categories').insert({
       user_id: user.id,
       name: newCategory.name,
-      color: randomColor(),
+      color: randomColor(categories.map(c => c.color)),
     })
     setNewCategory({ name: '', color: '' })
     setShowAddCategory(false)
@@ -114,6 +117,9 @@ export default function Dashboard() {
   }
 
   async function deleteCategory(id: string) {
+    if (!confirm('카테고리를 삭제할까요?\n포함된 채널은 삭제되지 않고 미분류로 이동됩니다.')) return
+    // 해당 카테고리 채널들 미분류로 이동
+    await supabase.from('channels').update({ category_id: null }).eq('category_id', id)
     await supabase.from('categories').delete().eq('id', id)
     loadData(user.id)
   }
