@@ -28,6 +28,10 @@ export default function Dashboard() {
   const [newChannel, setNewChannel] = useState({ url: '', alias: '', emoji: '📺', category_id: '' })
   const [newCategory, setNewCategory] = useState({ name: '', color: '#4da6ff' })
 
+  const [editingCat, setEditingCat] = useState<string | null>(null)
+  const [editingCatName, setEditingCatName] = useState('')
+  const [movingChannel, setMovingChannel] = useState<string | null>(null)
+
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { window.location.href = '/'; return }
@@ -114,6 +118,20 @@ export default function Dashboard() {
     loadData(user.id)
   }
 
+  async function updateCategoryName(id: string, name: string) {
+    if (!name.trim()) return
+    await supabase.from('categories').update({ name: name.trim() }).eq('id', id)
+    setEditingCat(null)
+    setEditingCatName('')
+    loadData(user.id)
+  }
+
+  async function moveChannel(channelId: string, categoryId: string) {
+    await supabase.from('channels').update({ category_id: categoryId || null }).eq('id', channelId)
+    setMovingChannel(null)
+    loadData(user.id)
+  }
+
   async function saveSettings(updated: Partial<Settings>) {
     if (!user) return
     const merged = { ...settings, ...updated, user_id: user.id }
@@ -195,17 +213,43 @@ export default function Dashboard() {
             <span style={{ marginLeft: 'auto', fontSize: 11, color: '#444' }}>{channels.length}</span>
           </div>
           {categories.map(cat => (
-            <div key={cat.id}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6, fontSize: 13, color: filterCat === cat.id ? '#f0f0f0' : '#666' }}>
-              <span onClick={() => setFilterCat(cat.id)} style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0, display: 'inline-block', cursor: 'pointer' }} />
-              <span onClick={() => setFilterCat(cat.id)} style={{ flex: 1, cursor: 'pointer' }}>{cat.name}</span>
-              <span style={{ fontSize: 11, color: '#444' }}>{channels.filter(c => c.category_id === cat.id).length}</span>
-              <span onClick={() => deleteCategory(cat.id)}
-                style={{ color: '#444', cursor: 'pointer', fontSize: 11, padding: '1px 4px', borderRadius: 3 }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#ff4757')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#444')}>
-                ✕
-              </span>
+            <div key={cat.id} style={{ marginBottom: 2 }}>
+              {editingCat === cat.id ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px' }}>
+                  <input
+                    autoFocus
+                    value={editingCatName}
+                    onChange={e => setEditingCatName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') updateCategoryName(cat.id, editingCatName)
+                      if (e.key === 'Escape') setEditingCat(null)
+                    }}
+                    style={{ flex: 1, background: '#222', border: '1px solid #e8ff47', borderRadius: 4, padding: '3px 6px', color: '#f0f0f0', fontSize: 12, outline: 'none' }}
+                  />
+                  <span onClick={() => updateCategoryName(cat.id, editingCatName)}
+                    style={{ color: '#e8ff47', cursor: 'pointer', fontSize: 11 }}>✓</span>
+                  <span onClick={() => setEditingCat(null)}
+                    style={{ color: '#666', cursor: 'pointer', fontSize: 11 }}>✕</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6, fontSize: 13, color: filterCat === cat.id ? '#f0f0f0' : '#666' }}>
+                  <span onClick={() => setFilterCat(cat.id)} style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0, display: 'inline-block', cursor: 'pointer' }} />
+                  <span onClick={() => setFilterCat(cat.id)} style={{ flex: 1, cursor: 'pointer' }}>{cat.name}</span>
+                  <span style={{ fontSize: 11, color: '#444' }}>{channels.filter(c => c.category_id === cat.id).length}</span>
+                  <span onClick={() => { setEditingCat(cat.id); setEditingCatName(cat.name) }}
+                    style={{ color: '#444', cursor: 'pointer', fontSize: 11, padding: '1px 4px' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#e8ff47')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#444')}>
+                    ✎
+                  </span>
+                  <span onClick={() => deleteCategory(cat.id)}
+                    style={{ color: '#444', cursor: 'pointer', fontSize: 11, padding: '1px 4px' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#ff4757')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#444')}>
+                    ✕
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -339,6 +383,25 @@ export default function Dashboard() {
                         <div style={{ padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500, background: cat.color + '22', color: cat.color, flexShrink: 0 }}>
                           {cat.name}
                         </div>
+                      )}
+                      {movingChannel === ch.id ? (
+                        <select
+                          autoFocus
+                          defaultValue={ch.category_id ?? ''}
+                          onChange={e => moveChannel(ch.id, e.target.value)}
+                          onBlur={() => setMovingChannel(null)}
+                          style={{ background: '#1a1a1a', border: '1px solid #e8ff47', borderRadius: 6, padding: '4px 8px', color: '#f0f0f0', fontSize: 12, cursor: 'pointer' }}>
+                          <option value="">미분류</option>
+                          {categories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button onClick={() => setMovingChannel(ch.id)}
+                          title="카테고리 이동"
+                          style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 13 }}>
+                          ↔
+                        </button>
                       )}
                       <button onClick={() => deleteChannel(ch.id)}
                         style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 13 }}>✕</button>
