@@ -73,8 +73,8 @@ export default function Dashboard() {
 
   async function loadData(userId: string) {
     const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }] = await Promise.all([
-      supabase.from('categories').select('*').eq('user_id', userId).order('created_at'),
-      supabase.from('channels').select('*').eq('user_id', userId).order('created_at'),
+      supabase.from('categories').select('*').eq('user_id', userId).order('name', { ascending: true }),
+      supabase.from('channels').select('*').eq('user_id', userId).order('alias', { ascending: true }),
       supabase.from('settings').select('*').eq('user_id', userId).single(),
       supabase.from('digests').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(200),
     ])
