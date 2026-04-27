@@ -245,10 +245,8 @@ export default function Dashboard() {
   return (
     <div style={s}>
       {/* 사이드바 */}
-      {isMobile && (
-        <div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
-      )}
-      <aside className={`${isMobile ? 'sidebar-mobile' : ''} ${sidebarOpen ? 'open' : ''}`}
+      <div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
+      <aside className={`sidebar-mobile ${sidebarOpen ? 'open' : ''}`}
         style={{ width: 220, minWidth: 220, background: '#111', borderRight: '1px solid #222', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '24px 20px', borderBottom: '1px solid #222' }}>
           <div style={{ fontFamily: 'monospace', fontSize: 20, color: '#e8ff47', fontWeight: 700 }}>DAILY DIGEST</div>
