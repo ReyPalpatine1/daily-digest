@@ -355,32 +355,32 @@ export default function Dashboard() {
           {activeTab === 'channels' && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowAddCategory(!showAddCategory)}
-                style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13 }}>
-                + 카테고리
+                style={{ padding: isMobile ? '6px 10px' : '8px 14px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: isMobile ? 12 : 13 }}>
+                + {isMobile ? '분류' : '카테고리'}
               </button>
               <button onClick={() => setShowAddChannel(!showAddChannel)}
-                style={{ padding: '8px 14px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                + 채널 추가
+                style={{ padding: isMobile ? '6px 10px' : '8px 14px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: isMobile ? 12 : 13, fontWeight: 600 }}>
+                + 채널
               </button>
             </div>
           )}
         </div>
 
-        <div style={{ padding: '24px 28px' }}>
+        <div style={{ padding: isMobile ? '16px' : '24px 28px' }}>
 
           {/* 채널 탭 */}
           {activeTab === 'channels' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(3,1fr)', gap: isMobile ? 8 : 12, marginBottom: isMobile ? 16 : 24 }}>
                 {[
                   { label: '구독 채널', value: channels.length, unit: '개' },
                   { label: '카테고리', value: categories.length, unit: '개' },
                   { label: '저장된 기록', value: digests.length, unit: '개' },
                 ].map(s => (
-                  <div key={s.label} style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 16 }}>
-                    <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>{s.label}</div>
-                    <div style={{ fontFamily: 'monospace', fontSize: 28, color: '#e8ff47' }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{s.unit}</div>
+                  <div key={s.label} style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: isMobile ? 12 : 16 }}>
+                    <div style={{ fontSize: isMobile ? 10 : 11, color: '#666', marginBottom: isMobile ? 4 : 8 }}>{s.label}</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: isMobile ? 22 : 28, color: '#e8ff47' }}>{s.value}</div>
+                    <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>{s.unit}</div>
                   </div>
                 ))}
               </div>
@@ -407,7 +407,7 @@ export default function Dashboard() {
               {showAddChannel && (
                 <div style={{ background: '#111', border: '1px solid #333', borderRadius: 10, padding: 20, marginBottom: 16 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>새 채널 추가</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, marginBottom: 10 }}>
                     {[
                       { label: '채널 URL', key: 'url', placeholder: 'https://youtube.com/@channelname' },
                       { label: '채널 별칭', key: 'alias', placeholder: '표시할 이름' },
@@ -610,7 +610,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr 1fr', gap: 8 }}>
                   <div style={{ position: 'relative' }}>
                     <input
                       value={historySearch}
