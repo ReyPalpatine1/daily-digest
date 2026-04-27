@@ -37,6 +37,8 @@ export default function Dashboard() {
   const [editingCat, setEditingCat] = useState<string | null>(null)
   const [editingCatName, setEditingCatName] = useState('')
   const [movingChannel, setMovingChannel] = useState<string | null>(null)
+  const [editingChannel, setEditingChannel] = useState<string | null>(null)
+  const [editChannelData, setEditChannelData] = useState({ alias: '', emoji: '', url: '' })
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -152,6 +154,26 @@ export default function Dashboard() {
   async function moveChannel(channelId: string, categoryId: string) {
     await supabase.from('channels').update({ category_id: categoryId || null }).eq('id', channelId)
     setMovingChannel(null)
+    loadData(user.id)
+  }
+
+  async function updateChannel(id: string) {
+    if (!editChannelData.alias.trim()) {
+      alert('채널 별칭을 입력해 주세요.')
+      return
+    }
+    if (!editChannelData.url.trim()) {
+      alert('채널 URL을 입력해 주세요.')
+      return
+    }
+    await supabase.from('channels').update({
+      alias: editChannelData.alias.trim(),
+      emoji: editChannelData.emoji || '📺',
+      url: editChannelData.url.trim(),
+      channel_id: null, // URL 바뀌면 channel_id 재추출
+    }).eq('id', id)
+    setEditingChannel(null)
+    setEditChannelData({ alias: '', emoji: '', url: '' })
     loadData(user.id)
   }
 
@@ -407,6 +429,30 @@ export default function Dashboard() {
                   </div>
                 ) : filteredChannels.map(ch => {
                   const cat = getCatById(ch.category_id)
+                  if (editingChannel === ch.id) {
+                    return (
+                      <div key={ch.id} style={{ background: '#111', border: '1px solid #e8ff47', borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: '#e8ff47' }}>채널 수정</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1.5fr', gap: 8, marginBottom: 10 }}>
+                          <input value={editChannelData.emoji} onChange={e => setEditChannelData({ ...editChannelData, emoji: e.target.value })}
+                            placeholder="📺" maxLength={2}
+                            style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px', color: '#f0f0f0', fontSize: 13, textAlign: 'center', outline: 'none' }} />
+                          <input value={editChannelData.alias} onChange={e => setEditChannelData({ ...editChannelData, alias: e.target.value })}
+                            placeholder="채널 별칭"
+                            style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
+                          <input value={editChannelData.url} onChange={e => setEditChannelData({ ...editChannelData, url: e.target.value })}
+                            placeholder="채널 URL"
+                            style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <button onClick={() => { setEditingChannel(null); setEditChannelData({ alias: '', emoji: '', url: '' }) }}
+                            style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 12 }}>취소</button>
+                          <button onClick={() => updateChannel(ch.id)}
+                            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>저장</button>
+                        </div>
+                      </div>
+                    )
+                  }
                   return (
                     <div key={ch.id} style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
                       <div style={{ width: 40, height: 40, borderRadius: '50%', background: cat ? cat.color + '22' : '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
@@ -440,6 +486,11 @@ export default function Dashboard() {
                           ↔
                         </button>
                       )}
+                      <button onClick={() => { setEditingChannel(ch.id); setEditChannelData({ alias: ch.alias, emoji: ch.emoji, url: ch.url }) }}
+                        title="채널 수정"
+                        style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 13 }}>
+                        ✎
+                      </button>
                       <button onClick={() => deleteChannel(ch.id)}
                         style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 13 }}>✕</button>
                     </div>
@@ -610,7 +661,7 @@ export default function Dashboard() {
                           <span style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{digest.video_title}</span>
                         </div>
                         <div style={{ fontSize: 12, color: '#666' }}>
-                          {digest.channel_alias} · {digest.category_name} · 📅 발송일 {new Date(digest.created_at).toLocaleDateString('ko-KR')} · 🎬 게시일 {digest.published_at ? new Date(digest.published_at).toLocaleDateString('ko-KR') : '-'}
+                          {digest.channel_alias} · {digest.category_name} · 🎬 게시일 {digest.published_at ? new Date(digest.published_at).toLocaleDateString('ko-KR') : '-'} · 📅 발송일 {new Date(digest.created_at).toLocaleDateString('ko-KR')}
                         </div>
                       </div>
                       <div style={{ color: '#444', fontSize: 12, flexShrink: 0 }}>
