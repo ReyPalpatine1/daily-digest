@@ -249,16 +249,22 @@ export default function Dashboard() {
             <div key={cat.id} style={{ marginBottom: 2 }}>
               {editingCat === cat.id ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px' }}>
-                  <input
-                    autoFocus
-                    value={editingCatName}
-                    onChange={e => setEditingCatName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') updateCategoryName(cat.id, editingCatName)
-                      if (e.key === 'Escape') setEditingCat(null)
-                    }}
-                    style={{ flex: 1, background: '#222', border: '1px solid #e8ff47', borderRadius: 4, padding: '3px 6px', color: '#f0f0f0', fontSize: 12, outline: 'none' }}
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      value={historySearch}
+                      onChange={e => setHistorySearch(e.target.value)}
+                      placeholder="🔍 제목 또는 내용 검색"
+                      style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 36px 8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    {historySearch && (
+                      <span onClick={() => setHistorySearch('')}
+                        style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#666', fontSize: 14, padding: '2px 6px', borderRadius: 4 }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#f0f0f0')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#666')}>
+                        ✕
+                      </span>
+                    )}
+                  </div>
                   <span onClick={() => updateCategoryName(cat.id, editingCatName)}
                     style={{ color: '#e8ff47', cursor: 'pointer', fontSize: 11 }}>✓</span>
                   <span onClick={() => setEditingCat(null)}
@@ -549,6 +555,7 @@ export default function Dashboard() {
                     type="date"
                     value={historyDate}
                     onChange={e => setHistoryDate(e.target.value)}
+                    title="발송일 기준 필터"
                     style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}
                   />
                   <select
@@ -599,7 +606,7 @@ export default function Dashboard() {
                           <span style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{digest.video_title}</span>
                         </div>
                         <div style={{ fontSize: 12, color: '#666' }}>
-                          {digest.channel_alias} · {digest.category_name} · {new Date(digest.created_at).toLocaleDateString('ko-KR')}
+                          {digest.channel_alias} · {digest.category_name} · 📅 발송일 {new Date(digest.created_at).toLocaleDateString('ko-KR')} · 🎬 게시일 {digest.published_at ? new Date(digest.published_at).toLocaleDateString('ko-KR') : '-'}
                         </div>
                       </div>
                       <div style={{ color: '#444', fontSize: 12, flexShrink: 0 }}>
