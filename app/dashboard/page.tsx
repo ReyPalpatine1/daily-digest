@@ -387,18 +387,20 @@ export default function Dashboard() {
               {showAddCategory && (
                 <div style={{ background: '#111', border: '1px solid #333', borderRadius: 10, padding: 20, marginBottom: 16 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>새 카테고리</div>
-                  <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
                     <input value={newCategory.name} onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
                       onKeyDown={e => e.key === 'Enter' && addCategory()}
                       placeholder="카테고리 이름" style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                    <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }}
-                      style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13 }}>
-                      취소
-                    </button>
-                    <button onClick={addCategory}
-                      style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      추가
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }}
+                        style={{ padding: isMobile ? '6px 12px' : '8px 16px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13 }}>
+                        취소
+                      </button>
+                      <button onClick={addCategory}
+                        style={{ padding: isMobile ? '6px 12px' : '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                        추가
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -453,7 +455,7 @@ export default function Dashboard() {
                     return (
                       <div key={ch.id} style={{ background: '#111', border: '1px solid #e8ff47', borderRadius: 10, padding: 14 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: '#e8ff47' }}>채널 수정</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1.5fr', gap: 8, marginBottom: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '60px 1fr' : '60px 1fr 1.5fr', gap: 8, marginBottom: 10 }}>
                           <input value={editChannelData.emoji} onChange={e => setEditChannelData({ ...editChannelData, emoji: e.target.value })}
                             placeholder="📺" maxLength={2}
                             style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px', color: '#f0f0f0', fontSize: 13, textAlign: 'center', outline: 'none' }} />
@@ -462,9 +464,9 @@ export default function Dashboard() {
                             style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
                           <input value={editChannelData.url} onChange={e => setEditChannelData({ ...editChannelData, url: e.target.value })}
                             placeholder="채널 URL"
-                            style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
+                            style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none', ...(isMobile ? { gridColumn: '1 / -1' } : {}) }} />
                         </div>
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, justifyContent: 'flex-end', alignItems: isMobile ? 'stretch' : 'center' }}>
                           <button onClick={() => { setEditingChannel(null); setEditChannelData({ alias: '', emoji: '', url: '' }) }}
                             style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 12 }}>취소</button>
                           <button onClick={() => updateChannel(ch.id)}
@@ -538,14 +540,16 @@ export default function Dashboard() {
 
               <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 20 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>수신 이메일</div>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
                   <input type="email" defaultValue={settings?.email ?? ''} id="email-input"
                     placeholder="your@gmail.com"
                     style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                  <button onClick={() => {
-                    const val = (document.getElementById('email-input') as HTMLInputElement).value
-                    saveSettings({ email: val })
-                  }} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>저장</button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={() => {
+                      const val = (document.getElementById('email-input') as HTMLInputElement).value
+                      saveSettings({ email: val })
+                    }} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>저장</button>
+                  </div>
                 </div>
               </div>
 
@@ -568,13 +572,15 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
                   <input value={newKeyword} onChange={e => setNewKeyword(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addKeyword()}
                     placeholder="키워드 추가 (예: 긴급, breaking)"
                     style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                  <button onClick={addKeyword}
-                    style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>추가</button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={addKeyword}
+                      style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>추가</button>
+                  </div>
                 </div>
               </div>
 
