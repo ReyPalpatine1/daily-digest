@@ -245,9 +245,10 @@ export default function Dashboard() {
   return (
     <div style={s}>
       {/* 사이드바 */}
-      <div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
-      <aside className={`sidebar-mobile ${sidebarOpen ? 'open' : ''}`}
-        style={{ width: 220, minWidth: 220, background: '#111', borderRight: '1px solid #222', display: 'flex', flexDirection: 'column' }}>
+      <div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+        onTouchEnd={(e) => { e.preventDefault(); setSidebarOpen(false) }} />
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div style={{ padding: '24px 20px', borderBottom: '1px solid #222' }}>
           <div style={{ fontFamily: 'monospace', fontSize: 20, color: '#e8ff47', fontWeight: 700 }}>DAILY DIGEST</div>
           <div style={{ fontSize: 11, color: '#666', marginTop: 3 }}>YouTube AI 요약 에이전트</div>
@@ -259,7 +260,7 @@ export default function Dashboard() {
             { key: 'schedule', label: '발송 설정', icon: '◷' },
             { key: 'history', label: '열람 기록', icon: '◈' },
           ].map(item => (
-            <div key={item.key} onClick={() => { setActiveTab(item.key as any); if (isMobile) setSidebarOpen(false) }}
+            <div key={item.key} onClick={() => { setActiveTab(item.key as any); setSidebarOpen(false) }}
               style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2, fontSize: 13, background: activeTab === item.key ? 'rgba(232,255,71,0.12)' : 'transparent', color: activeTab === item.key ? '#e8ff47' : '#666' }}>
               <span>{item.icon}</span>{item.label}
               {item.key === 'history' && digests.filter(d => d.is_breaking).length > 0 && (
@@ -340,12 +341,12 @@ export default function Dashboard() {
       <main style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '12px 16px' : '16px 28px', borderBottom: '1px solid #222', background: '#111', position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {isMobile && (
-              <button onClick={() => setSidebarOpen(true)}
-                style={{ background: 'transparent', border: 'none', color: '#f0f0f0', fontSize: 20, cursor: 'pointer', padding: 4 }}>
-                ☰
-              </button>
-            )}
+            <button className="hamburger-btn"
+              onClick={() => setSidebarOpen(true)}
+              onTouchEnd={(e) => { e.preventDefault(); setSidebarOpen(true) }}
+              style={{ background: 'transparent', border: 'none', color: '#f0f0f0', fontSize: 20, cursor: 'pointer', padding: 8, WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}>
+              ☰
+            </button>
             <div style={{ fontFamily: 'monospace', fontSize: isMobile ? 16 : 20, fontWeight: 700 }}>
               {activeTab === 'channels' ? '채널 관리' : activeTab === 'schedule' ? '발송 설정' : '열람 기록'}
             </div>

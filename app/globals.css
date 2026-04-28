@@ -7,6 +7,24 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS 15 호환 - 터치 이벤트 활성화 */
+button, [onclick], [role="button"] {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS 15 inset 대체 */
+.sidebar-overlay {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 html, body {
