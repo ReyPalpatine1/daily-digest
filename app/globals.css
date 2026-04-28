@@ -10,29 +10,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* iOS 15 호환 - 터치 이벤트 활성화 */
-button, [onclick], [role="button"] {
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* iOS 15 inset 대체 */
-.sidebar-overlay {
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-}
-
 html, body {
   max-width: 100vw;
   overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
-  -webkit-tap-highlight-color: transparent;
   margin: 0;
   padding: 0;
 }
@@ -43,6 +25,26 @@ button, input, select, textarea {
 
 input, select, textarea {
   font-size: 16px;
+}
+
+/* iOS 15 호환 - 모든 클릭 가능 요소 */
+button, a, [onclick], div[role="button"], span[onclick], div[onClick] {
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS Safari 클릭 이슈 강제 해결 */
+@supports (-webkit-touch-callout: none) {
+  * {
+    cursor: pointer;
+  }
+  button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -71,9 +73,12 @@ input, select, textarea {
 
 .sidebar-overlay {
   display: none;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
-/* 모바일 (768px 이하) */
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
@@ -90,7 +95,6 @@ input, select, textarea {
   .sidebar-overlay {
     display: block;
     position: fixed;
-    inset: 0;
     background: rgba(0,0,0,0.5);
     z-index: 99;
     opacity: 0;

@@ -30,7 +30,9 @@ export default function Home() {
         <div style={{ fontSize: 'clamp(13px, 3vw, 16px)', color: '#666', marginBottom: 'clamp(32px, 8vw, 48px)' }}>
           유튜브 AI 요약 에이전트
         </div>
-        <button onClick={loginWithGoogle} style={{
+        <button onClick={loginWithGoogle}
+          onTouchEnd={(e) => { e.preventDefault(); loginWithGoogle() }}
+          style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
           padding: 'clamp(12px, 3vw, 14px) clamp(20px, 5vw, 28px)', borderRadius: 10,
           border: '1px solid #333', background: '#111',
