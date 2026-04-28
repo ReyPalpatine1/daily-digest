@@ -12,22 +12,26 @@ export async function summarizeVideo(
   transcript: string,
   description?: string
 ): Promise<SummaryResult> {
-  try {
-    let content = ''
-    let summaryBasis = ''
+  const maxRetries = 3
+  const retryDelay = 3000 // 3초
 
-    if (transcript && transcript.length > 50) {
-      content = `자막:\n${transcript.slice(0, 8000)}`
-      summaryBasis = '자동 생성 자막 기반 요약'
-    } else if (description && description.length > 20) {
-      content = `영상 설명:\n${description.slice(0, 2000)}`
-      summaryBasis = '영상 설명 기반 요약'
-    } else {
-      content = ''
-      summaryBasis = '제목 기반 요약'
-    }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      let content = ''
+      let summaryBasis = ''
 
-    const prompt = `
+      if (transcript && transcript.length > 50) {
+        content = `자막:\n${transcript.slice(0, 8000)}`
+        summaryBasis = '자동 생성 자막 기반 요약'
+      } else if (description && description.length > 20) {
+        content = `영상 설명:\n${description.slice(0, 2000)}`
+        summaryBasis = '영상 설명 기반 요약'
+      } else {
+        content = ''
+        summaryBasis = '제목 기반 요약'
+      }
+
+      const prompt = `
 다음은 유튜브 영상의 정보입니다.
 
 제목: ${title}
@@ -46,41 +50,74 @@ ${content || '(자막 및 설명 없음)'}
 참고: 자막이 없으면 timeline은 빈 배열로 반환하세요.
 `
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3 },
-        }),
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.3 },
+          }),
+        }
+      )
+
+      if (res.status === 503) {
+        if (attempt < maxRetries) {
+          console.log(`⚠️ Gemini 503 에러, ${retryDelay}ms 후 재시도 (${attempt}/${maxRetries})`)
+          await new Promise(resolve => setTimeout(resolve, retryDelay))
+          continue
+        } else {
+          console.log('❌ Gemini 503 에러, 최대 재시도 횟수 초과')
+          throw new Error('503 Service Unavailable after retries')
+        }
       }
-    )
 
-    const data = await res.json()
-    if (data.error) {
-      console.log('❌ Gemini API 에러:', JSON.stringify(data.error))
-      throw new Error(data.error.message)
-    }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    if (!text) {
-      console.log('❌ Gemini 응답 비어있음:', JSON.stringify(data))
-      throw new Error('빈 응답')
-    }
-    const clean = text.replace(/```json|```/g, '').trim()
-    console.log('📝 Gemini 응답 일부:', clean.slice(0, 200))
-    const parsed = JSON.parse(clean)
+      const data = await res.json()
+      if (data.error) {
+        console.log('❌ Gemini API 에러:', JSON.stringify(data.error))
+        throw new Error(data.error.message)
+      }
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      if (!text) {
+        console.log('❌ Gemini 응답 비어있음:', JSON.stringify(data))
+        throw new Error('빈 응답')
+      }
+      const clean = text.replace(/```json|```/g, '').trim()
+      console.log('📝 Gemini 응답 일부:', clean.slice(0, 200))
+      const parsed = JSON.parse(clean)
 
-    return { ...parsed, summaryBasis }
-  } catch (e) {
-    console.log('❌ Gemini 요약 에러:', e)
-    return {
-      summary: '요약을 가져오지 못했습니다.',
-      keyPoints: [],
-      timeline: [],
-      summaryBasis: '요약 실패',
+      return { ...parsed, summaryBasis }
+    } catch (e) {
+      if (attempt === maxRetries || (e instanceof Error && !e.message.includes('503'))) {
+        console.log('❌ Gemini 요약 에러:', e)
+        return {
+          summary: '요약을 가져오지 못했습니다.',
+          keyPoints: [],
+          timeline: [],
+          summaryBasis: '요약 실패',
+        }
+      }
+      // 503이 아닌 다른 에러는 즉시 fallback
+      if (!(e instanceof Error) || !e.message.includes('503')) {
+        console.log('❌ Gemini 요약 에러 (비-503):', e)
+        return {
+          summary: '요약을 가져오지 못했습니다.',
+          keyPoints: [],
+          timeline: [],
+          summaryBasis: '요약 실패',
+        }
+      }
+      // 503 에러는 재시도
     }
+  }
+
+  // 이 부분은 도달하지 않지만 안전하게
+  return {
+    summary: '요약을 가져오지 못했습니다.',
+    keyPoints: [],
+    timeline: [],
+    summaryBasis: '요약 실패',
   }
 }
 
