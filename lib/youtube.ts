@@ -115,6 +115,43 @@ export async function getYesterdayVideos(channelId: string): Promise<VideoItem[]
   }
 }
 
+export async function getRecentVideos(channelId: string, minutes: number): Promise<VideoItem[]> {
+  try {
+    const now = new Date()
+    const publishedAfter = new Date(now.getTime() - minutes * 60 * 1000).toISOString()
+
+    const searchRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&publishedAfter=${publishedAfter}&order=date&maxResults=25&key=${YOUTUBE_API_KEY}`
+    )
+    const searchData = await searchRes.json()
+    const items = searchData.items ?? []
+    const videoIds = items
+      .map((item: any) => item.id.videoId)
+      .filter((id: string) => Boolean(id))
+
+    if (!videoIds.length) {
+      return []
+    }
+
+    const videosRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoIds.join(',')}&key=${YOUTUBE_API_KEY}`
+    )
+    const videosData = await videosRes.json()
+
+    return (videosData.items ?? [])
+      .filter((video: any) => !isShortsVideo(video))
+      .map((video: any) => ({
+        videoId: video.id,
+        title: video.snippet.title,
+        publishedAt: video.snippet.publishedAt,
+        channelTitle: video.snippet.channelTitle,
+        url: `https://youtube.com/watch?v=${video.id}`,
+      }))
+  } catch {
+    return []
+  }
+}
+
 // 최신 영상 실시간 감지 (속보용)
 export async function getLatestVideo(channelId: string): Promise<VideoItem | null> {
   try {

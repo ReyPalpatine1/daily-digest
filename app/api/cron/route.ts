@@ -19,44 +19,75 @@ export async function GET(req: Request) {
     const formatted = Object.fromEntries(
       parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value])
     ) as Record<string, string>
-    const currentSendTime = `${formatted.hour.padStart(2, '0')}:${formatted.minute.padStart(2, '0')}`
+    const currentHour = formatted.hour.padStart(2, '0')
+    const currentMinute = Number(formatted.minute)
+    const currentSendTime = `${currentHour}:00`
+    const shouldSendDigest = currentMinute < 15
 
-    // 현재 KST 기준에 맞춰 발송 대상 유저만 가져오기
-    const { data: settings, error } = await supabase
+    const { data: allSettings, error } = await supabase
       .from('settings')
-      .select('user_id')
+      .select('user_id, send_time, breaking_alert')
       .eq('active', true)
-      .eq('send_time', currentSendTime)
 
     if (error) {
       console.error('Settings fetch error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    if (!settings?.length) {
-      console.log(`현재 KST ${currentSendTime}에 발송할 활성 유저 없음`)
-      return NextResponse.json({ message: '발송 대상 없음', currentSendTime })
+    if (!allSettings?.length) {
+      console.log('활성 유저 없음')
+      return NextResponse.json({ message: '활성 유저 없음' })
     }
 
-    console.log(`현재 KST ${currentSendTime} 발송 대상 ${settings.length}명 발견`)
+    const digestUsers = shouldSendDigest
+      ? allSettings.filter(s => s.send_time === currentSendTime).map(s => s.user_id)
+      : []
+    const breakingUsers = allSettings
+      .filter(s => s.breaking_alert)
+      .map(s => s.user_id)
 
-    // 각 유저별 다이제스트 실행
-    const results = await Promise.allSettled(
-      settings.map(s =>
-        fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/digest`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: s.user_id }),
-        }).then(res => res.json())
-      )
-    )
+    console.log(`현재 KST ${currentHour}:${formatted.minute} 실행 - digest 대상 ${digestUsers.length}명, breaking 대상 ${breakingUsers.length}명`)
 
-    const succeeded = results.filter(r => r.status === 'fulfilled').length
-    const failed = results.filter(r => r.status === 'rejected').length
+    const digestResults = shouldSendDigest && digestUsers.length > 0
+      ? await Promise.allSettled(
+          digestUsers.map(userId =>
+            fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/digest`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId }),
+            }).then(res => res.json())
+          )
+        )
+      : []
 
-    console.log(`성공: ${succeeded}, 실패: ${failed}`)
+    const breakingResults = breakingUsers.length > 0
+      ? await Promise.allSettled(
+          breakingUsers.map(userId =>
+            fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/breaking`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId }),
+            }).then(res => res.json())
+          )
+        )
+      : []
 
-    return NextResponse.json({ currentSendTime, succeeded, failed })
+    const digestSucceeded = digestResults.filter(r => r.status === 'fulfilled').length
+    const digestFailed = digestResults.filter(r => r.status === 'rejected').length
+    const breakingSucceeded = breakingResults.filter(r => r.status === 'fulfilled').length
+    const breakingFailed = breakingResults.filter(r => r.status === 'rejected').length
+
+    console.log(`digest 성공: ${digestSucceeded}, 실패: ${digestFailed}`)
+    console.log(`breaking 성공: ${breakingSucceeded}, 실패: ${breakingFailed}`)
+
+    return NextResponse.json({
+      currentHour,
+      currentMinute,
+      currentSendTime,
+      shouldSendDigest,
+      digest: { count: digestUsers.length, succeeded: digestSucceeded, failed: digestFailed },
+      breaking: { count: breakingUsers.length, succeeded: breakingSucceeded, failed: breakingFailed },
+    })
   } catch (error) {
     console.error('Cron error:', error)
     return NextResponse.json({ error: '서버 오류' }, { status: 500 })
