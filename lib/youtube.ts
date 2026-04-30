@@ -24,18 +24,43 @@ export async function getChannelId(channelUrl: string): Promise<string | null> {
   }
 }
 
+function getSeoulMidnightUtc(date: Date): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+
+  const map = Object.fromEntries(
+    parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value])
+  ) as Record<string, string>
+
+  return new Date(
+    Date.UTC(
+      Number(map.year),
+      Number(map.month) - 1,
+      Number(map.day),
+      0,
+      0,
+      0
+    )
+  )
+}
+
 // 전날 업로드된 영상 가져오기
 export async function getYesterdayVideos(channelId: string): Promise<VideoItem[]> {
   try {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    yesterday.setHours(0, 0, 0, 0)
+    const now = new Date()
+    const todayKstMidnightUtc = getSeoulMidnightUtc(now)
+    const yesterdayKstMidnightUtc = new Date(todayKstMidnightUtc.getTime() - 24 * 60 * 60 * 1000)
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    const publishedAfter = yesterday.toISOString()
-    const publishedBefore = today.toISOString()
+    const publishedAfter = yesterdayKstMidnightUtc.toISOString()
+    const publishedBefore = todayKstMidnightUtc.toISOString()
 
     const res = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&publishedAfter=${publishedAfter}&publishedBefore=${publishedBefore}&maxResults=10&key=${YOUTUBE_API_KEY}`
