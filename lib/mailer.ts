@@ -164,19 +164,47 @@ type FailedItem = {
   videoTitle: string
   videoUrl: string
   errorInfo: string
+  attempts?: number
+}
+
+export type DigestTrigger = 'manual' | 'cron' | 'breaking'
+
+const triggerLabel: Record<DigestTrigger, string> = {
+  manual: '테스트 (지금 실행하기)',
+  cron: '정시 자동 발송',
+  breaking: '실시간 속보 감지',
+}
+
+function resolveAdminRecipients(): string[] {
+  const fromEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean)
+  if (fromEmails.length > 0) return fromEmails
+  if (process.env.ADMIN_EMAIL) return [process.env.ADMIN_EMAIL]
+  return []
 }
 
 export async function sendAdminBulkErrorEmail(
-  to: string,
   userName: string,
   userEmail: string,
   userId: string,
-  failedItems: FailedItem[]
+  failedItems: FailedItem[],
+  trigger: DigestTrigger
 ): Promise<void> {
-  const today = new Date().toLocaleDateString('ko-KR', {
+  const recipients = resolveAdminRecipients()
+  if (recipients.length === 0) {
+    console.log('⚠️ ADMIN_EMAILS/ADMIN_EMAIL 미설정 — 오류 알림 메일 발송 건너뜀')
+    return
+  }
+
+  const today = new Date().toLocaleString('ko-KR', {
     timeZone: 'Asia/Seoul',
+    year: 'numeric',
     month: 'long',
     day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 
   const errorTable = failedItems.map((item, idx) => `
@@ -185,20 +213,22 @@ export async function sendAdminBulkErrorEmail(
       <td style="padding:12px;font-size:13px">${item.emoji} ${item.channel}</td>
       <td style="padding:12px;font-size:13px">${item.category}</td>
       <td style="padding:12px;font-size:12px"><a href="${item.videoUrl}" style="color:#1a1a1a;text-decoration:none">${item.videoTitle}</a></td>
+      <td style="padding:12px;text-align:center;font-size:12px">${item.attempts ?? '-'}</td>
       <td style="padding:12px;font-size:12px;color:#b00000">${item.errorInfo.split('\n')[0]}</td>
     </tr>
   `).join('')
 
   await transporter.sendMail({
     from: `"Daily Digest 오류 알림" <${process.env.GMAIL_USER}>`,
-    to,
-    subject: `❗ Daily Digest 오류 알림 — ${failedItems.length}개 영상 실패`,
+    to: recipients.join(','),
+    subject: `❗ [Daily Digest] 요약 실패 알림 — ${failedItems.length}개 (${triggerLabel[trigger]})`,
     html: `
       <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:0 auto;padding:24px">
         <div style="background:#fff7f7;border:1px solid #ff4757;border-radius:12px;padding:24px;margin-bottom:24px">
           <h1 style="font-size:22px;color:#b00000;margin:0 0 12px">Daily Digest 관리자 오류 알림</h1>
           <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:20px">
-            <p>발송일: ${today}</p>
+            <p>발송 시점: ${today}</p>
+            <p>발송 경로: <strong>${triggerLabel[trigger]}</strong></p>
             <p>사용자: ${userName}</p>
             <p>사용자 이메일: ${userEmail}</p>
             <p>사용자 ID: ${userId}</p>
@@ -211,6 +241,7 @@ export async function sendAdminBulkErrorEmail(
                 <th style="padding:12px;font-size:13px;font-weight:600">채널</th>
                 <th style="padding:12px;font-size:13px;font-weight:600">카테고리</th>
                 <th style="padding:12px;font-size:13px;font-weight:600">영상 제목</th>
+                <th style="padding:12px;text-align:center;font-size:13px;font-weight:600">시도</th>
                 <th style="padding:12px;font-size:13px;font-weight:600">오류</th>
               </tr>
             </thead>

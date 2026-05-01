@@ -8,6 +8,7 @@ export type SummaryResult = {
   timeline: { time: string; content: string }[]
   summaryBasis: string // 요약 기반 표시
   errorInfo?: string
+  attempts?: number
 }
 
 export async function summarizeVideo(
@@ -110,10 +111,11 @@ ${content || '(자막 및 설명 없음)'}
           timeline: [],
           summaryBasis: '요약 실패',
           errorInfo: `JSON 파싱 오류: ${parseError}`,
+          attempts: attempt,
         }
       }
 
-      return { ...parsed, summaryBasis }
+      return { ...parsed, summaryBasis, attempts: attempt }
     } catch (e) {
       const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
       if (attempt === maxRetries || !errorInfo.includes('503')) {
@@ -124,6 +126,7 @@ ${content || '(자막 및 설명 없음)'}
           timeline: [],
           summaryBasis: '요약 실패',
           errorInfo,
+          attempts: attempt,
         }
       }
       // 503 에러는 재시도
@@ -137,6 +140,7 @@ ${content || '(자막 및 설명 없음)'}
     timeline: [],
     summaryBasis: '요약 실패',
     errorInfo: '알 수 없는 오류',
+    attempts: maxRetries,
   }
 }
 

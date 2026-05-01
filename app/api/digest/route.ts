@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getYesterdayVideos } from '@/lib/youtube'
 import { summarizeVideo, getTranscript } from '@/lib/gemini'
-import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail } from '@/lib/mailer'
+import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, DigestTrigger } from '@/lib/mailer'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,7 +11,9 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await req.json()
+    const body = await req.json()
+    const userId: string = body.userId
+    const trigger: DigestTrigger = body.trigger === 'cron' ? 'cron' : 'manual'
 
     // 유저 설정 가져오기
     const { data: settings } = await supabase
@@ -112,6 +114,7 @@ export async function POST(req: Request) {
             videoTitle: video.title,
             videoUrl: video.url,
             errorInfo: summary.errorInfo,
+            attempts: summary.attempts,
           })
         }
 
@@ -136,13 +139,13 @@ export async function POST(req: Request) {
     }
 
     // 오류 항목 번들 메일 발송
-    if (failedItems.length > 0 && process.env.ADMIN_EMAIL) {
+    if (failedItems.length > 0) {
       await sendAdminBulkErrorEmail(
-        process.env.ADMIN_EMAIL,
         profile?.name ?? '사용자',
         settings.email,
         userId,
-        failedItems
+        failedItems,
+        trigger
       )
     }
 

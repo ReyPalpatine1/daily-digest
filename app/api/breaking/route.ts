@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getRecentVideos } from '@/lib/youtube'
 import { getTranscript, summarizeVideo } from '@/lib/gemini'
-import { sendBreakingAlert } from '@/lib/mailer'
+import { sendBreakingAlert, sendAdminBulkErrorEmail } from '@/lib/mailer'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -132,6 +132,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: '새로운 속보 없음', skipped: breakingVideos.length })
     }
 
+    const failedItems: {
+      channel: string
+      category: string
+      emoji: string
+      videoTitle: string
+      videoUrl: string
+      errorInfo: string
+      attempts?: number
+    }[] = []
+
     let sentCount = 0
     for (const video of newVideos) {
       await new Promise(resolve => setTimeout(resolve, 1500))
@@ -148,6 +158,18 @@ export async function POST(req: Request) {
       }
 
       await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem)
+
+      if (summary.errorInfo) {
+        failedItems.push({
+          channel: video.channel.alias,
+          category: video.channel.categoryName ?? '미분류',
+          emoji: video.channel.emoji,
+          videoTitle: video.title,
+          videoUrl: video.url,
+          errorInfo: summary.errorInfo,
+          attempts: summary.attempts,
+        })
+      }
 
       await supabase.from('digests').insert({
         user_id: userId,
@@ -166,6 +188,16 @@ export async function POST(req: Request) {
       })
 
       sentCount += 1
+    }
+
+    if (failedItems.length > 0) {
+      await sendAdminBulkErrorEmail(
+        profile?.name ?? '사용자',
+        settings.email,
+        userId,
+        failedItems,
+        'breaking'
+      )
     }
 
     return NextResponse.json({
