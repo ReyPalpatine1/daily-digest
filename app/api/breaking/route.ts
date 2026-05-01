@@ -136,7 +136,7 @@ export async function POST(req: Request) {
     for (const video of newVideos) {
       await new Promise(resolve => setTimeout(resolve, 1500))
       const { transcript, description } = await getTranscript(video.videoId)
-      const summary = await summarizeVideo(video.title, transcript, description)
+      const summary = await summarizeVideo(userId, video.title, transcript, description)
 
       const digestItem = {
         channel: video.channel.alias,

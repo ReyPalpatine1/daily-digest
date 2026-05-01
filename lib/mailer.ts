@@ -29,6 +29,12 @@ function formatTime(isoString: string): string {
   })
 }
 
+function truncateErrorInfo(errorInfo?: string): string | undefined {
+  if (!errorInfo) return undefined
+  const firstLine = errorInfo.trim().split('\n')[0]
+  return firstLine.length > 120 ? `${firstLine.slice(0, 120)}...` : firstLine
+}
+
 function buildEmailHtml(items: DigestItem[], userName: string): string {
   const today = new Date().toLocaleDateString('ko-KR', {
     timeZone: 'Asia/Seoul',
@@ -65,6 +71,11 @@ function buildEmailHtml(items: DigestItem[], userName: string): string {
           <div style="font-size:11px;color:#999;margin-bottom:6px">
             📌 ${item.summary.summaryBasis ?? '요약'}
           </div>
+          ${item.summary.errorInfo ? `
+            <div style="font-size:12px;color:#b00;margin-bottom:10px;line-height:1.4">
+              <strong>오류 코드:</strong> ${truncateErrorInfo(item.summary.errorInfo)}
+            </div>
+          ` : ''}
           <p style="font-size:14px;color:#333;line-height:1.7;margin:0 0 12px">
             ${item.summary.summary}
           </p>
@@ -143,5 +154,75 @@ export async function sendBreakingAlert(
     to,
     subject: `🚨 속보 감지 — ${item.video.title}`,
     html: buildEmailHtml([item], userName),
+  })
+}
+
+type FailedItem = {
+  channel: string
+  category: string
+  emoji: string
+  videoTitle: string
+  videoUrl: string
+  errorInfo: string
+}
+
+export async function sendAdminBulkErrorEmail(
+  to: string,
+  userName: string,
+  userEmail: string,
+  userId: string,
+  failedItems: FailedItem[]
+): Promise<void> {
+  const today = new Date().toLocaleDateString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  const errorTable = failedItems.map((item, idx) => `
+    <tr style="border-bottom:1px solid #ddd">
+      <td style="padding:12px;text-align:center;font-size:13px">${idx + 1}</td>
+      <td style="padding:12px;font-size:13px">${item.emoji} ${item.channel}</td>
+      <td style="padding:12px;font-size:13px">${item.category}</td>
+      <td style="padding:12px;font-size:12px"><a href="${item.videoUrl}" style="color:#1a1a1a;text-decoration:none">${item.videoTitle}</a></td>
+      <td style="padding:12px;font-size:12px;color:#b00000">${item.errorInfo.split('\n')[0]}</td>
+    </tr>
+  `).join('')
+
+  await transporter.sendMail({
+    from: `"Daily Digest 오류 알림" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: `❗ Daily Digest 오류 알림 — ${failedItems.length}개 영상 실패`,
+    html: `
+      <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:0 auto;padding:24px">
+        <div style="background:#fff7f7;border:1px solid #ff4757;border-radius:12px;padding:24px;margin-bottom:24px">
+          <h1 style="font-size:22px;color:#b00000;margin:0 0 12px">Daily Digest 관리자 오류 알림</h1>
+          <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:20px">
+            <p>발송일: ${today}</p>
+            <p>사용자: ${userName}</p>
+            <p>사용자 이메일: ${userEmail}</p>
+            <p>사용자 ID: ${userId}</p>
+            <p style="font-weight:600;color:#b00000">오류 발생 영상: <strong>${failedItems.length}개</strong></p>
+          </div>
+          <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+            <thead>
+              <tr style="background:#f5f5f5;border-bottom:2px solid #ddd">
+                <th style="padding:12px;text-align:center;font-size:13px;font-weight:600">#</th>
+                <th style="padding:12px;font-size:13px;font-weight:600">채널</th>
+                <th style="padding:12px;font-size:13px;font-weight:600">카테고리</th>
+                <th style="padding:12px;font-size:13px;font-weight:600">영상 제목</th>
+                <th style="padding:12px;font-size:13px;font-weight:600">오류</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${errorTable}
+            </tbody>
+          </table>
+          <div style="margin-top:20px;font-size:12px;color:#666">
+            <p>자세한 오류 정보는 Vercel 로그를 참조하세요.</p>
+          </div>
+        </div>
+      </div>
+    `,
   })
 }

@@ -25,6 +25,8 @@ export default function Dashboard() {
   const [filterCat, setFilterCat] = useState<string | null>(null)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'breaking'>('all')
   const [historySearch, setHistorySearch] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [usageStats, setUsageStats] = useState<{ totalCalls: number; totalTokens: number; rows: any[] } | null>(null)
   const [historyDate, setHistoryDate] = useState('')
   const [historyChannel, setHistoryChannel] = useState('')
   const [historyCategory, setHistoryCategory] = useState('')
@@ -46,6 +48,8 @@ export default function Dashboard() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { window.location.href = '/'; return }
       setUser(data.user)
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
+      setIsAdmin(adminEmails.includes(data.user.email?.toLowerCase() ?? ''))
 
       // 프로필 없으면 자동 생성
       const { data: profile } = await supabase
@@ -85,6 +89,12 @@ export default function Dashboard() {
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchAdminUsage()
+    }
+  }, [isAdmin])
 
   async function loadData(userId: string) {
     const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }] = await Promise.all([
@@ -191,6 +201,17 @@ export default function Dashboard() {
     const merged = { ...settings, ...updated, user_id: user.id }
     await supabase.from('settings').upsert(merged)
     loadData(user.id)
+  }
+
+  async function fetchAdminUsage() {
+    try {
+      const res = await fetch('/api/admin/usage')
+      if (!res.ok) return
+      const data = await res.json()
+      setUsageStats(data)
+    } catch (error) {
+      console.error('관리자 사용량 조회 실패:', error)
+    }
   }
 
   async function addKeyword() {
@@ -383,6 +404,31 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
+
+              {isAdmin && usageStats && (
+                <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 18, marginBottom: 18 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#e8ff47' }}>관리자 Gemini API 사용량</div>
+                      <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>오늘까지 누적된 요약 API 호출 현황</div>
+                    </div>
+                    <button onClick={fetchAdminUsage}
+                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #333', background: 'transparent', color: '#f0f0f0', cursor: 'pointer', fontSize: 12 }}>
+                      새로고침
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 10 }}>
+                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16 }}>
+                      <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>총 API 호출</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 26, color: '#e8ff47' }}>{usageStats.totalCalls}</div>
+                    </div>
+                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16 }}>
+                      <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>총 토큰 사용량</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 26, color: '#e8ff47' }}>{usageStats.totalTokens}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {showAddCategory && (
                 <div style={{ background: '#111', border: '1px solid #333', borderRadius: 10, padding: 20, marginBottom: 16 }}>

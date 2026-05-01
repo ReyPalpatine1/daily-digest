@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getYesterdayVideos } from '@/lib/youtube'
 import { summarizeVideo, getTranscript } from '@/lib/gemini'
-import { sendDigestEmail, sendBreakingAlert } from '@/lib/mailer'
+import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail } from '@/lib/mailer'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,6 +42,7 @@ export async function POST(req: Request) {
     }
 
     const digestItems = []
+    const failedItems = []
     const keywords: string[] = settings.breaking_keywords ?? ['속보']
 
     for (const channel of channels) {
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
         const { transcript, description } = await getTranscript(video.videoId)
 
         // Gemini로 요약
-        const summary = await summarizeVideo(video.title, transcript, description)
+        const summary = await summarizeVideo(userId, video.title, transcript, description)
 
         // 속보 감지
         const isBreaking = keywords.some(kw => video.title.includes(kw))
@@ -102,6 +103,18 @@ export async function POST(req: Request) {
           summary_basis: summary.summaryBasis,
         })
 
+        // 오류난 항목 수집
+        if (summary.errorInfo) {
+          failedItems.push({
+            channel: channel.alias,
+            category: (channel as any).categories?.name ?? '미분류',
+            emoji: channel.emoji,
+            videoTitle: video.title,
+            videoUrl: video.url,
+            errorInfo: summary.errorInfo,
+          })
+        }
+
         // 속보 즉시 발송
         if (settings.breaking_alert && isBreaking) {
           await sendBreakingAlert(
@@ -119,6 +132,17 @@ export async function POST(req: Request) {
         settings.email,
         profile?.name ?? '사용자',
         digestItems
+      )
+    }
+
+    // 오류 항목 번들 메일 발송
+    if (failedItems.length > 0 && process.env.ADMIN_EMAIL) {
+      await sendAdminBulkErrorEmail(
+        process.env.ADMIN_EMAIL,
+        profile?.name ?? '사용자',
+        settings.email,
+        userId,
+        failedItems
       )
     }
 

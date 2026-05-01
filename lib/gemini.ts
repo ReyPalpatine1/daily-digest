@@ -1,3 +1,5 @@
+import { logApiUsage } from '@/lib/api-usage'
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 
 export type SummaryResult = {
@@ -5,9 +7,11 @@ export type SummaryResult = {
   keyPoints: string[]
   timeline: { time: string; content: string }[]
   summaryBasis: string // 요약 기반 표시
+  errorInfo?: string
 }
 
 export async function summarizeVideo(
+  userId: string,
   title: string,
   transcript: string,
   description?: string
@@ -31,24 +35,20 @@ export async function summarizeVideo(
         summaryBasis = '제목 기반 요약'
       }
 
-      const prompt = `
-다음은 유튜브 영상의 정보입니다.
+      const prompt = `다음은 유튜브 영상의 정보입니다.
 
 제목: ${title}
 
 ${content || '(자막 및 설명 없음)'}
 
-아래 JSON 형식으로만 응답해주세요. 다른 텍스트 없이 JSON만:
+아래 JSON 형식으로만 응답해주세요. 다른 텍스트 없이 완전한 JSON만 반환하세요:
 {
-  "summary": "영상 전체 내용을 3~5문장으로 요약 (자막이나 설명이 없으면 제목 기반으로 추정해서 작성)",
+  "summary": "영상 전체 내용을 3~5문장으로 요약",
   "keyPoints": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"],
-  "timeline": [
-    { "time": "0:00", "content": "해당 구간 내용 요약" }
-  ]
+  "timeline": [{"time": "0:00", "content": "구간 내용 요약"}]
 }
 
-참고: 자막이 없으면 timeline은 빈 배열로 반환하세요.
-`
+참고: 자막이 없으면 timeline은 빈 배열 []로 하세요. 응답은 유효한 JSON이어야 합니다.`
 
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
@@ -73,39 +73,57 @@ ${content || '(자막 및 설명 없음)'}
         }
       }
 
-      const data = await res.json()
+      let data
+      try {
+        data = await res.json()
+      } catch (jsonError) {
+        console.log('❌ Gemini API 응답 JSON 파싱 실패:', jsonError)
+        throw new Error(`API 응답 파싱 실패: ${jsonError}`)
+      }
       if (data.error) {
         console.log('❌ Gemini API 에러:', JSON.stringify(data.error))
         throw new Error(data.error.message)
       }
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      console.log('🔍 Gemini 원본 응답 길이:', text.length)
+      console.log('🔍 Gemini 원본 응답 끝부분:', text.slice(-100))
       if (!text) {
         console.log('❌ Gemini 응답 비어있음:', JSON.stringify(data))
         throw new Error('빈 응답')
       }
       const clean = text.replace(/```json|```/g, '').trim()
-      console.log('📝 Gemini 응답 일부:', clean.slice(0, 200))
-      const parsed = JSON.parse(clean)
+      console.log('📝 Gemini 정리 후 응답 일부:', clean.slice(0, 200))
+
+      const tokensUsed = data.metadata?.tokenUsage?.totalTokens ?? data.candidates?.[0]?.metadata?.tokenUsage?.totalTokens ?? 0
+      await logApiUsage(userId, 1, tokensUsed)
+      
+      // JSON 파싱 시도
+      let parsed
+      try {
+        parsed = JSON.parse(clean)
+      } catch (parseError) {
+        console.log('❌ JSON 파싱 실패, 기본값 반환:', parseError)
+        // 파싱 실패시 기본 요약 반환
+        return {
+          summary: `영상 요약을 생성할 수 없습니다: ${title}`,
+          keyPoints: ['요약 생성 실패'],
+          timeline: [],
+          summaryBasis: '요약 실패',
+          errorInfo: `JSON 파싱 오류: ${parseError}`,
+        }
+      }
 
       return { ...parsed, summaryBasis }
     } catch (e) {
-      if (attempt === maxRetries || (e instanceof Error && !e.message.includes('503'))) {
+      const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
+      if (attempt === maxRetries || !errorInfo.includes('503')) {
         console.log('❌ Gemini 요약 에러:', e)
         return {
           summary: '요약을 가져오지 못했습니다.',
           keyPoints: [],
           timeline: [],
           summaryBasis: '요약 실패',
-        }
-      }
-      // 503이 아닌 다른 에러는 즉시 fallback
-      if (!(e instanceof Error) || !e.message.includes('503')) {
-        console.log('❌ Gemini 요약 에러 (비-503):', e)
-        return {
-          summary: '요약을 가져오지 못했습니다.',
-          keyPoints: [],
-          timeline: [],
-          summaryBasis: '요약 실패',
+          errorInfo,
         }
       }
       // 503 에러는 재시도
@@ -118,6 +136,7 @@ ${content || '(자막 및 설명 없음)'}
     keyPoints: [],
     timeline: [],
     summaryBasis: '요약 실패',
+    errorInfo: '알 수 없는 오류',
   }
 }
 
