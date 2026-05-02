@@ -102,6 +102,7 @@ export async function POST(req: Request) {
           key_points: summary.keyPoints,
           timeline: summary.timeline,
           is_breaking: isBreaking,
+          is_read: false,
           summary_basis: summary.summaryBasis,
         })
 

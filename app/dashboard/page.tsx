@@ -242,6 +242,20 @@ export default function Dashboard() {
     loadData(user.id)
   }
 
+  async function markAsRead(digestId: string) {
+    const digest = digests.find(d => d.id === digestId)
+    if (!digest || !digest.is_breaking || digest.is_read) return
+
+    setDigests(prev => prev.map(d =>
+      d.id === digestId ? { ...d, is_read: true } : d
+    ))
+
+    await supabase
+      .from('digests')
+      .update({ is_read: true })
+      .eq('id', digestId)
+  }
+
   async function logout() {
     await supabase.auth.signOut()
     window.location.href = '/'
@@ -284,9 +298,9 @@ export default function Dashboard() {
             <div key={item.key} onClick={() => { setActiveTab(item.key as any); setSidebarOpen(false) }}
               style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 2, fontSize: 13, background: activeTab === item.key ? 'rgba(232,255,71,0.12)' : 'transparent', color: activeTab === item.key ? '#e8ff47' : '#666' }}>
               <span>{item.icon}</span>{item.label}
-              {item.key === 'history' && digests.filter(d => d.is_breaking).length > 0 && (
+              {item.key === 'history' && digests.filter(d => d.is_breaking && !d.is_read).length > 0 && (
                 <span style={{ marginLeft: 'auto', background: '#ff4757', color: '#000', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 999 }}>
-                  {digests.filter(d => d.is_breaking).length}
+                  {digests.filter(d => d.is_breaking && !d.is_read).length}
                 </span>
               )}
             </div>
@@ -720,15 +734,32 @@ export default function Dashboard() {
                   <div style={{ padding: 40, textAlign: 'center', color: '#444', border: '1px dashed #333', borderRadius: 10 }}>
                     아직 기록이 없어요
                   </div>
-                ) : filteredDigests.map(digest => (
-                  <div key={digest.id} style={{ background: '#111', border: `1px solid ${digest.is_breaking ? '#ff4757' : '#222'}`, borderRadius: 10, overflow: 'hidden' }}>
-                    <div onClick={() => setExpandedDigest(expandedDigest === digest.id ? null : digest.id)}
+                ) : filteredDigests.map(digest => {
+                  const isUnread = digest.is_breaking && !digest.is_read
+                  return (
+                  <div key={digest.id} style={{
+                    background: '#111',
+                    border: `1px solid ${isUnread ? '#ff4757' : digest.is_breaking ? '#552230' : '#222'}`,
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    boxShadow: isUnread ? '0 0 0 1px rgba(255, 71, 87, 0.3)' : 'none',
+                  }}>
+                    <div onClick={() => {
+                      const isOpening = expandedDigest !== digest.id
+                      setExpandedDigest(expandedDigest === digest.id ? null : digest.id)
+                      if (isOpening) {
+                        markAsRead(digest.id)
+                      }
+                    }}
                       style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                       <div style={{ fontSize: 20, flexShrink: 0 }}>{digest.channel_emoji}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          {digest.is_breaking && (
+                          {digest.is_breaking && !digest.is_read && (
                             <span style={{ background: '#ff4757', color: '#fff', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4 }}>속보</span>
+                          )}
+                          {digest.is_breaking && digest.is_read && (
+                            <span style={{ background: '#552230', color: '#999', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4 }}>속보</span>
                           )}
                           <span style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{digest.video_title}</span>
                         </div>
@@ -777,7 +808,8 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </>
           )}

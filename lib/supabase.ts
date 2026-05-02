@@ -52,5 +52,6 @@ export type Digest = {
   key_points: string[]
   timeline: { time: string; content: string }[]
   is_breaking: boolean
+  is_read: boolean
   created_at: string
 }
