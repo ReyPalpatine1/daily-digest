@@ -8,6 +8,12 @@ const supabase = createClient(
 
 export async function GET(req: Request) {
   try {
+    const authHeader = req.headers.get('authorization')
+    const expected = `Bearer ${process.env.CRON_SECRET}`
+    if (!process.env.CRON_SECRET || authHeader !== expected) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const now = new Date()
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Seoul',
