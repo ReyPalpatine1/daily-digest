@@ -90,6 +90,8 @@ export async function GET() {
   const today = todayKstDateString()
   const monthStart = monthStartKstDateString()
   const sevenDaysAgo = daysAgoKstDateString(6) // 오늘 포함 7일
+  const todayKstMidnightUtc = new Date(`${today}T00:00:00+09:00`).toISOString()
+  const monthStartKstUtc = new Date(`${monthStart}T00:00:00+09:00`).toISOString()
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
 
@@ -103,6 +105,24 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // 사용자 통계
+  const { count: totalUsers } = await serviceClient
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+
+  const { data: todayDigests } = await serviceClient
+    .from('digests')
+    .select('user_id')
+    .gte('created_at', todayKstMidnightUtc)
+
+  const { data: monthDigests } = await serviceClient
+    .from('digests')
+    .select('user_id')
+    .gte('created_at', monthStartKstUtc)
+
+  const activeToday = new Set((todayDigests ?? []).map((d: any) => d.user_id)).size
+  const activeThisMonth = new Set((monthDigests ?? []).map((d: any) => d.user_id)).size
 
   const todayTotals = emptyTotals()
   const monthTotals = emptyTotals()
@@ -157,5 +177,10 @@ export async function GET() {
     today: todayTotals,
     thisMonth: monthTotals,
     last7Days: Array.from(last7DaysMap.values()),
+    users: {
+      total: totalUsers ?? 0,
+      activeToday,
+      activeThisMonth,
+    },
   })
 }

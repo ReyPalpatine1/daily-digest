@@ -38,6 +38,7 @@ export default function Dashboard() {
       supadata: { count: number }
     }
     last7Days: { date: string; gemini: number; youtube: number; supadata: number }[]
+    users: { total: number; activeToday: number; activeThisMonth: number }
   } | null>(null)
   const [historyDate, setHistoryDate] = useState('')
   const [historyChannel, setHistoryChannel] = useState('')
@@ -431,115 +432,6 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {isAdmin && usageStats && (() => {
-                const GEMINI_DAILY_LIMIT = 1500
-                const todayGemini = usageStats.today.gemini.count
-                const pct = Math.min(100, (todayGemini / GEMINI_DAILY_LIMIT) * 100)
-                const barColor = pct >= 80 ? '#ff4757' : pct >= 50 ? '#ffaa47' : '#e8ff47'
-                const max7d = Math.max(1, ...usageStats.last7Days.map(d => d.gemini + d.youtube + d.supadata))
-                const formatNum = (n: number) => n.toLocaleString('en-US')
-                return (
-                  <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 18, marginBottom: 18 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#e8ff47' }}>🔒 관리자 통계</div>
-                        <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Gemini · YouTube · Supadata API 사용 현황 (KST)</div>
-                      </div>
-                      <button onClick={fetchAdminUsage}
-                        style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #333', background: 'transparent', color: '#f0f0f0', cursor: 'pointer', fontSize: 12 }}>
-                        새로고침
-                      </button>
-                    </div>
-
-                    {/* Gemini 진행률 */}
-                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#e8ff47' }}>Gemini API</div>
-                        <div style={{ fontSize: 11, color: '#666' }}>무료 한도 {formatNum(GEMINI_DAILY_LIMIT)}건/일</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, color: '#888' }}>오늘</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 22, color: barColor }}>{formatNum(todayGemini)}</span>
-                        <span style={{ fontSize: 11, color: '#666' }}>건</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 11, color: barColor, fontWeight: 600 }}>{pct.toFixed(1)}%</span>
-                      </div>
-                      <div style={{ width: '100%', height: 8, background: '#1a1a1a', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: barColor, transition: 'width 0.3s' }} />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 8, fontSize: 11 }}>
-                        <div>
-                          <div style={{ color: '#666', marginBottom: 2 }}>오늘 입력 토큰</div>
-                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.today.gemini.input_tokens)}</div>
-                        </div>
-                        <div>
-                          <div style={{ color: '#666', marginBottom: 2 }}>오늘 출력 토큰</div>
-                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.today.gemini.output_tokens)}</div>
-                        </div>
-                        <div>
-                          <div style={{ color: '#666', marginBottom: 2 }}>이번 달 호출</div>
-                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.gemini.count)}건</div>
-                        </div>
-                        <div>
-                          <div style={{ color: '#666', marginBottom: 2 }}>이번 달 토큰</div>
-                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>
-                            {formatNum(usageStats.thisMonth.gemini.input_tokens + usageStats.thisMonth.gemini.output_tokens)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 최근 7일 추이 */}
-                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>최근 7일 추이 (서비스 합계)</div>
-                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80, marginBottom: 6 }}>
-                        {usageStats.last7Days.map(d => {
-                          const total = d.gemini + d.youtube + d.supadata
-                          const heightPct = (total / max7d) * 100
-                          return (
-                            <div key={d.date} title={`${d.date}\nGemini ${d.gemini} · YouTube ${d.youtube} · Supadata ${d.supadata}`}
-                              style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                              <div style={{
-                                height: `${heightPct}%`,
-                                minHeight: total > 0 ? 2 : 0,
-                                background: 'linear-gradient(to top, #e8ff47, #47ffb2)',
-                                borderRadius: 3,
-                              }} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, fontSize: 10, color: '#555' }}>
-                        {usageStats.last7Days.map(d => (
-                          <div key={d.date} style={{ flex: 1, textAlign: 'center', fontFamily: 'monospace' }}>
-                            {d.date.slice(5)}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 다른 서비스 */}
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 10 }}>
-                      <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 14 }}>
-                        <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>YouTube API</div>
-                        <div style={{ fontSize: 11, color: '#aaa' }}>
-                          오늘 <span style={{ fontFamily: 'monospace', color: '#e8ff47' }}>{formatNum(usageStats.today.youtube.count)}</span>건
-                          <span style={{ margin: '0 6px', color: '#444' }}>·</span>
-                          이번 달 <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.youtube.count)}</span>건
-                        </div>
-                      </div>
-                      <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 14 }}>
-                        <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Supadata API</div>
-                        <div style={{ fontSize: 11, color: '#aaa' }}>
-                          오늘 <span style={{ fontFamily: 'monospace', color: '#e8ff47' }}>{formatNum(usageStats.today.supadata.count)}</span>건
-                          <span style={{ margin: '0 6px', color: '#444' }}>·</span>
-                          이번 달 <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.supadata.count)}</span>건
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
-
               {showAddCategory && (
                 <div style={{ background: '#111', border: '1px solid #333', borderRadius: 10, padding: 20, marginBottom: 16 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>새 카테고리</div>
@@ -675,6 +567,133 @@ export default function Dashboard() {
                   )
                 })}
               </div>
+
+              {isAdmin && usageStats && (() => {
+                const GEMINI_DAILY_LIMIT = 1500
+                const todayGemini = usageStats.today.gemini.count
+                const pct = Math.min(100, (todayGemini / GEMINI_DAILY_LIMIT) * 100)
+                const barColor = pct >= 80 ? '#ff4757' : pct >= 50 ? '#ffaa47' : '#e8ff47'
+                const max7d = Math.max(1, ...usageStats.last7Days.map(d => d.gemini + d.youtube + d.supadata))
+                const formatNum = (n: number) => n.toLocaleString('en-US')
+                return (
+                  <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 18, marginTop: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#e8ff47' }}>🔒 관리자 통계</div>
+                        <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Gemini · YouTube · Supadata API 사용 현황 (KST)</div>
+                      </div>
+                      <button onClick={fetchAdminUsage}
+                        style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #333', background: 'transparent', color: '#f0f0f0', cursor: 'pointer', fontSize: 12 }}>
+                        새로고침
+                      </button>
+                    </div>
+
+                    {/* 사용자 현황 */}
+                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e8ff47', marginBottom: 10 }}>👥 사용자 현황</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                        {[
+                          { label: '전체', value: usageStats.users.total },
+                          { label: '오늘 활동', value: usageStats.users.activeToday },
+                          { label: '이번 달', value: usageStats.users.activeThisMonth },
+                        ].map(u => (
+                          <div key={u.label} style={{ background: '#111', border: '1px solid #222', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                            <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>{u.label}</div>
+                            <div style={{ fontFamily: 'monospace', fontSize: 22, color: '#e8ff47' }}>{formatNum(u.value)}</div>
+                            <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>명</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Gemini 진행률 */}
+                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#e8ff47' }}>Gemini API</div>
+                        <div style={{ fontSize: 11, color: '#666' }}>무료 한도 {formatNum(GEMINI_DAILY_LIMIT)}건/일</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, color: '#888' }}>오늘</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 22, color: barColor }}>{formatNum(todayGemini)}</span>
+                        <span style={{ fontSize: 11, color: '#666' }}>건</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: barColor, fontWeight: 600 }}>{pct.toFixed(1)}%</span>
+                      </div>
+                      <div style={{ width: '100%', height: 8, background: '#1a1a1a', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: barColor, transition: 'width 0.3s' }} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 8, fontSize: 11 }}>
+                        <div>
+                          <div style={{ color: '#666', marginBottom: 2 }}>오늘 입력 토큰</div>
+                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.today.gemini.input_tokens)}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#666', marginBottom: 2 }}>오늘 출력 토큰</div>
+                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.today.gemini.output_tokens)}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#666', marginBottom: 2 }}>이번 달 호출</div>
+                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.gemini.count)}건</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#666', marginBottom: 2 }}>이번 달 토큰</div>
+                          <div style={{ fontFamily: 'monospace', color: '#ccc' }}>
+                            {formatNum(usageStats.thisMonth.gemini.input_tokens + usageStats.thisMonth.gemini.output_tokens)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 최근 7일 추이 */}
+                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>최근 7일 추이 (서비스 합계)</div>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80, marginBottom: 6 }}>
+                        {usageStats.last7Days.map(d => {
+                          const total = d.gemini + d.youtube + d.supadata
+                          const heightPct = (total / max7d) * 100
+                          return (
+                            <div key={d.date} title={`${d.date}\nGemini ${d.gemini} · YouTube ${d.youtube} · Supadata ${d.supadata}`}
+                              style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                              <div style={{
+                                height: `${heightPct}%`,
+                                minHeight: total > 0 ? 2 : 0,
+                                background: 'linear-gradient(to top, #e8ff47, #47ffb2)',
+                                borderRadius: 3,
+                              }} />
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, fontSize: 10, color: '#555' }}>
+                        {usageStats.last7Days.map(d => (
+                          <div key={d.date} style={{ flex: 1, textAlign: 'center', fontFamily: 'monospace' }}>
+                            {d.date.slice(5)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 다른 서비스 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 10 }}>
+                      <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>YouTube API</div>
+                        <div style={{ fontSize: 11, color: '#aaa' }}>
+                          오늘 <span style={{ fontFamily: 'monospace', color: '#e8ff47' }}>{formatNum(usageStats.today.youtube.count)}</span>건
+                          <span style={{ margin: '0 6px', color: '#444' }}>·</span>
+                          이번 달 <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.youtube.count)}</span>건
+                        </div>
+                      </div>
+                      <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Supadata API</div>
+                        <div style={{ fontSize: 11, color: '#aaa' }}>
+                          오늘 <span style={{ fontFamily: 'monospace', color: '#e8ff47' }}>{formatNum(usageStats.today.supadata.count)}</span>건
+                          <span style={{ margin: '0 6px', color: '#444' }}>·</span>
+                          이번 달 <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.supadata.count)}</span>건
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
             </>
           )}
 
