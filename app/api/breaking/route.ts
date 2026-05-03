@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     for (const channel of channels) {
       let channelId = channel.channel_id
       if (!channelId) {
-        channelId = await getChannelId(channel.url)
+        channelId = await getChannelId(channel.url, userId)
         if (channelId) {
           await supabase
             .from('channels')
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       }
       if (!channelId) continue
 
-      const videos = await getRecentVideos(channelId, 15)
+      const videos = await getRecentVideos(channelId, 15, userId)
       recentVideos.push(
         ...videos.map(video => ({
           ...video,
@@ -145,7 +145,7 @@ export async function POST(req: Request) {
     let sentCount = 0
     for (const video of newVideos) {
       await new Promise(resolve => setTimeout(resolve, 1500))
-      const { transcript, description } = await getTranscript(video.videoId)
+      const { transcript, description } = await getTranscript(video.videoId, userId)
       const summary = await summarizeVideo(userId, video.title, transcript, description)
 
       const digestItem = {

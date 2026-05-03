@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       // 채널 ID 추출
       let channelId = channel.channel_id
       if (!channelId) {
-        channelId = await getChannelId(channel.url)
+        channelId = await getChannelId(channel.url, userId)
         if (channelId) {
           await supabase
             .from('channels')
@@ -62,14 +62,14 @@ export async function POST(req: Request) {
       if (!channelId) continue
 
       // 전날 영상 가져오기
-      const videos = await getYesterdayVideos(channelId)
+      const videos = await getYesterdayVideos(channelId, userId)
 
       for (const video of videos) {
         // API 한도 방지를 위한 딜레이
         await new Promise(r => setTimeout(r, 1500))
 
         // 자막 + 설명 추출
-        const { transcript, description } = await getTranscript(video.videoId)
+        const { transcript, description } = await getTranscript(video.videoId, userId)
 
         // Gemini로 요약
         const summary = await summarizeVideo(userId, video.title, transcript, description)

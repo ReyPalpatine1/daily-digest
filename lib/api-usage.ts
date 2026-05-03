@@ -4,14 +4,36 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey)
 
-export async function logApiUsage(userId: string, apiCalls: number, tokensUsed: number) {
-  const date = new Date().toISOString().slice(0, 10)
+export type ApiService = 'gemini' | 'youtube' | 'supadata'
+
+function todayKstDate(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const map = Object.fromEntries(
+    parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value])
+  ) as Record<string, string>
+  return `${map.year}-${map.month}-${map.day}`
+}
+
+export async function logApiUsage(
+  userId: string,
+  service: ApiService,
+  inputTokens: number = 0,
+  outputTokens: number = 0,
+  calls: number = 1
+) {
+  const date = todayKstDate()
 
   const { data: existing, error: selectError } = await supabaseAdmin
     .from('api_usage')
-    .select('api_calls, tokens_used')
+    .select('api_calls, input_tokens, output_tokens, tokens_used')
     .eq('user_id', userId)
     .eq('date', date)
+    .eq('service', service)
     .maybeSingle()
 
   if (selectError) {
@@ -20,14 +42,19 @@ export async function logApiUsage(userId: string, apiCalls: number, tokensUsed: 
   }
 
   if (existing) {
+    const newInput = (existing.input_tokens ?? 0) + inputTokens
+    const newOutput = (existing.output_tokens ?? 0) + outputTokens
     const { error: updateError } = await supabaseAdmin
       .from('api_usage')
       .update({
-        api_calls: existing.api_calls + apiCalls,
-        tokens_used: existing.tokens_used + tokensUsed,
+        api_calls: (existing.api_calls ?? 0) + calls,
+        input_tokens: newInput,
+        output_tokens: newOutput,
+        tokens_used: newInput + newOutput,
       })
       .eq('user_id', userId)
       .eq('date', date)
+      .eq('service', service)
 
     if (updateError) {
       console.error('API 사용량 업데이트 오류:', updateError)
@@ -40,33 +67,14 @@ export async function logApiUsage(userId: string, apiCalls: number, tokensUsed: 
     .insert({
       user_id: userId,
       date,
-      api_calls: apiCalls,
-      tokens_used: tokensUsed,
+      service,
+      api_calls: calls,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      tokens_used: inputTokens + outputTokens,
     })
 
   if (insertError) {
     console.error('API 사용량 삽입 오류:', insertError)
-  }
-}
-
-export async function getApiUsageSummary() {
-  const { data, error } = await supabaseAdmin
-    .from('api_usage')
-    .select('user_id, date, api_calls, tokens_used')
-    .order('date', { ascending: false })
-    .limit(200)
-
-  if (error) {
-    console.error('API 사용량 요약 조회 오류:', error)
-    return null
-  }
-
-  const totalCalls = (data ?? []).reduce((sum, row: any) => sum + (row.api_calls ?? 0), 0)
-  const totalTokens = (data ?? []).reduce((sum, row: any) => sum + (row.tokens_used ?? 0), 0)
-
-  return {
-    totalCalls,
-    totalTokens,
-    rows: data ?? [],
   }
 }

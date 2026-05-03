@@ -95,8 +95,10 @@ ${content || '(자막 및 설명 없음)'}
       const clean = text.replace(/```json|```/g, '').trim()
       console.log('📝 Gemini 정리 후 응답 일부:', clean.slice(0, 200))
 
-      const tokensUsed = data.metadata?.tokenUsage?.totalTokens ?? data.candidates?.[0]?.metadata?.tokenUsage?.totalTokens ?? 0
-      await logApiUsage(userId, 1, tokensUsed)
+      const usage = data.usageMetadata ?? {}
+      const inputTokens = usage.promptTokenCount ?? 0
+      const outputTokens = usage.candidatesTokenCount ?? 0
+      await logApiUsage(userId, 'gemini', inputTokens, outputTokens)
       
       // JSON 파싱 시도
       let parsed
@@ -144,7 +146,7 @@ ${content || '(자막 및 설명 없음)'}
   }
 }
 
-export async function getTranscript(videoId: string): Promise<{ transcript: string; description: string }> {
+export async function getTranscript(videoId: string, userId?: string): Promise<{ transcript: string; description: string }> {
   let transcript = ''
   let description = ''
 
@@ -158,6 +160,7 @@ export async function getTranscript(videoId: string): Promise<{ transcript: stri
         },
       }
     )
+    if (userId) await logApiUsage(userId, 'supadata')
 
     if (res.ok) {
       const data = await res.json()
@@ -173,6 +176,7 @@ export async function getTranscript(videoId: string): Promise<{ transcript: stri
           },
         }
       )
+      if (userId) await logApiUsage(userId, 'supadata')
       if (fallback.ok) {
         const data = await fallback.json()
         transcript = data.content ?? ''

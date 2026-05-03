@@ -1,3 +1,5 @@
+import { logApiUsage } from './api-usage'
+
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 
 export type VideoItem = {
@@ -9,7 +11,7 @@ export type VideoItem = {
 }
 
 // 채널 ID 추출 (URL에서)
-export async function getChannelId(channelUrl: string): Promise<string | null> {
+export async function getChannelId(channelUrl: string, userId?: string): Promise<string | null> {
   try {
     const handle = channelUrl.split('@')[1]?.split('/')[0]
     if (!handle) return null
@@ -17,6 +19,7 @@ export async function getChannelId(channelUrl: string): Promise<string | null> {
     const res = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${handle}&key=${YOUTUBE_API_KEY}`
     )
+    if (userId) await logApiUsage(userId, 'youtube')
     const data = await res.json()
     return data.items?.[0]?.snippet?.channelId ?? null
   } catch {
@@ -74,7 +77,7 @@ function isShortsVideo(video: any): boolean {
 }
 
 // 전날 업로드된 영상 가져오기
-export async function getYesterdayVideos(channelId: string): Promise<VideoItem[]> {
+export async function getYesterdayVideos(channelId: string, userId?: string): Promise<VideoItem[]> {
   try {
     const now = new Date()
     const todayKstMidnightUtc = getSeoulMidnightUtc(now)
@@ -86,6 +89,7 @@ export async function getYesterdayVideos(channelId: string): Promise<VideoItem[]
     const searchRes = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&publishedAfter=${publishedAfter}&publishedBefore=${publishedBefore}&maxResults=10&key=${YOUTUBE_API_KEY}`
     )
+    if (userId) await logApiUsage(userId, 'youtube')
     const searchData = await searchRes.json()
     const items = searchData.items ?? []
     const videoIds = items
@@ -99,6 +103,7 @@ export async function getYesterdayVideos(channelId: string): Promise<VideoItem[]
     const videosRes = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoIds.join(',')}&key=${YOUTUBE_API_KEY}`
     )
+    if (userId) await logApiUsage(userId, 'youtube')
     const videosData = await videosRes.json()
 
     return (videosData.items ?? [])
@@ -115,7 +120,7 @@ export async function getYesterdayVideos(channelId: string): Promise<VideoItem[]
   }
 }
 
-export async function getRecentVideos(channelId: string, minutes: number): Promise<VideoItem[]> {
+export async function getRecentVideos(channelId: string, minutes: number, userId?: string): Promise<VideoItem[]> {
   try {
     const now = new Date()
     const publishedAfter = new Date(now.getTime() - minutes * 60 * 1000).toISOString()
@@ -123,6 +128,7 @@ export async function getRecentVideos(channelId: string, minutes: number): Promi
     const searchRes = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&publishedAfter=${publishedAfter}&order=date&maxResults=25&key=${YOUTUBE_API_KEY}`
     )
+    if (userId) await logApiUsage(userId, 'youtube')
     const searchData = await searchRes.json()
     const items = searchData.items ?? []
     const videoIds = items
@@ -136,6 +142,7 @@ export async function getRecentVideos(channelId: string, minutes: number): Promi
     const videosRes = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoIds.join(',')}&key=${YOUTUBE_API_KEY}`
     )
+    if (userId) await logApiUsage(userId, 'youtube')
     const videosData = await videosRes.json()
 
     return (videosData.items ?? [])
@@ -153,11 +160,12 @@ export async function getRecentVideos(channelId: string, minutes: number): Promi
 }
 
 // 최신 영상 실시간 감지 (속보용)
-export async function getLatestVideo(channelId: string): Promise<VideoItem | null> {
+export async function getLatestVideo(channelId: string, userId?: string): Promise<VideoItem | null> {
   try {
     const res = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=1&key=${YOUTUBE_API_KEY}`
     )
+    if (userId) await logApiUsage(userId, 'youtube')
     const data = await res.json()
     const item = data.items?.[0]
     if (!item) return null
