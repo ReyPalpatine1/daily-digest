@@ -47,6 +47,13 @@ export async function POST(req: Request) {
     const failedItems = []
     const keywords: string[] = settings.breaking_keywords ?? ['속보']
 
+    // 이미 처리된 영상 ID 미리 조회 (cron 재시도 시 중복 발송 방지)
+    const { data: existingDigests } = await supabase
+      .from('digests')
+      .select('video_id')
+      .eq('user_id', userId)
+    const processedVideoIds = new Set((existingDigests ?? []).map(d => d.video_id))
+
     for (const channel of channels) {
       // 채널 ID 추출
       let channelId = channel.channel_id
@@ -65,6 +72,10 @@ export async function POST(req: Request) {
       const videos = await getYesterdayVideos(channelId, userId)
 
       for (const video of videos) {
+        // 이미 처리된 영상이면 스킵 (idempotent)
+        if (processedVideoIds.has(video.videoId)) continue
+        processedVideoIds.add(video.videoId)
+
         // API 한도 방지를 위한 딜레이
         await new Promise(r => setTimeout(r, 1500))
 

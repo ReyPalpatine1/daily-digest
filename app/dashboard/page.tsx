@@ -57,6 +57,11 @@ export default function Dashboard() {
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
   const [editChannelData, setEditChannelData] = useState({ alias: '', emoji: '', url: '' })
 
+  const [pendingSendTime, setPendingSendTime] = useState('07:00')
+  const [pendingEmail, setPendingEmail] = useState('')
+  const [sendTimeStatus, setSendTimeStatus] = useState<'idle' | 'saved'>('idle')
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'saved'>('idle')
+
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { window.location.href = '/'; return }
@@ -108,6 +113,41 @@ export default function Dashboard() {
       fetchAdminUsage()
     }
   }, [isAdmin])
+
+  useEffect(() => {
+    if (settings) {
+      setPendingSendTime(settings.send_time ?? '07:00')
+      setPendingEmail(settings.email ?? '')
+    }
+  }, [settings])
+
+  const sendTimeOptions = (() => {
+    const arr: string[] = []
+    for (let h = 0; h < 24; h++) {
+      arr.push(`${String(h).padStart(2, '0')}:00`)
+      arr.push(`${String(h).padStart(2, '0')}:30`)
+    }
+    return arr
+  })()
+
+  const currentSendTime = settings?.send_time ?? '07:00'
+  const currentEmail = settings?.email ?? ''
+  const sendTimeChanged = pendingSendTime !== currentSendTime
+  const emailChanged = pendingEmail !== currentEmail
+
+  async function saveSendTime() {
+    if (!sendTimeChanged) return
+    await saveSettings({ send_time: pendingSendTime })
+    setSendTimeStatus('saved')
+    setTimeout(() => setSendTimeStatus('idle'), 1500)
+  }
+
+  async function saveEmail() {
+    if (!emailChanged) return
+    await saveSettings({ email: pendingEmail })
+    setEmailStatus('saved')
+    setTimeout(() => setEmailStatus('idle'), 1500)
+  }
 
   async function loadData(userId: string) {
     const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }] = await Promise.all([
@@ -702,28 +742,98 @@ export default function Dashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 20 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>발송 시간</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ fontFamily: 'monospace', fontSize: 40, color: '#e8ff47' }}>{settings?.send_time ?? '07:00'}</div>
-                  <div>
-                    <input type="time" defaultValue={settings?.send_time ?? '07:00'}
-                      onChange={e => saveSettings({ send_time: e.target.value })}
-                      style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13 }} />
-                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>매일 이 시간에 자동 발송</div>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 40, color: '#e8ff47' }}>{currentSendTime}</div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <select
+                        value={pendingSendTime}
+                        onChange={e => setPendingSendTime(e.target.value)}
+                        style={{
+                          background: '#1a1a1a',
+                          border: `1px solid ${sendTimeChanged ? '#e8ff47' : '#333'}`,
+                          borderRadius: 6,
+                          padding: '8px 12px',
+                          color: '#f0f0f0',
+                          fontSize: 13,
+                          outline: 'none',
+                          transition: 'border-color 0.2s',
+                        }}>
+                        {!sendTimeOptions.includes(pendingSendTime) && (
+                          <option value={pendingSendTime}>{pendingSendTime} (현재)</option>
+                        )}
+                        {sendTimeOptions.map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={saveSendTime}
+                        disabled={!sendTimeChanged}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: 6,
+                          border: 'none',
+                          background: sendTimeChanged ? '#e8ff47' : '#333',
+                          color: sendTimeChanged ? '#000' : '#666',
+                          cursor: sendTimeChanged ? 'pointer' : 'not-allowed',
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}>
+                        저장
+                      </button>
+                      {sendTimeStatus === 'saved' && (
+                        <span style={{ fontSize: 12, color: '#47ffb2' }}>✓ 저장됨</span>
+                      )}
+                      {sendTimeChanged && sendTimeStatus !== 'saved' && (
+                        <span style={{ fontSize: 12, color: '#ffaa47' }}>● 미저장</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#666', marginTop: 6 }}>매일 이 시간에 자동 발송 (30분 단위)</div>
                   </div>
                 </div>
               </div>
 
               <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 20 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>수신 이메일</div>
-                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
-                  <input type="email" defaultValue={settings?.email ?? ''} id="email-input"
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, alignItems: isMobile ? 'stretch' : 'center' }}>
+                  <input
+                    type="email"
+                    value={pendingEmail}
+                    onChange={e => setPendingEmail(e.target.value)}
                     placeholder="your@gmail.com"
-                    style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button onClick={() => {
-                      const val = (document.getElementById('email-input') as HTMLInputElement).value
-                      saveSettings({ email: val })
-                    }} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>저장</button>
+                    style={{
+                      flex: 1,
+                      background: '#1a1a1a',
+                      border: `1px solid ${emailChanged ? '#e8ff47' : '#333'}`,
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      color: '#f0f0f0',
+                      fontSize: 13,
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                    }} />
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                    {emailStatus === 'saved' && (
+                      <span style={{ fontSize: 12, color: '#47ffb2' }}>✓ 저장됨</span>
+                    )}
+                    {emailChanged && emailStatus !== 'saved' && (
+                      <span style={{ fontSize: 12, color: '#ffaa47' }}>● 미저장</span>
+                    )}
+                    <button
+                      onClick={saveEmail}
+                      disabled={!emailChanged}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: 6,
+                        border: 'none',
+                        background: emailChanged ? '#e8ff47' : '#333',
+                        color: emailChanged ? '#000' : '#666',
+                        cursor: emailChanged ? 'pointer' : 'not-allowed',
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}>
+                      저장
+                    </button>
                   </div>
                 </div>
               </div>
