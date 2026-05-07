@@ -9,6 +9,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+export const maxDuration = 60
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -150,15 +152,21 @@ export async function POST(req: Request) {
       )
     }
 
-    // 오류 항목 번들 메일 발송
+    // 오류 항목 번들 메일 발송 — 실패해도 디지스트 응답엔 영향 없게
     if (failedItems.length > 0) {
-      await sendAdminBulkErrorEmail(
-        profile?.name ?? '사용자',
-        settings.email,
-        userId,
-        failedItems,
-        trigger
-      )
+      console.log(`[digest] 관리자 오류 메일 발송 시도: userId=${userId}, failedCount=${failedItems.length}`)
+      try {
+        await sendAdminBulkErrorEmail(
+          profile?.name ?? '사용자',
+          settings.email,
+          userId,
+          failedItems,
+          trigger
+        )
+        console.log(`[digest] 관리자 오류 메일 발송 완료: userId=${userId}`)
+      } catch (adminMailError) {
+        console.error(`[digest] 관리자 오류 메일 발송 실패: userId=${userId}`, adminMailError)
+      }
     }
 
     // 30일 지난 기록 삭제

@@ -9,6 +9,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+export const maxDuration = 60
+
 type RecentVideoItem = {
   videoId: string
   title: string
@@ -192,13 +194,19 @@ export async function POST(req: Request) {
     }
 
     if (failedItems.length > 0) {
-      await sendAdminBulkErrorEmail(
-        profile?.name ?? '사용자',
-        settings.email,
-        userId,
-        failedItems,
-        'breaking'
-      )
+      console.log(`[breaking] 관리자 오류 메일 발송 시도: userId=${userId}, failedCount=${failedItems.length}`)
+      try {
+        await sendAdminBulkErrorEmail(
+          profile?.name ?? '사용자',
+          settings.email,
+          userId,
+          failedItems,
+          'breaking'
+        )
+        console.log(`[breaking] 관리자 오류 메일 발송 완료: userId=${userId}`)
+      } catch (adminMailError) {
+        console.error(`[breaking] 관리자 오류 메일 발송 실패: userId=${userId}`, adminMailError)
+      }
     }
 
     return NextResponse.json({
