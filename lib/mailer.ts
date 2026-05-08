@@ -175,7 +175,7 @@ const triggerLabel: Record<DigestTrigger, string> = {
   breaking: '실시간 속보 감지',
 }
 
-function resolveAdminRecipients(): string[] {
+export function resolveAdminRecipients(): string[] {
   const fromEmails = (process.env.ADMIN_EMAILS ?? '')
     .split(',')
     .map(email => email.trim())
