@@ -176,10 +176,23 @@ export default function Dashboard() {
     }
   }, [settings])
 
-  // 테마 변경을 html data-theme 에 반영
+  // 테마 초기 동기화 (layout.tsx bootstrap script 가 이미 html.dataset.theme 설정) +
+  // OS 선호도 변경 자동 반영 (사용자가 명시 토글하지 않은 경우에만)
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
-  }, [theme])
+    const current = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+    setTheme(current)
+
+    if (typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    function onSystemChange(e: MediaQueryListEvent) {
+      try { if (localStorage.getItem('theme')) return } catch { return }
+      const next: 'light' | 'dark' = e.matches ? 'dark' : 'light'
+      setTheme(next)
+      document.documentElement.dataset.theme = next
+    }
+    mq.addEventListener('change', onSystemChange)
+    return () => mq.removeEventListener('change', onSystemChange)
+  }, [])
 
   // 설정 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -388,7 +401,10 @@ export default function Dashboard() {
   }
 
   function toggleTheme() {
-    setTheme(t => (t === 'light' ? 'dark' : 'light'))
+    const next: 'light' | 'dark' = theme === 'light' ? 'dark' : 'light'
+    setTheme(next)
+    document.documentElement.dataset.theme = next
+    try { localStorage.setItem('theme', next) } catch {}
   }
 
   function switchPlanMode(mode: 'free' | 'pro') {
@@ -578,8 +594,8 @@ export default function Dashboard() {
           <Segmented options={['KO', 'EN']} value={lang} onChange={(v) => { setLang(v as 'KO' | 'EN'); console.log('[phase2] language', v) }} />
         </div>
         <div style={{ ...dropdownItemStyle, cursor: 'default' }}>
-          <span style={{ fontSize: 14 }}>🌙</span>
-          <span style={{ flex: 1 }}>다크 모드</span>
+          <span style={{ fontSize: 14 }}>{theme === 'dark' ? '🌙' : '☀️'}</span>
+          <span style={{ flex: 1 }}>{theme === 'dark' ? '다크 모드' : '라이트 모드'}</span>
           <Switch on={theme === 'dark'} onChange={toggleTheme} />
         </div>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open notification channel modal'); closeMenu() }}>
@@ -653,17 +669,29 @@ export default function Dashboard() {
               <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
               <span style={planBadgeStyle(plan)}>{plan}</span>
             </div>
-            <button onClick={() => setSidebarOpen(true)}
-              aria-label="메뉴 열기"
-              style={{
-                marginLeft: 'auto',
-                width: 36, height: 36, borderRadius: 8,
-                background: 'transparent', border: 'none',
-                color: 'var(--text-primary)', fontSize: 20, cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-              ☰
-            </button>
+            <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+              <button
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                style={{
+                  width: 36, height: 36, borderRadius: 8,
+                  background: 'transparent', border: 'none',
+                  color: 'var(--text-primary)', fontSize: 16, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
+              <button onClick={() => setSidebarOpen(true)}
+                aria-label="메뉴 열기"
+                style={{
+                  width: 36, height: 36, borderRadius: 8,
+                  background: 'transparent', border: 'none',
+                  color: 'var(--text-primary)', fontSize: 20, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                ☰
+              </button>
+            </div>
           </>
         ) : (
           <>
@@ -736,6 +764,24 @@ export default function Dashboard() {
                   })}
                 </div>
               )}
+              {/* 빠른 테마 토글 */}
+              <button
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                style={{
+                  width: 32, height: 32, borderRadius: 6,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer', fontSize: 14,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'inherit',
+                }}>
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
               <button ref={settingsBtnRef} onClick={() => setSettingsOpen(o => !o)}
                 aria-label="설정"
                 style={gearBtn}>

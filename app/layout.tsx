@@ -36,13 +36,21 @@ export const metadata: Metadata = {
   },
 };
 
+// 모바일 브라우저 상단바 색상도 OS 다크/라이트 선호도 따라 자동 변경
 export const viewport: Viewport = {
-  themeColor: "#FAFAFA",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FAFAFA" },
+    { media: "(prefers-color-scheme: dark)", color: "#0A0A0A" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
 };
+
+// React 렌더 전에 실행되어 라이트→다크 플래시(FOUC) 방지.
+// localStorage 우선 → 시스템 선호도 폴백.
+const themeBootstrapScript = `(function(){try{var s=localStorage.getItem('theme');var p=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var t=(s==='light'||s==='dark')?s:(p?'dark':'light');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='light';}})();`;
 
 export default function RootLayout({
   children,
@@ -52,9 +60,11 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      data-theme="light"
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+      </head>
       <body
         style={{
           background: "var(--bg-primary)",

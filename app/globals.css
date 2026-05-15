@@ -98,6 +98,19 @@ html, body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* 테마 전환 시 부드러운 색상 전이 - 모든 요소에 깔지 않고 자주 색 바뀌는 종류만 선택 */
+button,
+input,
+select,
+textarea,
+a {
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
 button, input, select, textarea {
   font-family: inherit;
 }
