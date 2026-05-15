@@ -92,14 +92,15 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
-  const plan: 'FREE' | 'PRO' = 'FREE' // TODO: 추후 결제 연동 시 settings 또는 profile 에서 가져옴
+  const plan = 'FREE' as 'FREE' | 'PRO' // TODO: 추후 결제 연동 시 settings 또는 profile 에서 가져옴
+  const isPro = plan === 'PRO'
 
   // --- Phase 3: 채널 탭 검색 상태 ---
   const [channelSearch, setChannelSearch] = useState('')
   const [showChannelSearch, setShowChannelSearch] = useState(false)
   // Free 플랜 한도 (추후 plan 별로 다이내믹하게)
   const channelLimit = 5
-  const retentionDays = plan === 'FREE' ? 7 : 30
+  const retentionDays = isPro ? 30 : 7
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -777,22 +778,7 @@ export default function Dashboard() {
       {/* =============== 메인 본문 =============== */}
       <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 28px' }}>
 
-        {/* 콘텐츠 헤더 - 채널 탭은 전용 인삿말 헤더(아래)를 사용하므로 제외 */}
-        {activeTab !== 'channels' && (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            flexWrap: 'wrap', gap: 12, marginBottom: 16,
-          }}>
-            <h1 style={{
-              fontSize: isMobile ? 20 : 24,
-              fontWeight: 700, margin: 0,
-              color: 'var(--text-primary)',
-              letterSpacing: -0.3,
-            }}>
-              {activeTab === 'schedule' ? '발송 설정' : '열람 기록'}
-            </h1>
-          </div>
-        )}
+        {/* 각 탭이 자체 헤더(타이틀+서브타이틀)를 갖는다. 공통 헤더는 제거. */}
 
         {/* =============== 채널 탭 (Phase 3: 새 디자인) =============== */}
         {activeTab === 'channels' && (() => {
@@ -1453,307 +1439,616 @@ export default function Dashboard() {
           )
         })()}
 
-        {/* =============== 발송 설정 탭 (본문 - 이번 단계에서 디자인 미적용) =============== */}
-        {activeTab === 'schedule' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>발송 시간</div>
-              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 40, color: '#e8ff47' }}>{currentSendTime}</div>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <select
-                      value={pendingSendTime}
-                      onChange={e => setPendingSendTime(e.target.value)}
-                      style={{
-                        background: '#1a1a1a',
-                        border: `1px solid ${sendTimeChanged ? '#e8ff47' : '#333'}`,
-                        borderRadius: 6,
-                        padding: '8px 12px',
-                        color: '#f0f0f0',
-                        fontSize: 13,
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                      }}>
-                      {!sendTimeOptions.includes(pendingSendTime) && (
-                        <option value={pendingSendTime}>{pendingSendTime} (현재)</option>
-                      )}
-                      {sendTimeOptions.map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={saveSendTime}
-                      disabled={!sendTimeChanged}
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: 6,
-                        border: 'none',
-                        background: sendTimeChanged ? '#e8ff47' : '#333',
-                        color: sendTimeChanged ? '#000' : '#666',
-                        cursor: sendTimeChanged ? 'pointer' : 'not-allowed',
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}>
-                      저장
-                    </button>
-                    {sendTimeStatus === 'saved' && (
-                      <span style={{ fontSize: 12, color: '#47ffb2' }}>✓ 저장됨</span>
-                    )}
-                    {sendTimeChanged && sendTimeStatus !== 'saved' && (
-                      <span style={{ fontSize: 12, color: '#ffaa47' }}>● 미저장</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#666', marginTop: 6 }}>매일 이 시간에 자동 발송 (30분 단위)</div>
+        {/* =============== 발송 설정 탭 (Phase 4: 새 디자인) =============== */}
+        {activeTab === 'schedule' && (() => {
+          const cardStyle: React.CSSProperties = {
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 10,
+            padding: 16,
+          }
+          const primaryBtn: React.CSSProperties = {
+            padding: '8px 14px', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: 'var(--bg-card)',
+            cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            fontFamily: 'inherit', whiteSpace: 'nowrap',
+          }
+          const disabledBtn: React.CSSProperties = {
+            padding: '8px 14px', borderRadius: 8, border: 'none',
+            background: 'var(--bg-subtle)', color: 'var(--text-muted)',
+            cursor: 'not-allowed', fontSize: 13, fontWeight: 600,
+            fontFamily: 'inherit', whiteSpace: 'nowrap',
+          }
+          const inputStyle: React.CSSProperties = {
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 7,
+            padding: '8px 12px',
+            color: 'var(--text-primary)',
+            fontSize: 13, fontFamily: 'inherit',
+            outline: 'none', boxSizing: 'border-box',
+            transition: 'border-color 0.15s',
+          }
+          const sectionTitle: React.CSSProperties = {
+            fontSize: 14, fontWeight: 500,
+            color: 'var(--text-primary)',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }
+          const sectionSubtitle: React.CSSProperties = {
+            fontSize: 12, color: 'var(--text-tertiary)',
+            marginTop: 4, marginBottom: 14,
+          }
+          const proBadge: React.CSSProperties = {
+            fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+            color: 'var(--text-muted)',
+            background: 'var(--bg-subtle)',
+            padding: '2px 7px', borderRadius: 4,
+            whiteSpace: 'nowrap',
+          }
+
+          const notifChannels = [
+            { id: 'email', label: '이메일', icon: '📧', checked: true, locked: false, fixed: true },
+            { id: 'kakao', label: '카카오톡', icon: '💬', checked: false, locked: !isPro, fixed: false },
+            { id: 'telegram', label: '텔레그램', icon: '✈️', checked: false, locked: !isPro, fixed: false },
+            { id: 'discord', label: '디스코드', icon: '🎮', checked: false, locked: !isPro, fixed: false },
+          ]
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* 페이지 헤더 */}
+              <div style={{ marginBottom: 6 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--text-primary)', letterSpacing: -0.3 }}>
+                  발송 설정
+                </h1>
+                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                  다이제스트를 받을 시간과 방법을 설정하세요
                 </div>
               </div>
-            </div>
 
-            <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>수신 이메일</div>
-              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, alignItems: isMobile ? 'stretch' : 'center' }}>
-                <input
-                  type="email"
-                  value={pendingEmail}
-                  onChange={e => setPendingEmail(e.target.value)}
-                  placeholder="your@gmail.com"
-                  style={{
-                    flex: 1,
-                    background: '#1a1a1a',
-                    border: `1px solid ${emailChanged ? '#e8ff47' : '#333'}`,
-                    borderRadius: 6,
-                    padding: '8px 12px',
-                    color: '#f0f0f0',
-                    fontSize: 13,
-                    outline: 'none',
-                    transition: 'border-color 0.2s',
-                  }} />
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
-                  {emailStatus === 'saved' && (
-                    <span style={{ fontSize: 12, color: '#47ffb2' }}>✓ 저장됨</span>
-                  )}
-                  {emailChanged && emailStatus !== 'saved' && (
-                    <span style={{ fontSize: 12, color: '#ffaa47' }}>● 미저장</span>
-                  )}
-                  <button
-                    onClick={saveEmail}
-                    disabled={!emailChanged}
+              {/* 발송 시간 */}
+              <div style={cardStyle}>
+                <div style={sectionTitle}><span>⏰</span> 발송 시간</div>
+                <div style={sectionSubtitle}>매일 이 시간에 자동으로 요약을 받아봐요</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <select
+                    value={pendingSendTime}
+                    onChange={e => setPendingSendTime(e.target.value)}
                     style={{
-                      padding: '8px 16px',
-                      borderRadius: 6,
-                      border: 'none',
-                      background: emailChanged ? '#e8ff47' : '#333',
-                      color: emailChanged ? '#000' : '#666',
-                      cursor: emailChanged ? 'pointer' : 'not-allowed',
-                      fontSize: 13,
-                      fontWeight: 600,
+                      ...inputStyle,
+                      minWidth: 110,
+                      borderColor: sendTimeChanged ? 'var(--accent)' : 'var(--border)',
                     }}>
+                    {!sendTimeOptions.includes(pendingSendTime) && (
+                      <option value={pendingSendTime}>{pendingSendTime} (현재)</option>
+                    )}
+                    {sendTimeOptions.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <button onClick={saveSendTime} disabled={!sendTimeChanged}
+                    style={sendTimeChanged ? primaryBtn : disabledBtn}>
                     저장
                   </button>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>속보 키워드</div>
-                  <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>제목에 포함 시 즉시 알림 발송</div>
-                </div>
-                <div onClick={() => saveSettings({ breaking_alert: !settings?.breaking_alert })}
-                  style={{ width: 44, height: 24, borderRadius: 999, background: settings?.breaking_alert ? '#e8ff47' : '#333', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
-                  <div style={{ position: 'absolute', top: 3, left: settings?.breaking_alert ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                {(settings?.breaking_keywords ?? ['속보']).map(kw => (
-                  <div key={kw} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, background: '#ff475722', border: '1px solid #ff4757', fontSize: 13 }}>
-                    <span style={{ color: '#ff4757' }}>{kw}</span>
-                    <span onClick={() => removeKeyword(kw)} style={{ color: '#ff4757', cursor: 'pointer', fontSize: 11 }}>✕</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
-                <input value={newKeyword} onChange={e => setNewKeyword(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addKeyword()}
-                  placeholder="키워드 추가 (예: 긴급, breaking)"
-                  style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button onClick={addKeyword}
-                    style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>추가</button>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>지금 바로 실행</div>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>전날 영상을 지금 바로 요약해서 이메일로 발송해요</div>
-              {msg && <div style={{ fontSize: 13, marginBottom: 12, color: msg.includes('✅') ? '#47ffb2' : '#ff4757' }}>{msg}</div>}
-              <button onClick={runDigestNow} disabled={loading}
-                style={{ padding: '10px 20px', borderRadius: 6, border: 'none', background: loading ? '#333' : '#e8ff47', color: '#000', cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}>
-                {loading ? '요약 중...' : '🚀 지금 실행하기'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* =============== 열람 기록 탭 (본문 - 이번 단계에서 디자인 미적용) =============== */}
-        {activeTab === 'history' && (
-          <>
-            <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                {[
-                  { key: 'all', label: '전체' },
-                  { key: 'breaking', label: '🚨 속보만' },
-                ].map(f => (
-                  <div key={f.key} onClick={() => setHistoryFilter(f.key as any)}
-                    style={{ padding: '7px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer', background: historyFilter === f.key ? '#1a1a1a' : 'transparent', color: historyFilter === f.key ? '#f0f0f0' : '#666', border: '1px solid #333' }}>
-                    {f.label}
-                  </div>
-                ))}
-                <div style={{ marginLeft: 'auto', fontSize: 13, color: '#666', display: 'flex', alignItems: 'center' }}>
-                  총 {filteredDigests.length}개
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr 1fr', gap: 8 }}>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    value={historySearch}
-                    onChange={e => setHistorySearch(e.target.value)}
-                    placeholder="🔍 제목 또는 내용 검색"
-                    style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 36px 8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                  />
-                  {historySearch && (
-                    <span onClick={() => setHistorySearch('')}
-                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#666', fontSize: 14, padding: '2px 6px', borderRadius: 4 }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#f0f0f0')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#666')}>
-                      ✕
-                    </span>
+                  {sendTimeStatus === 'saved' && (
+                    <span style={{ fontSize: 12, color: 'var(--success)' }}>✓ 저장됨</span>
+                  )}
+                  {sendTimeChanged && sendTimeStatus !== 'saved' && (
+                    <span style={{ fontSize: 12, color: 'var(--warning)' }}>● 변경됨</span>
                   )}
                 </div>
-                <input
-                  type="date"
-                  value={historyDate}
-                  onChange={e => setHistoryDate(e.target.value)}
-                  title="발송일 기준 필터"
-                  style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}
-                />
-                <select
-                  value={historyChannel}
-                  onChange={e => setHistoryChannel(e.target.value)}
-                  style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}>
-                  <option value="">모든 채널</option>
-                  {uniqueChannels.map(ch => <option key={ch} value={ch}>{ch}</option>)}
-                </select>
-                <select
-                  value={historyCategory}
-                  onChange={e => setHistoryCategory(e.target.value)}
-                  style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }}>
-                  <option value="">모든 카테고리</option>
-                  {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+                {!isPro && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, textAlign: 'right' }}>
+                    💡 Pro 사용자는 여러 시간 설정 가능
+                  </div>
+                )}
               </div>
 
-              {(historySearch || historyDate || historyChannel || historyCategory) && (
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+              {/* 수신 이메일 */}
+              <div style={cardStyle}>
+                <div style={sectionTitle}><span>📧</span> 수신 이메일</div>
+                <div style={sectionSubtitle}>다이제스트를 받을 이메일 주소</div>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center' }}>
+                  <input
+                    type="email"
+                    value={pendingEmail}
+                    onChange={e => setPendingEmail(e.target.value)}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = emailChanged ? 'var(--accent)' : 'var(--border)')}
+                    placeholder="your@email.com"
+                    style={{
+                      ...inputStyle,
+                      flex: 1,
+                      borderColor: emailChanged ? 'var(--accent)' : 'var(--border)',
+                    }} />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+                    {emailStatus === 'saved' && (
+                      <span style={{ fontSize: 12, color: 'var(--success)' }}>✓ 저장됨</span>
+                    )}
+                    {emailChanged && emailStatus !== 'saved' && (
+                      <span style={{ fontSize: 12, color: 'var(--warning)' }}>● 변경됨</span>
+                    )}
+                    <button onClick={saveEmail} disabled={!emailChanged}
+                      style={emailChanged ? primaryBtn : disabledBtn}>
+                      저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 알림 채널 */}
+              <div style={cardStyle}>
+                <div style={sectionTitle}><span>🔔</span> 알림 채널</div>
+                <div style={sectionSubtitle}>다이제스트를 받을 채널을 선택하세요</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {notifChannels.map(ch => (
+                    <div key={ch.id}
+                      onClick={() => {
+                        if (ch.locked) {
+                          console.log('[phase4] open upgrade modal — channel:', ch.id)
+                        } else if (ch.fixed) {
+                          // 이메일은 변경 불가
+                        } else {
+                          console.log('[phase4] toggle channel:', ch.id)
+                        }
+                      }}
+                      onMouseEnter={e => { if (!ch.fixed) e.currentTarget.style.background = 'var(--bg-subtle)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 12px', borderRadius: 7,
+                        cursor: ch.fixed ? 'default' : 'pointer',
+                        background: 'transparent',
+                        transition: 'background 0.15s',
+                        opacity: ch.locked ? 0.65 : 1,
+                      }}>
+                      <span style={{
+                        width: 18, height: 18, borderRadius: 4,
+                        border: '0.5px solid var(--border)',
+                        background: ch.checked ? 'var(--accent)' : 'var(--bg-card)',
+                        color: 'var(--bg-card)',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        {ch.checked ? '✓' : ''}
+                      </span>
+                      <span style={{
+                        fontSize: 13,
+                        color: ch.locked ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                      }}>
+                        {ch.icon} {ch.label}
+                      </span>
+                      {ch.locked && (
+                        <span style={{ marginLeft: 'auto', ...proBadge }}>🔒 Pro</span>
+                      )}
+                      {ch.fixed && (
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
+                          기본
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 속보 키워드 */}
+              <div style={{ ...cardStyle, opacity: isPro ? 1 : 0.85 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={sectionTitle}><span>🚨</span> 속보 키워드</div>
+                  {!isPro ? (
+                    <span style={proBadge}>🔒 Pro 전용</span>
+                  ) : (
+                    <div onClick={() => saveSettings({ breaking_alert: !settings?.breaking_alert })}
+                      style={{
+                        width: 36, height: 20, borderRadius: 999,
+                        background: settings?.breaking_alert ? 'var(--accent)' : 'var(--bg-subtle)',
+                        border: '0.5px solid var(--border)',
+                        position: 'relative', cursor: 'pointer',
+                        transition: 'background 0.2s', flexShrink: 0,
+                      }}>
+                      <div style={{
+                        position: 'absolute', top: 2, left: settings?.breaking_alert ? 18 : 2,
+                        width: 14, height: 14, borderRadius: '50%',
+                        background: settings?.breaking_alert ? 'var(--bg-card)' : 'var(--text-tertiary)',
+                        transition: 'left 0.2s',
+                      }} />
+                    </div>
+                  )}
+                </div>
+                <div style={sectionSubtitle}>영상 제목에 키워드가 있으면 즉시 알림</div>
+
+                {/* 키워드 칩 */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  {(settings?.breaking_keywords ?? ['속보']).map(kw => (
+                    <div key={kw} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '4px 10px', borderRadius: 999,
+                      background: 'var(--bg-subtle)',
+                      border: '0.5px solid var(--border)',
+                      fontSize: 12, fontWeight: 500,
+                      color: 'var(--danger)',
+                    }}>
+                      <span>{kw}</span>
+                      {isPro && (
+                        <span onClick={() => removeKeyword(kw)}
+                          style={{ cursor: 'pointer', fontSize: 10, color: 'var(--text-muted)' }}>✕</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 키워드 추가 */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={newKeyword}
+                    onChange={e => setNewKeyword(e.target.value)}
+                    onKeyDown={e => isPro && e.key === 'Enter' && addKeyword()}
+                    onFocus={e => isPro && (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                    placeholder={isPro ? '키워드 추가 (예: 긴급, breaking)' : '🔒 Pro 업그레이드 필요'}
+                    disabled={!isPro}
+                    style={{ ...inputStyle, flex: 1, opacity: isPro ? 1 : 0.6 }} />
                   <button onClick={() => {
-                    setHistorySearch('')
-                    setHistoryDate('')
-                    setHistoryChannel('')
-                    setHistoryCategory('')
-                  }} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 12 }}>
-                    필터 초기화
+                      if (!isPro) {
+                        console.log('[phase4] open upgrade modal — breaking keywords')
+                        return
+                      }
+                      addKeyword()
+                    }}
+                    style={isPro ? primaryBtn : disabledBtn}>
+                    {isPro ? '+ 추가' : '🔒 Pro'}
                   </button>
+                </div>
+              </div>
+
+              {/* 지금 바로 실행 */}
+              <div style={cardStyle}>
+                <div style={sectionTitle}><span>⚡</span> 지금 바로 실행</div>
+                <div style={sectionSubtitle}>어제 영상을 지금 요약해서 이메일로 받기</div>
+                {msg && (
+                  <div style={{
+                    fontSize: 12, marginBottom: 10,
+                    color: msg.includes('✅') ? 'var(--success)' : 'var(--danger)',
+                  }}>{msg}</div>
+                )}
+                <button onClick={runDigestNow} disabled={loading}
+                  style={{
+                    ...primaryBtn,
+                    padding: '10px 16px',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    background: loading ? 'var(--bg-subtle)' : 'var(--accent)',
+                    color: loading ? 'var(--text-muted)' : 'var(--bg-card)',
+                  }}>
+                  {loading ? '요약 중...' : '🚀 지금 실행하기'}
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* =============== 열람 기록 탭 (Phase 4: 새 디자인) =============== */}
+        {activeTab === 'history' && (() => {
+          const cardStyle: React.CSSProperties = {
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 10,
+            padding: 16,
+          }
+          const primaryBtn: React.CSSProperties = {
+            padding: '8px 14px', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: 'var(--bg-card)',
+            cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            fontFamily: 'inherit', whiteSpace: 'nowrap',
+          }
+          const secondaryBtn: React.CSSProperties = {
+            padding: '6px 12px', borderRadius: 7,
+            border: '0.5px solid var(--border)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer', fontSize: 12, fontWeight: 500,
+            fontFamily: 'inherit', whiteSpace: 'nowrap',
+          }
+          const inputStyle: React.CSSProperties = {
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 7,
+            padding: '8px 12px',
+            color: 'var(--text-primary)',
+            fontSize: 13, fontFamily: 'inherit',
+            outline: 'none', boxSizing: 'border-box',
+            width: '100%',
+            transition: 'border-color 0.15s',
+          }
+          const hasFilter = !!(historySearch || historyDate || historyChannel || historyCategory) || historyFilter !== 'all'
+          const formatShortDate = (iso?: string | null) => {
+            if (!iso) return '-'
+            const d = new Date(iso)
+            return `${d.getMonth() + 1}.${d.getDate()}.`
+          }
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* 페이지 헤더 */}
+              <div style={{ marginBottom: 6 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--text-primary)', letterSpacing: -0.3 }}>
+                  열람 기록
+                </h1>
+                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                  최근 {retentionDays}일간 받은 다이제스트
+                </div>
+              </div>
+
+              {/* 필터 카드 */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>필터</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                    총 {filteredDigests.length}개
+                  </span>
+                </div>
+
+                {/* 전체 / 속보만 칩 */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <button
+                    className={`cat-chip${historyFilter === 'all' ? ' active' : ''}`}
+                    onClick={() => setHistoryFilter('all')}>
+                    전체
+                  </button>
+                  <button
+                    className={`cat-chip${historyFilter === 'breaking' ? ' active' : ''}`}
+                    onClick={() => setHistoryFilter('breaking')}>
+                    🚨 속보만
+                  </button>
+                </div>
+
+                {/* 입력 필터들 */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr 1fr',
+                  gap: 8,
+                }}>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      value={historySearch}
+                      onChange={e => setHistorySearch(e.target.value)}
+                      onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                      placeholder="🔍 제목 또는 내용 검색"
+                      style={{ ...inputStyle, paddingRight: 32 }}
+                    />
+                    {historySearch && (
+                      <span onClick={() => setHistorySearch('')}
+                        style={{
+                          position: 'absolute', right: 10, top: '50%',
+                          transform: 'translateY(-50%)',
+                          cursor: 'pointer', fontSize: 13,
+                          color: 'var(--text-muted)',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
+                        ✕
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={historyDate}
+                    onChange={e => setHistoryDate(e.target.value)}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                    title="발송일 기준 필터"
+                    style={inputStyle}
+                  />
+                  <select
+                    value={historyChannel}
+                    onChange={e => setHistoryChannel(e.target.value)}
+                    style={inputStyle}>
+                    <option value="">모든 채널</option>
+                    {uniqueChannels.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+                  </select>
+                  <select
+                    value={historyCategory}
+                    onChange={e => setHistoryCategory(e.target.value)}
+                    style={inputStyle}>
+                    <option value="">모든 카테고리</option>
+                    {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+
+                {hasFilter && (
+                  <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={() => {
+                      setHistorySearch('')
+                      setHistoryDate('')
+                      setHistoryChannel('')
+                      setHistoryCategory('')
+                      setHistoryFilter('all')
+                    }} style={secondaryBtn}>
+                      초기화
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 기록 목록 / 빈 상태 */}
+              {filteredDigests.length === 0 ? (
+                <div style={{ ...cardStyle, padding: '48px 24px', textAlign: 'center' }}>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%',
+                    background: 'var(--bg-subtle)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 24, marginBottom: 16,
+                  }}>📬</div>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
+                    {hasFilter ? '일치하는 기록이 없어요' : '아직 받은 다이제스트가 없어요'}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 18 }}>
+                    {hasFilter ? (
+                      <>필터를 조정해서 다시 검색해 보세요</>
+                    ) : (
+                      <>채널을 추가하고 발송 시간을 설정하면<br />매일 요약을 받아볼 수 있어요</>
+                    )}
+                  </div>
+                  {!hasFilter && (
+                    <button onClick={() => setActiveTab('channels')}
+                      style={{ ...primaryBtn, padding: '10px 18px' }}>
+                      채널 관리하러 가기 →
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {filteredDigests.map(digest => {
+                    const isUnread = digest.is_breaking && !digest.is_read
+                    const isExpanded = expandedDigest === digest.id
+                    return (
+                      <div key={digest.id}
+                        onMouseEnter={e => { if (!isUnread) e.currentTarget.style.borderColor = 'var(--text-muted)' }}
+                        onMouseLeave={e => { if (!isUnread) e.currentTarget.style.borderColor = 'var(--border)' }}
+                        style={{
+                          background: 'var(--bg-card)',
+                          border: '0.5px solid var(--border)',
+                          borderLeftWidth: isUnread ? 3 : 0.5,
+                          borderLeftColor: isUnread ? 'var(--danger)' : 'var(--border)',
+                          borderRadius: 10,
+                          overflow: 'hidden',
+                          transition: 'border-color 0.15s',
+                        }}>
+                        {/* 헤더 (클릭 → 펼침 + 자동 읽음) */}
+                        <div onClick={() => {
+                          const isOpening = !isExpanded
+                          setExpandedDigest(isExpanded ? null : digest.id)
+                          if (isOpening) markAsRead(digest.id)
+                        }}
+                          style={{
+                            padding: '14px 16px',
+                            display: 'flex', alignItems: 'center', gap: 12,
+                            cursor: 'pointer',
+                          }}>
+                          <div style={{ fontSize: 18, flexShrink: 0 }}>{digest.channel_emoji}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                              {digest.is_breaking && (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  fontSize: 11, fontWeight: 600,
+                                  color: isUnread ? 'var(--danger)' : 'var(--text-muted)',
+                                  flexShrink: 0,
+                                }}>
+                                  <span style={{
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: 'currentColor',
+                                  }} />
+                                  속보
+                                </span>
+                              )}
+                              <span style={{
+                                fontSize: 14, fontWeight: 500, color: 'var(--text-primary)',
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                minWidth: 0,
+                              }}>{digest.video_title}</span>
+                            </div>
+                            <div style={{
+                              fontSize: 11, color: 'var(--text-tertiary)',
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              flexWrap: 'wrap',
+                            }}>
+                              <span>{digest.channel_alias}</span>
+                              {digest.category_name && (
+                                <>
+                                  <span style={{ color: 'var(--text-muted)' }}>·</span>
+                                  <span>{digest.category_name}</span>
+                                </>
+                              )}
+                              <span style={{ color: 'var(--text-muted)' }}>·</span>
+                              <span>🎬 {formatShortDate(digest.published_at)}</span>
+                              <span style={{ color: 'var(--text-muted)' }}>·</span>
+                              <span>📅 {formatShortDate(digest.created_at)}</span>
+                            </div>
+                          </div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
+                            {isExpanded ? '▲' : '▼'}
+                          </div>
+                        </div>
+
+                        {/* 펼친 영역 */}
+                        {isExpanded && (
+                          <div style={{
+                            padding: '14px 16px 16px',
+                            borderTop: '0.5px solid var(--border-light)',
+                          }}>
+                            <div style={{
+                              fontSize: 13, color: 'var(--text-secondary)',
+                              lineHeight: 1.7, marginBottom: 14,
+                            }}>
+                              {digest.summary}
+                            </div>
+
+                            {digest.key_points?.length > 0 && (
+                              <div style={{ marginBottom: 14 }}>
+                                <div style={{
+                                  fontSize: 11, color: 'var(--text-tertiary)',
+                                  fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
+                                }}>
+                                  📌 핵심 포인트
+                                </div>
+                                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                  {digest.key_points.map((p, i) => (
+                                    <li key={i} style={{
+                                      fontSize: 13, color: 'var(--text-secondary)',
+                                      marginBottom: 4, lineHeight: 1.6,
+                                    }}>{p}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {digest.timeline?.length > 0 && (
+                              <div style={{ marginBottom: 14 }}>
+                                <div style={{
+                                  fontSize: 11, color: 'var(--text-tertiary)',
+                                  fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
+                                }}>
+                                  🕐 타임라인
+                                </div>
+                                {digest.timeline.map((t, i) => (
+                                  <div key={i} style={{
+                                    fontSize: 12, color: 'var(--text-secondary)',
+                                    marginBottom: 4, lineHeight: 1.6,
+                                  }}>
+                                    <span style={{
+                                      display: 'inline-block',
+                                      background: 'var(--bg-subtle)',
+                                      color: 'var(--text-primary)',
+                                      padding: '1px 6px', borderRadius: 4,
+                                      marginRight: 8,
+                                      fontSize: 11, fontWeight: 500,
+                                    }}>{t.time}</span>
+                                    {t.content}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <a href={digest.video_url} target="_blank" rel="noreferrer"
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                background: 'var(--danger)', color: '#fff',
+                                padding: '8px 14px', borderRadius: 7,
+                                textDecoration: 'none',
+                                fontSize: 12, fontWeight: 600,
+                              }}>
+                              ▶ 영상 보기
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {filteredDigests.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', color: '#444', border: '1px dashed #333', borderRadius: 10 }}>
-                  아직 기록이 없어요
-                </div>
-              ) : filteredDigests.map(digest => {
-                const isUnread = digest.is_breaking && !digest.is_read
-                return (
-                <div key={digest.id} style={{
-                  background: '#111',
-                  border: `1px solid ${isUnread ? '#ff4757' : digest.is_breaking ? '#552230' : '#222'}`,
-                  borderRadius: 10,
-                  overflow: 'hidden',
-                  boxShadow: isUnread ? '0 0 0 1px rgba(255, 71, 87, 0.3)' : 'none',
-                }}>
-                  <div onClick={() => {
-                    const isOpening = expandedDigest !== digest.id
-                    setExpandedDigest(expandedDigest === digest.id ? null : digest.id)
-                    if (isOpening) {
-                      markAsRead(digest.id)
-                    }
-                  }}
-                    style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                    <div style={{ fontSize: 20, flexShrink: 0 }}>{digest.channel_emoji}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        {digest.is_breaking && !digest.is_read && (
-                          <span style={{ background: '#ff4757', color: '#fff', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4 }}>속보</span>
-                        )}
-                        {digest.is_breaking && digest.is_read && (
-                          <span style={{ background: '#552230', color: '#999', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4 }}>속보</span>
-                        )}
-                        <span style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{digest.video_title}</span>
-                      </div>
-                      <div style={{ fontSize: 12, color: '#666' }}>
-                        {digest.channel_alias} · {digest.category_name} · 🎬 게시일 {digest.published_at ? new Date(digest.published_at).toLocaleDateString('ko-KR') : '-'} · 📅 발송일 {new Date(digest.created_at).toLocaleDateString('ko-KR')}
-                      </div>
-                    </div>
-                    <div style={{ color: '#444', fontSize: 12, flexShrink: 0 }}>
-                      {expandedDigest === digest.id ? '▲' : '▼'}
-                    </div>
-                  </div>
-
-                  {expandedDigest === digest.id && (
-                    <div style={{ padding: '0 16px 16px', borderTop: '1px solid #222' }}>
-                      <div style={{ paddingTop: 14 }}>
-                        <div style={{ fontSize: 13, color: '#ccc', lineHeight: 1.7, marginBottom: 12 }}>{digest.summary}</div>
-
-                        {digest.key_points?.length > 0 && (
-                          <div style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 11, color: '#666', fontWeight: 600, marginBottom: 6, letterSpacing: 1 }}>핵심 포인트</div>
-                            <ul style={{ margin: 0, paddingLeft: 16 }}>
-                              {digest.key_points.map((p, i) => (
-                                <li key={i} style={{ fontSize: 13, color: '#ccc', marginBottom: 4 }}>{p}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {digest.timeline?.length > 0 && (
-                          <div style={{ marginBottom: 14 }}>
-                            <div style={{ fontSize: 11, color: '#666', fontWeight: 600, marginBottom: 6, letterSpacing: 1 }}>타임라인</div>
-                            {digest.timeline.map((t, i) => (
-                              <div key={i} style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>
-                                <span style={{ background: '#e8ff47', color: '#000', padding: '1px 6px', borderRadius: 4, marginRight: 6, fontSize: 11 }}>{t.time}</span>
-                                {t.content}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        <a href={digest.video_url} target="_blank" rel="noreferrer"
-                          style={{ display: 'inline-block', background: '#ff0000', color: '#fff', padding: '7px 14px', borderRadius: 6, textDecoration: 'none', fontSize: 13 }}>
-                          ▶ 영상 보기
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                )
-              })}
-            </div>
-          </>
-        )}
+          )
+        })()}
       </main>
     </div>
   )
