@@ -92,13 +92,16 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
-  const plan = 'FREE' as 'FREE' | 'PRO' // TODO: 추후 결제 연동 시 settings 또는 profile 에서 가져옴
-  const isPro = plan === 'PRO'
+  // 실제 구독 상태 (지금은 항상 false. 추후 결제 연동 시 settings/profile에서 가져옴)
+  const [isPro, setIsPro] = useState(false)
+  // 관리자 전용 임시 모드 토글 ('free' | 'pro') — localStorage에 영속화
+  const [adminPlanMode, setAdminPlanMode] = useState<'free' | 'pro'>('free')
+  const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
   // --- Phase 3: 채널 탭 검색 상태 ---
   const [channelSearch, setChannelSearch] = useState('')
   const [showChannelSearch, setShowChannelSearch] = useState(false)
-  // Free 플랜 한도 (추후 plan 별로 다이내믹하게)
+  // Free 한도 (Pro는 한도 없음 → 렌더에서 '무제한' 처리)
   const channelLimit = 5
   const retentionDays = isPro ? 30 : 7
 
@@ -107,7 +110,19 @@ export default function Dashboard() {
       if (!data.user) { window.location.href = '/'; return }
       setUser(data.user)
       const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
-      setIsAdmin(adminEmails.includes(data.user.email?.toLowerCase() ?? ''))
+      const isAdminUser = adminEmails.includes(data.user.email?.toLowerCase() ?? '')
+      setIsAdmin(isAdminUser)
+
+      // 관리자: localStorage에 저장된 임시 모드 복원 / 일반 사용자: 항상 Free
+      if (isAdminUser) {
+        const savedMode = localStorage.getItem('admin_plan_mode')
+        if (savedMode === 'pro') {
+          setAdminPlanMode('pro')
+          setIsPro(true)
+        }
+      } else {
+        setIsPro(false)
+      }
 
       // 프로필 없으면 자동 생성
       const { data: profile } = await supabase
@@ -374,6 +389,13 @@ export default function Dashboard() {
 
   function toggleTheme() {
     setTheme(t => (t === 'light' ? 'dark' : 'light'))
+  }
+
+  function switchPlanMode(mode: 'free' | 'pro') {
+    setAdminPlanMode(mode)
+    setIsPro(mode === 'pro')
+    try { localStorage.setItem('admin_plan_mode', mode) } catch {}
+    console.log(`[Admin] Plan mode switched to: ${mode}`)
   }
 
   const filteredChannels = filterCat ? channels.filter(c => c.category_id === filterCat) : channels
@@ -673,6 +695,47 @@ export default function Dashboard() {
                   Pro 업그레이드
                 </button>
               )}
+              {/* 관리자 전용 Free/Pro 임시 모드 토글 */}
+              {isAdmin && (
+                <div title="관리자 전용 미리보기 — 실제 구독 상태가 아닙니다"
+                  style={{
+                    display: 'inline-flex',
+                    background: 'var(--bg-subtle)',
+                    borderRadius: 7,
+                    padding: 2,
+                    border: '0.5px dashed var(--border)',
+                  }}>
+                  {(['free', 'pro'] as const).map(mode => {
+                    const active = adminPlanMode === mode
+                    const label = mode === 'pro' ? 'Pro' : 'Free'
+                    return (
+                      <button key={mode}
+                        onClick={() => switchPlanMode(mode)}
+                        onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)' }}
+                        onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-tertiary)' }}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 5,
+                          background: active ? 'var(--bg-card)' : 'transparent',
+                          color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                          fontWeight: active ? 500 : 400,
+                          boxShadow: active ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                          border: 'none',
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          transition: 'background 0.15s, color 0.15s',
+                        }}>
+                        <span style={{ fontSize: 10, opacity: active ? 1 : 0.6 }}>👁</span>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <button ref={settingsBtnRef} onClick={() => setSettingsOpen(o => !o)}
                 aria-label="설정"
                 style={gearBtn}>
@@ -940,13 +1003,19 @@ export default function Dashboard() {
                     <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
                       {channels.length}
                     </span>
-                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>/ {channelLimit}</span>
+                    {!isPro && (
+                      <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>/ {channelLimit}</span>
+                    )}
                   </div>
                   <div style={{
                     fontSize: 10, marginTop: 4,
-                    color: channels.length >= channelLimit ? 'var(--danger)' : 'var(--text-tertiary)',
+                    color: !isPro && channels.length >= channelLimit ? 'var(--danger)' : 'var(--text-tertiary)',
                   }}>
-                    {channels.length >= channelLimit ? '⚠ 한도 도달' : `Free 한도 ${channelLimit}개`}
+                    {isPro
+                      ? '✨ Pro 무제한'
+                      : channels.length >= channelLimit
+                        ? '⚠ 한도 도달'
+                        : `Free 한도 ${channelLimit}개`}
                   </div>
                 </div>
 
