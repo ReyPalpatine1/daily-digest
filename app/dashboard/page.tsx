@@ -11,6 +11,30 @@ function randomColor(usedColors: string[] = []) {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
+// KST 기준 YYYY-MM-DD (offset 일수만큼 이전 날짜)
+function kstDateStr(offsetDays = 0): string {
+  const now = new Date()
+  const kst = new Date(now.getTime() + 9 * 3600_000 - offsetDays * 86_400_000)
+  return kst.toISOString().slice(0, 10)
+}
+
+function timeAgo(iso?: string | null): string {
+  if (!iso) return ''
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 0) return '방금'
+  const min = Math.floor(ms / 60_000)
+  if (min < 1) return '방금'
+  if (min < 60) return `${min}분 전`
+  const hour = Math.floor(min / 60)
+  if (hour < 24) return `${hour}시간 전`
+  const day = Math.floor(hour / 24)
+  if (day < 7) return `${day}일 전`
+  const week = Math.floor(day / 7)
+  if (week < 4) return `${week}주 전`
+  const month = Math.floor(day / 30)
+  return `${month}개월 전`
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null)
   const [categories, setCategories] = useState<Category[]>([])
@@ -69,6 +93,13 @@ export default function Dashboard() {
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
   const plan: 'FREE' | 'PRO' = 'FREE' // TODO: 추후 결제 연동 시 settings 또는 profile 에서 가져옴
+
+  // --- Phase 3: 채널 탭 검색 상태 ---
+  const [channelSearch, setChannelSearch] = useState('')
+  const [showChannelSearch, setShowChannelSearch] = useState(false)
+  // Free 플랜 한도 (추후 plan 별로 다이내믹하게)
+  const channelLimit = 5
+  const retentionDays = plan === 'FREE' ? 7 : 30
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -746,419 +777,681 @@ export default function Dashboard() {
       {/* =============== 메인 본문 =============== */}
       <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 28px' }}>
 
-        {/* 콘텐츠 헤더 (타이틀 + 페이지 액션) */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexWrap: 'wrap', gap: 12, marginBottom: 16,
-        }}>
-          <h1 style={{
-            fontSize: isMobile ? 20 : 24,
-            fontWeight: 700, margin: 0,
-            color: 'var(--text-primary)',
-            letterSpacing: -0.3,
+        {/* 콘텐츠 헤더 - 채널 탭은 전용 인삿말 헤더(아래)를 사용하므로 제외 */}
+        {activeTab !== 'channels' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 12, marginBottom: 16,
           }}>
-            {activeTab === 'channels' ? '채널 관리' : activeTab === 'schedule' ? '발송 설정' : '열람 기록'}
-          </h1>
-          {activeTab === 'channels' && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShowAddCategory(!showAddCategory)}
-                style={{
-                  padding: isMobile ? '6px 10px' : '8px 14px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-card)',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontSize: isMobile ? 12 : 13,
-                  fontFamily: 'inherit',
-                }}>
-                + {isMobile ? '분류' : '카테고리'}
-              </button>
-              <button onClick={() => setShowAddChannel(!showAddChannel)}
-                style={{
-                  padding: isMobile ? '6px 10px' : '8px 14px',
-                  borderRadius: 8,
-                  border: 'none',
-                  background: 'var(--accent)',
-                  color: 'var(--bg-card)',
-                  cursor: 'pointer',
-                  fontSize: isMobile ? 12 : 13,
-                  fontWeight: 600,
-                  fontFamily: 'inherit',
-                }}>
-                + 채널
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 카테고리 필터 칩 (임시 배치 - 다음 단계에서 본문과 정리) */}
-        {activeTab === 'channels' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-            <button onClick={() => setFilterCat(null)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 7,
-                background: filterCat === null ? 'var(--bg-subtle)' : 'transparent',
-                color: filterCat === null ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                fontWeight: filterCat === null ? 500 : 400,
-                border: '1px solid var(--border)',
-                fontSize: 12,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}>
-              전체
-              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{channels.length}</span>
-            </button>
-            {categories.map(cat => {
-              const active = filterCat === cat.id
-              if (editingCat === cat.id) {
-                return (
-                  <div key={cat.id} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    padding: '3px 8px', borderRadius: 7,
-                    border: '1px solid var(--accent)', background: 'var(--bg-card)',
-                  }}>
-                    <input
-                      autoFocus
-                      value={editingCatName}
-                      onChange={e => setEditingCatName(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') updateCategoryName(cat.id, editingCatName)
-                        if (e.key === 'Escape') setEditingCat(null)
-                      }}
-                      style={{
-                        background: 'transparent', border: 'none',
-                        padding: '2px 4px', color: 'var(--text-primary)',
-                        fontSize: 12, outline: 'none', width: 90,
-                        fontFamily: 'inherit',
-                      }}
-                    />
-                    <span onClick={() => updateCategoryName(cat.id, editingCatName)}
-                      style={{ cursor: 'pointer', color: 'var(--success)', fontSize: 11 }}>✓</span>
-                    <span onClick={() => setEditingCat(null)}
-                      style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11 }}>✕</span>
-                  </div>
-                )
-              }
-              return (
-                <div key={cat.id}
-                  style={{
-                    padding: '6px 10px',
-                    borderRadius: 7,
-                    background: active ? 'var(--bg-subtle)' : 'transparent',
-                    color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                    fontWeight: active ? 500 : 400,
-                    border: '1px solid var(--border)',
-                    fontSize: 12,
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}>
-                  <span onClick={() => setFilterCat(cat.id)}
-                    style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, cursor: 'pointer', flexShrink: 0 }} />
-                  <span onClick={() => setFilterCat(cat.id)} style={{ cursor: 'pointer' }}>{cat.name}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                    {channels.filter(c => c.category_id === cat.id).length}
-                  </span>
-                  <span onClick={(e) => { e.stopPropagation(); setEditingCat(cat.id); setEditingCatName(cat.name) }}
-                    style={{ color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, marginLeft: 2 }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
-                    ✎
-                  </span>
-                  <span onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id) }}
-                    style={{ color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11 }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
-                    ✕
-                  </span>
-                </div>
-              )
-            })}
+            <h1 style={{
+              fontSize: isMobile ? 20 : 24,
+              fontWeight: 700, margin: 0,
+              color: 'var(--text-primary)',
+              letterSpacing: -0.3,
+            }}>
+              {activeTab === 'schedule' ? '발송 설정' : '열람 기록'}
+            </h1>
           </div>
         )}
 
-        {/* =============== 채널 탭 (본문 - 이번 단계에서 디자인 미적용) =============== */}
-        {activeTab === 'channels' && (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(3,1fr)', gap: isMobile ? 8 : 12, marginBottom: isMobile ? 16 : 24 }}>
-              {[
-                { label: '구독 채널', value: channels.length, unit: '개' },
-                { label: '카테고리', value: categories.length, unit: '개' },
-                { label: '저장된 기록', value: digests.length, unit: '개' },
-              ].map(s => (
-                <div key={s.label} style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: isMobile ? 12 : 16 }}>
-                  <div style={{ fontSize: isMobile ? 10 : 11, color: '#666', marginBottom: isMobile ? 4 : 8 }}>{s.label}</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: isMobile ? 22 : 28, color: '#e8ff47' }}>{s.value}</div>
-                  <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>{s.unit}</div>
-                </div>
-              ))}
-            </div>
+        {/* =============== 채널 탭 (Phase 3: 새 디자인) =============== */}
+        {activeTab === 'channels' && (() => {
+          const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '사용자'
+          const todayStr = kstDateStr(0)
+          const yesterdayStr = kstDateStr(1)
+          const todayDigestCount = digests.filter(d => d.created_at?.startsWith(todayStr)).length
+          const yesterdayDigestCount = digests.filter(d => d.created_at?.startsWith(yesterdayStr)).length
+          const dailyDelta = todayDigestCount - yesterdayDigestCount
+          const breakingTotal = digests.filter(d => d.is_breaking).length
+          const channelStats = (alias: string) => {
+            const list = digests.filter(d => d.channel_alias === alias)
+            return {
+              today: list.filter(d => d.created_at?.startsWith(todayStr)).length,
+              unreadBreaking: list.filter(d => d.is_breaking && !d.is_read).length,
+              lastDigest: list[0],
+              total: list.length,
+            }
+          }
+          const visibleChannels = filteredChannels.filter(ch =>
+            channelSearch.trim() === '' ||
+            ch.alias.toLowerCase().includes(channelSearch.trim().toLowerCase())
+          )
 
-            {showAddCategory && (
-              <div style={{ background: '#111', border: '1px solid #333', borderRadius: 10, padding: 20, marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>새 카테고리</div>
-                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
-                  <input value={newCategory.name} onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
-                    onKeyDown={e => e.key === 'Enter' && addCategory()}
-                    placeholder="카테고리 이름" style={{ flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
-                    <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }}
-                      style={{ padding: isMobile ? '6px 12px' : '8px 16px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13 }}>
-                      취소
-                    </button>
-                    <button onClick={addCategory}
-                      style={{ padding: isMobile ? '6px 12px' : '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      추가
-                    </button>
+          // 공통 스타일
+          const cardStyle: React.CSSProperties = {
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 10,
+            padding: 14,
+          }
+          const primaryBtn: React.CSSProperties = {
+            padding: '8px 14px',
+            borderRadius: 8,
+            border: 'none',
+            background: 'var(--accent)',
+            color: 'var(--bg-card)',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 600,
+            fontFamily: 'inherit',
+            whiteSpace: 'nowrap',
+          }
+          const secondaryBtn: React.CSSProperties = {
+            padding: '8px 14px',
+            borderRadius: 8,
+            border: '0.5px solid var(--border)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 500,
+            fontFamily: 'inherit',
+            whiteSpace: 'nowrap',
+          }
+          const inputStyle: React.CSSProperties = {
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 7,
+            padding: '8px 12px',
+            color: 'var(--text-primary)',
+            fontSize: 13,
+            fontFamily: 'inherit',
+            outline: 'none',
+            width: '100%',
+            boxSizing: 'border-box',
+          }
+          const labelStyle: React.CSSProperties = {
+            fontSize: 12,
+            color: 'var(--text-tertiary)',
+            display: 'block',
+            marginBottom: 4,
+          }
+          const rowActionBtn: React.CSSProperties = {
+            width: 26, height: 26, borderRadius: 6,
+            border: '0.5px solid var(--border)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer', fontSize: 11,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'inherit',
+          }
+
+          return (
+            <>
+              {/* 인삿말 헤더 */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--text-primary)', letterSpacing: -0.3 }}>
+                    안녕하세요, {userName}님 <span style={{ display: 'inline-block' }}>👋</span>
+                  </h1>
+                  <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                    오늘 <strong style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{channels.length}개 채널</strong>에서{' '}
+                    <strong style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{todayDigestCount}개 영상</strong>을 요약했어요
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button onClick={() => setShowAddCategory(v => !v)} style={secondaryBtn}>
+                    + {isMobile ? '분류' : '카테고리'}
+                  </button>
+                  <button onClick={() => setShowAddChannel(v => !v)} style={primaryBtn}>
+                    + 채널 추가
+                  </button>
+                </div>
+              </div>
+
+              {/* Pro 업그레이드 배너 (Free + 비관리자만) */}
+              {plan === 'FREE' && !isAdmin && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-subtle) 100%)',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 10,
+                  padding: '14px 16px',
+                  marginBottom: 20,
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8,
+                    background: 'var(--accent)', color: 'var(--bg-card)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18, flexShrink: 0,
+                  }}>✨</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                      속보를 놓치지 않으려면 Pro로 업그레이드
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                      무제한 채널 · 정밀 요약 · 30분 단위 속보
+                    </div>
+                  </div>
+                  <button onClick={() => console.log('[phase3] open upgrade modal')}
+                    style={{
+                      background: 'transparent',
+                      border: '0.5px solid var(--text-primary)',
+                      color: 'var(--text-primary)',
+                      padding: '6px 12px',
+                      borderRadius: 7,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {isMobile ? '자세히 →' : '자세히 보기 →'}
+                  </button>
+                </div>
+              )}
+
+              {/* 통계 카드 4개 */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+                gap: 10,
+                marginBottom: 20,
+              }}>
+                <div style={cardStyle}>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>구독 채널</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                    <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
+                      {channels.length}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>/ {channelLimit}</span>
+                  </div>
+                  <div style={{
+                    fontSize: 10, marginTop: 4,
+                    color: channels.length >= channelLimit ? 'var(--danger)' : 'var(--text-tertiary)',
+                  }}>
+                    {channels.length >= channelLimit ? '⚠ 한도 도달' : `Free 한도 ${channelLimit}개`}
+                  </div>
+                </div>
+
+                <div style={cardStyle}>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>오늘 영상</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
+                    {todayDigestCount}
+                  </div>
+                  <div style={{
+                    fontSize: 10, marginTop: 4,
+                    color: dailyDelta > 0 ? 'var(--success)' : 'var(--text-tertiary)',
+                  }}>
+                    {dailyDelta > 0 ? `+${dailyDelta} 어제 대비` : dailyDelta < 0 ? `${dailyDelta} 어제 대비` : '= 어제 대비'}
+                  </div>
+                </div>
+
+                <div style={cardStyle}>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>속보</div>
+                  <div style={{
+                    fontSize: 22, fontWeight: 600, letterSpacing: -0.5,
+                    color: (breakingTotal === 0 && plan === 'FREE') ? 'var(--text-muted)' : 'var(--text-primary)',
+                  }}>
+                    {(breakingTotal === 0 && plan === 'FREE') ? '—' : breakingTotal}
+                  </div>
+                  <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)' }}>
+                    {plan === 'FREE' ? '🔒 Pro 전용' : '누적'}
+                  </div>
+                </div>
+
+                <div style={cardStyle}>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>기록 보관</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
+                    {retentionDays}일
+                  </div>
+                  <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)' }}>
+                    {plan === 'FREE' ? 'Pro: 30일' : '최대 보관'}
                   </div>
                 </div>
               </div>
-            )}
 
-            {showAddChannel && (
-              <div style={{ background: '#111', border: '1px solid #333', borderRadius: 10, padding: 20, marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>새 채널 추가</div>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                  {[
-                    { label: '채널 URL', key: 'url', placeholder: 'https://youtube.com/@channelname' },
-                    { label: '채널 별칭', key: 'alias', placeholder: '표시할 이름' },
-                  ].map(f => (
-                    <div key={f.key}>
-                      <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>{f.label}</label>
-                      <input value={(newChannel as any)[f.key]} onChange={e => setNewChannel({ ...newChannel, [f.key]: e.target.value })}
-                        placeholder={f.placeholder}
-                        style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, boxSizing: 'border-box', outline: 'none' }} />
+              {/* 카테고리 추가 폼 (토글) */}
+              {showAddCategory && (
+                <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>새 카테고리</div>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8 }}>
+                    <input value={newCategory.name}
+                      onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
+                      onKeyDown={e => e.key === 'Enter' && addCategory()}
+                      onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                      placeholder="카테고리 이름"
+                      style={{ ...inputStyle, flex: 1 }} />
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }} style={secondaryBtn}>취소</button>
+                      <button onClick={addCategory} style={primaryBtn}>추가</button>
                     </div>
-                  ))}
-                  <div>
-                    <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>카테고리</label>
-                    <select value={newChannel.category_id} onChange={e => setNewChannel({ ...newChannel, category_id: e.target.value })}
-                      style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, boxSizing: 'border-box' }}>
-                      <option value="">선택 안함</option>
-                      {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>이모지</label>
-                    <input value={newChannel.emoji} onChange={e => setNewChannel({ ...newChannel, emoji: e.target.value })}
-                      placeholder="📺" maxLength={2}
-                      style={{ width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, boxSizing: 'border-box', outline: 'none' }} />
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <button onClick={() => setShowAddChannel(false)}
-                    style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13 }}>취소</button>
-                  <button onClick={addChannel}
-                    style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>추가하기</button>
-                </div>
-              </div>
-            )}
+              )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {filteredChannels.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', color: '#444', border: '1px dashed #333', borderRadius: 10 }}>
-                  채널을 추가해주세요
-                </div>
-              ) : filteredChannels.map(ch => {
-                const cat = getCatById(ch.category_id)
-                if (editingChannel === ch.id) {
-                  return (
-                    <div key={ch.id} style={{ background: '#111', border: '1px solid #e8ff47', borderRadius: 10, padding: 14 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: '#e8ff47' }}>채널 수정</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '60px 1fr' : '60px 1fr 1.5fr', gap: 8, marginBottom: 10 }}>
-                        <input value={editChannelData.emoji} onChange={e => setEditChannelData({ ...editChannelData, emoji: e.target.value })}
-                          placeholder="📺" maxLength={2}
-                          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px', color: '#f0f0f0', fontSize: 13, textAlign: 'center', outline: 'none' }} />
-                        <input value={editChannelData.alias} onChange={e => setEditChannelData({ ...editChannelData, alias: e.target.value })}
-                          placeholder="채널 별칭"
-                          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none' }} />
-                        <input value={editChannelData.url} onChange={e => setEditChannelData({ ...editChannelData, url: e.target.value })}
-                          placeholder="채널 URL"
-                          style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, padding: '8px 12px', color: '#f0f0f0', fontSize: 13, outline: 'none', ...(isMobile ? { gridColumn: '1 / -1' } : {}) }} />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, justifyContent: 'flex-end', alignItems: isMobile ? 'stretch' : 'center' }}>
-                        <button onClick={() => { setEditingChannel(null); setEditChannelData({ alias: '', emoji: '', url: '' }) }}
-                          style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 12 }}>취소</button>
-                        <button onClick={() => updateChannel(ch.id)}
-                          style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#e8ff47', color: '#000', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>저장</button>
-                      </div>
-                    </div>
-                  )
-                }
-                return (
-                  <div key={ch.id} style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: cat ? cat.color + '22' : '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                      {ch.emoji}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 3 }}>{ch.alias}</div>
-                      <div style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.url}</div>
-                    </div>
-                    {cat && (
-                      <div style={{ padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500, background: cat.color + '22', color: cat.color, flexShrink: 0 }}>
-                        {cat.name}
-                      </div>
-                    )}
-                    {movingChannel === ch.id ? (
-                      <select
-                        autoFocus
-                        defaultValue={ch.category_id ?? ''}
-                        onChange={e => moveChannel(ch.id, e.target.value)}
-                        onBlur={() => setMovingChannel(null)}
-                        style={{ background: '#1a1a1a', border: '1px solid #e8ff47', borderRadius: 6, padding: '4px 8px', color: '#f0f0f0', fontSize: 12, cursor: 'pointer' }}>
-                        <option value="">미분류</option>
-                        {categories.map(cat => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <button onClick={() => setMovingChannel(ch.id)}
-                        title="카테고리 이동"
-                        style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 13 }}>
-                        ↔
-                      </button>
-                    )}
-                    <button onClick={() => { setEditingChannel(ch.id); setEditChannelData({ alias: ch.alias, emoji: ch.emoji, url: ch.url }) }}
-                      title="채널 수정"
-                      style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 13 }}>
-                      ✎
-                    </button>
-                    <button onClick={() => deleteChannel(ch.id)}
-                      style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #333', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 13 }}>✕</button>
-                  </div>
-                )
-              })}
-            </div>
-
-            {isAdmin && usageStats && (() => {
-              const GEMINI_DAILY_LIMIT = 1500
-              const todayGemini = usageStats.today.gemini.count
-              const pct = Math.min(100, (todayGemini / GEMINI_DAILY_LIMIT) * 100)
-              const barColor = pct >= 80 ? '#ff4757' : pct >= 50 ? '#ffaa47' : '#e8ff47'
-              const max7d = Math.max(1, ...usageStats.last7Days.map(d => d.gemini + d.youtube + d.supadata))
-              const formatNum = (n: number) => n.toLocaleString('en-US')
-              return (
-                <div style={{ background: '#111', border: '1px solid #222', borderRadius: 10, padding: 18, marginTop: 24 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              {/* 채널 추가 폼 (토글) */}
+              {showAddChannel && (
+                <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-primary)' }}>새 채널 추가</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, marginBottom: 12 }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#e8ff47' }}>🔒 관리자 통계</div>
-                      <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Gemini · YouTube · Supadata API 사용 현황 (KST)</div>
+                      <label style={labelStyle}>채널 URL</label>
+                      <input value={newChannel.url}
+                        onChange={e => setNewChannel({ ...newChannel, url: e.target.value })}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                        placeholder="https://youtube.com/@channelname"
+                        style={inputStyle} />
                     </div>
-                    <button onClick={fetchAdminUsage}
-                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #333', background: 'transparent', color: '#f0f0f0', cursor: 'pointer', fontSize: 12 }}>
-                      새로고침
+                    <div>
+                      <label style={labelStyle}>채널 별칭</label>
+                      <input value={newChannel.alias}
+                        onChange={e => setNewChannel({ ...newChannel, alias: e.target.value })}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                        placeholder="표시할 이름"
+                        style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>카테고리</label>
+                      <select value={newChannel.category_id}
+                        onChange={e => setNewChannel({ ...newChannel, category_id: e.target.value })}
+                        style={inputStyle}>
+                        <option value="">선택 안함</option>
+                        {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>이모지</label>
+                      <input value={newChannel.emoji}
+                        onChange={e => setNewChannel({ ...newChannel, emoji: e.target.value })}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                        placeholder="📺" maxLength={2}
+                        style={inputStyle} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button onClick={() => setShowAddChannel(false)} style={secondaryBtn}>취소</button>
+                    <button onClick={addChannel} style={primaryBtn}>추가하기</button>
+                  </div>
+                </div>
+              )}
+
+              {/* 카테고리 필터 칩 + 검색 */}
+              {channels.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <div className="cat-chip-row" style={{ flex: 1, minWidth: 0 }}>
+                    <button
+                      className={`cat-chip${filterCat === null ? ' active' : ''}`}
+                      onClick={() => setFilterCat(null)}
+                    >
+                      전체
+                      <span style={{
+                        color: filterCat === null ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)',
+                        fontSize: 11,
+                      }}>{channels.length}</span>
                     </button>
-                  </div>
-
-                  {/* 사용자 현황 */}
-                  <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e8ff47', marginBottom: 10 }}>👥 사용자 현황</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                      {[
-                        { label: '전체', value: usageStats.users.total },
-                        { label: '오늘 활동', value: usageStats.users.activeToday },
-                        { label: '이번 달', value: usageStats.users.activeThisMonth },
-                      ].map(u => (
-                        <div key={u.label} style={{ background: '#111', border: '1px solid #222', borderRadius: 8, padding: 12, textAlign: 'center' }}>
-                          <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>{u.label}</div>
-                          <div style={{ fontFamily: 'monospace', fontSize: 22, color: '#e8ff47' }}>{formatNum(u.value)}</div>
-                          <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>명</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Gemini 진행률 */}
-                  <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e8ff47' }}>Gemini API</div>
-                      <div style={{ fontSize: 11, color: '#666' }}>무료 한도 {formatNum(GEMINI_DAILY_LIMIT)}건/일</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-                      <span style={{ fontSize: 11, color: '#888' }}>오늘</span>
-                      <span style={{ fontFamily: 'monospace', fontSize: 22, color: barColor }}>{formatNum(todayGemini)}</span>
-                      <span style={{ fontSize: 11, color: '#666' }}>건</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 11, color: barColor, fontWeight: 600 }}>{pct.toFixed(1)}%</span>
-                    </div>
-                    <div style={{ width: '100%', height: 8, background: '#1a1a1a', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
-                      <div style={{ width: `${pct}%`, height: '100%', background: barColor, transition: 'width 0.3s' }} />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 8, fontSize: 11 }}>
-                      <div>
-                        <div style={{ color: '#666', marginBottom: 2 }}>오늘 입력 토큰</div>
-                        <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.today.gemini.input_tokens)}</div>
-                      </div>
-                      <div>
-                        <div style={{ color: '#666', marginBottom: 2 }}>오늘 출력 토큰</div>
-                        <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.today.gemini.output_tokens)}</div>
-                      </div>
-                      <div>
-                        <div style={{ color: '#666', marginBottom: 2 }}>이번 달 호출</div>
-                        <div style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.gemini.count)}건</div>
-                      </div>
-                      <div>
-                        <div style={{ color: '#666', marginBottom: 2 }}>이번 달 토큰</div>
-                        <div style={{ fontFamily: 'monospace', color: '#ccc' }}>
-                          {formatNum(usageStats.thisMonth.gemini.input_tokens + usageStats.thisMonth.gemini.output_tokens)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 최근 7일 추이 */}
-                  <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>최근 7일 추이 (서비스 합계)</div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80, marginBottom: 6 }}>
-                      {usageStats.last7Days.map(d => {
-                        const total = d.gemini + d.youtube + d.supadata
-                        const heightPct = (total / max7d) * 100
+                    {categories.map(cat => {
+                      const active = filterCat === cat.id
+                      const count = channels.filter(c => c.category_id === cat.id).length
+                      if (editingCat === cat.id) {
                         return (
-                          <div key={d.date} title={`${d.date}\nGemini ${d.gemini} · YouTube ${d.youtube} · Supadata ${d.supadata}`}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                            <div style={{
-                              height: `${heightPct}%`,
-                              minHeight: total > 0 ? 2 : 0,
-                              background: 'linear-gradient(to top, #e8ff47, #47ffb2)',
-                              borderRadius: 3,
-                            }} />
+                          <div key={cat.id} className="cat-chip" style={{ borderColor: 'var(--accent)' }}>
+                            <input
+                              autoFocus
+                              value={editingCatName}
+                              onChange={e => setEditingCatName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') updateCategoryName(cat.id, editingCatName)
+                                if (e.key === 'Escape') setEditingCat(null)
+                              }}
+                              style={{
+                                background: 'transparent', border: 'none',
+                                color: 'var(--text-primary)', fontSize: 12, outline: 'none', width: 80,
+                                fontFamily: 'inherit',
+                              }}
+                            />
+                            <span onClick={() => updateCategoryName(cat.id, editingCatName)}
+                              style={{ cursor: 'pointer', color: 'var(--success)', fontSize: 12 }}>✓</span>
+                            <span onClick={() => setEditingCat(null)}
+                              style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>✕</span>
                           </div>
                         )
-                      })}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, fontSize: 10, color: '#555' }}>
-                      {usageStats.last7Days.map(d => (
-                        <div key={d.date} style={{ flex: 1, textAlign: 'center', fontFamily: 'monospace' }}>
-                          {d.date.slice(5)}
-                        </div>
-                      ))}
-                    </div>
+                      }
+                      return (
+                        <button
+                          key={cat.id}
+                          className={`cat-chip${active ? ' active' : ''}`}
+                          onClick={() => setFilterCat(cat.id)}
+                        >
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: cat.color, display: 'inline-block', flexShrink: 0 }} />
+                          <span>{cat.name}</span>
+                          <span style={{
+                            color: active ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)',
+                            fontSize: 11,
+                          }}>{count}</span>
+                          <span className="chip-actions">
+                            <span onClick={(e) => { e.stopPropagation(); setEditingCat(cat.id); setEditingCatName(cat.name) }}
+                              style={{
+                                cursor: 'pointer', fontSize: 10, padding: '0 2px',
+                                color: active ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)',
+                              }}>✎</span>
+                            <span onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id) }}
+                              style={{
+                                cursor: 'pointer', fontSize: 10, padding: '0 2px',
+                                color: active ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)',
+                              }}>✕</span>
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
-
-                  {/* 다른 서비스 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 10 }}>
-                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 14 }}>
-                      <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>YouTube API</div>
-                      <div style={{ fontSize: 11, color: '#aaa' }}>
-                        오늘 <span style={{ fontFamily: 'monospace', color: '#e8ff47' }}>{formatNum(usageStats.today.youtube.count)}</span>건
-                        <span style={{ margin: '0 6px', color: '#444' }}>·</span>
-                        이번 달 <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.youtube.count)}</span>건
-                      </div>
-                    </div>
-                    <div style={{ background: '#0f0f0f', border: '1px solid #222', borderRadius: 10, padding: 14 }}>
-                      <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Supadata API</div>
-                      <div style={{ fontSize: 11, color: '#aaa' }}>
-                        오늘 <span style={{ fontFamily: 'monospace', color: '#e8ff47' }}>{formatNum(usageStats.today.supadata.count)}</span>건
-                        <span style={{ margin: '0 6px', color: '#444' }}>·</span>
-                        이번 달 <span style={{ fontFamily: 'monospace', color: '#ccc' }}>{formatNum(usageStats.thisMonth.supadata.count)}</span>건
-                      </div>
-                    </div>
+                  <div style={{ flexShrink: 0 }}>
+                    {showChannelSearch ? (
+                      <input
+                        autoFocus
+                        value={channelSearch}
+                        onChange={e => setChannelSearch(e.target.value)}
+                        onBlur={() => { if (!channelSearch) setShowChannelSearch(false) }}
+                        placeholder="채널 검색"
+                        style={{ ...inputStyle, width: 160, padding: '6px 10px', fontSize: 12 }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => setShowChannelSearch(true)}
+                        aria-label="채널 검색"
+                        style={{
+                          width: 32, height: 32, borderRadius: 7,
+                          background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                          color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 13,
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >🔍</button>
+                    )}
                   </div>
                 </div>
-              )
-            })()}
-          </>
-        )}
+              )}
+
+              {/* 채널 목록 / 빈 상태 */}
+              {channels.length === 0 ? (
+                <div style={{ ...cardStyle, padding: '48px 24px', textAlign: 'center' }}>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%',
+                    background: 'var(--bg-subtle)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 24, marginBottom: 16,
+                  }}>📺</div>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
+                    아직 등록된 채널이 없어요
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 18 }}>
+                    관심 있는 유튜브 채널을 추가하면<br />
+                    매일 아침 요약을 받아볼 수 있어요
+                  </div>
+                  <button onClick={() => setShowAddChannel(true)} style={{ ...primaryBtn, padding: '10px 18px' }}>
+                    + 첫 번째 채널 추가하기
+                  </button>
+                </div>
+              ) : (
+                <div style={{
+                  background: 'var(--bg-card)',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                }}>
+                  {visibleChannels.length === 0 ? (
+                    <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+                      일치하는 채널이 없어요
+                    </div>
+                  ) : visibleChannels.map(ch => {
+                    const cat = getCatById(ch.category_id)
+                    if (editingChannel === ch.id) {
+                      return (
+                        <div key={ch.id} style={{
+                          padding: 14,
+                          borderBottom: '0.5px solid var(--border-light)',
+                          background: 'var(--bg-subtle)',
+                        }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>채널 수정</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '60px 1fr' : '60px 1fr 1.5fr', gap: 8, marginBottom: 10 }}>
+                            <input value={editChannelData.emoji}
+                              onChange={e => setEditChannelData({ ...editChannelData, emoji: e.target.value })}
+                              onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                              placeholder="📺" maxLength={2}
+                              style={{ ...inputStyle, textAlign: 'center', padding: 8 }} />
+                            <input value={editChannelData.alias}
+                              onChange={e => setEditChannelData({ ...editChannelData, alias: e.target.value })}
+                              onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                              placeholder="채널 별칭" style={inputStyle} />
+                            <input value={editChannelData.url}
+                              onChange={e => setEditChannelData({ ...editChannelData, url: e.target.value })}
+                              onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                              placeholder="채널 URL"
+                              style={{ ...inputStyle, ...(isMobile ? { gridColumn: '1 / -1' } : {}) }} />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, justifyContent: 'flex-end' }}>
+                            <button onClick={() => { setEditingChannel(null); setEditChannelData({ alias: '', emoji: '', url: '' }) }}
+                              style={secondaryBtn}>취소</button>
+                            <button onClick={() => updateChannel(ch.id)} style={primaryBtn}>저장</button>
+                          </div>
+                        </div>
+                      )
+                    }
+                    const st = channelStats(ch.alias)
+                    const dotColor = st.unreadBreaking > 0
+                      ? 'var(--danger)'
+                      : st.today > 0
+                        ? 'var(--text-tertiary)'
+                        : 'var(--border)'
+                    const infoText = st.unreadBreaking > 0
+                      ? `속보 ${st.unreadBreaking}건`
+                      : st.today > 0
+                        ? `${st.today}개 영상`
+                        : st.total > 0
+                          ? `${st.total}개 누적`
+                          : '영상 없음'
+                    const timeText = st.lastDigest ? timeAgo(st.lastDigest.created_at) : ''
+                    return (
+                      <div key={ch.id} className="channels-row">
+                        <span style={{
+                          width: 6, height: 6, borderRadius: '50%',
+                          background: dotColor, flexShrink: 0,
+                        }} />
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>{ch.emoji}</span>
+                        <span style={{
+                          fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          maxWidth: isMobile ? 100 : 220,
+                          flexShrink: 0,
+                        }}>{ch.alias}</span>
+                        {cat && (
+                          <span style={{
+                            fontSize: 11,
+                            background: 'var(--bg-subtle)',
+                            color: 'var(--text-secondary)',
+                            padding: '2px 8px',
+                            borderRadius: 5,
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                          }}>{cat.name}</span>
+                        )}
+                        {!isMobile && (
+                          <span style={{
+                            fontSize: 11, color: 'var(--text-tertiary)',
+                            flexShrink: 0,
+                          }}>{infoText}</span>
+                        )}
+                        <span style={{
+                          marginLeft: 'auto',
+                          fontSize: 11, color: 'var(--text-muted)',
+                          minWidth: 50, textAlign: 'right',
+                          flexShrink: 0,
+                        }}>{timeText}</span>
+                        <div className="row-actions">
+                          {movingChannel === ch.id ? (
+                            <select
+                              autoFocus
+                              defaultValue={ch.category_id ?? ''}
+                              onChange={e => moveChannel(ch.id, e.target.value)}
+                              onBlur={() => setMovingChannel(null)}
+                              style={{
+                                background: 'var(--bg-card)',
+                                border: '0.5px solid var(--accent)',
+                                borderRadius: 6, padding: '3px 6px',
+                                color: 'var(--text-primary)', fontSize: 11,
+                                fontFamily: 'inherit',
+                              }}>
+                              <option value="">미분류</option>
+                              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          ) : (
+                            <button onClick={() => setMovingChannel(ch.id)} title="카테고리 이동" style={rowActionBtn}>↔</button>
+                          )}
+                          <button onClick={() => { setEditingChannel(ch.id); setEditChannelData({ alias: ch.alias, emoji: ch.emoji, url: ch.url }) }}
+                            title="채널 수정" style={rowActionBtn}>✎</button>
+                          <button onClick={() => deleteChannel(ch.id)} title="채널 삭제" style={rowActionBtn}>✕</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* 관리자 통계 */}
+              {isAdmin && usageStats && (() => {
+                const GEMINI_DAILY_LIMIT = 1500
+                const todayGemini = usageStats.today.gemini.count
+                const pct = Math.min(100, (todayGemini / GEMINI_DAILY_LIMIT) * 100)
+                const barColor = pct >= 80 ? 'var(--danger)' : pct >= 50 ? 'var(--warning)' : 'var(--success)'
+                const max7d = Math.max(1, ...usageStats.last7Days.map(d => d.gemini + d.youtube + d.supadata))
+                const formatNum = (n: number) => n.toLocaleString('en-US')
+                const innerCard: React.CSSProperties = {
+                  background: 'var(--bg-subtle)',
+                  border: '0.5px solid var(--border-light)',
+                  borderRadius: 8,
+                  padding: 14,
+                  marginBottom: 10,
+                }
+                return (
+                  <div style={{ ...cardStyle, padding: 18, marginTop: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>🔒 관리자 통계</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Gemini · YouTube · Supadata API 사용 현황 (KST)</div>
+                      </div>
+                      <button onClick={fetchAdminUsage} style={secondaryBtn}>새로고침</button>
+                    </div>
+
+                    {/* 사용자 현황 */}
+                    <div style={innerCard}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>👥 사용자 현황</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                        {[
+                          { label: '전체', value: usageStats.users.total },
+                          { label: '오늘 활동', value: usageStats.users.activeToday },
+                          { label: '이번 달', value: usageStats.users.activeThisMonth },
+                        ].map(u => (
+                          <div key={u.label} style={{
+                            background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                            borderRadius: 8, padding: 10, textAlign: 'center',
+                          }}>
+                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>{u.label}</div>
+                            <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: -0.5 }}>
+                              {formatNum(u.value)}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>명</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Gemini 진행률 */}
+                    <div style={innerCard}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Gemini API</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>무료 한도 {formatNum(GEMINI_DAILY_LIMIT)}건/일</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>오늘</span>
+                        <span style={{ fontSize: 20, fontWeight: 600, color: barColor, letterSpacing: -0.5 }}>{formatNum(todayGemini)}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>건</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: barColor, fontWeight: 600 }}>{pct.toFixed(1)}%</span>
+                      </div>
+                      <div style={{ width: '100%', height: 6, background: 'var(--bg-card)', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: barColor, transition: 'width 0.3s' }} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 8, fontSize: 11 }}>
+                        <div>
+                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>오늘 입력 토큰</div>
+                          <div style={{ color: 'var(--text-primary)' }}>{formatNum(usageStats.today.gemini.input_tokens)}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>오늘 출력 토큰</div>
+                          <div style={{ color: 'var(--text-primary)' }}>{formatNum(usageStats.today.gemini.output_tokens)}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>이번 달 호출</div>
+                          <div style={{ color: 'var(--text-primary)' }}>{formatNum(usageStats.thisMonth.gemini.count)}건</div>
+                        </div>
+                        <div>
+                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>이번 달 토큰</div>
+                          <div style={{ color: 'var(--text-primary)' }}>
+                            {formatNum(usageStats.thisMonth.gemini.input_tokens + usageStats.thisMonth.gemini.output_tokens)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 최근 7일 추이 */}
+                    <div style={innerCard}>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 10 }}>최근 7일 추이 (서비스 합계)</div>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 70, marginBottom: 6 }}>
+                        {usageStats.last7Days.map(d => {
+                          const total = d.gemini + d.youtube + d.supadata
+                          const heightPct = (total / max7d) * 100
+                          return (
+                            <div key={d.date} title={`${d.date}\nGemini ${d.gemini} · YouTube ${d.youtube} · Supadata ${d.supadata}`}
+                              style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                              <div style={{
+                                height: `${heightPct}%`,
+                                minHeight: total > 0 ? 2 : 0,
+                                background: 'linear-gradient(to top, var(--accent), var(--text-tertiary))',
+                                borderRadius: 3,
+                              }} />
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, fontSize: 10, color: 'var(--text-muted)' }}>
+                        {usageStats.last7Days.map(d => (
+                          <div key={d.date} style={{ flex: 1, textAlign: 'center' }}>
+                            {d.date.slice(5)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 다른 서비스 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 8 }}>
+                      <div style={{ ...innerCard, marginBottom: 0, padding: 12 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>YouTube API</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                          오늘 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.today.youtube.count)}</span>건
+                          <span style={{ margin: '0 6px', color: 'var(--text-muted)' }}>·</span>
+                          이번 달 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.thisMonth.youtube.count)}</span>건
+                        </div>
+                      </div>
+                      <div style={{ ...innerCard, marginBottom: 0, padding: 12 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>Supadata API</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                          오늘 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.today.supadata.count)}</span>건
+                          <span style={{ margin: '0 6px', color: 'var(--text-muted)' }}>·</span>
+                          이번 달 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.thisMonth.supadata.count)}</span>건
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </>
+          )
+        })()}
 
         {/* =============== 발송 설정 탭 (본문 - 이번 단계에서 디자인 미적용) =============== */}
         {activeTab === 'schedule' && (

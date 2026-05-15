@@ -198,3 +198,90 @@ button, a, [onclick], div[role="button"], span[onclick], div[onClick] {
     display: block !important;
   }
 }
+
+/* =============================================================
+   Phase 3: 채널 탭 - Linear 스타일 행 / 카테고리 칩
+   ============================================================= */
+
+.channels-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 0.5px solid var(--border-light);
+  transition: background-color 0.15s;
+  cursor: default;
+}
+.channels-row:last-child {
+  border-bottom: none;
+}
+.channels-row:hover {
+  background: var(--bg-subtle);
+}
+.channels-row .row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.channels-row:hover .row-actions {
+  opacity: 1;
+}
+/* 터치 디바이스는 hover 가 없으니 항상 보이게 */
+@media (hover: none) {
+  .channels-row .row-actions {
+    opacity: 1;
+  }
+}
+
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  font-family: inherit;
+}
+.cat-chip:hover {
+  border-color: var(--text-tertiary);
+}
+.cat-chip.active {
+  background: var(--text-primary);
+  color: var(--bg-card);
+  border-color: var(--text-primary);
+  font-weight: 500;
+}
+.cat-chip .chip-actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 2px;
+}
+.cat-chip:hover .chip-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .cat-chip .chip-actions {
+    opacity: 1;
+  }
+}
+
+.cat-chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+.cat-chip-row::-webkit-scrollbar {
+  height: 4px;
+}
