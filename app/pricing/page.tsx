@@ -1,0 +1,234 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useTranslation } from '@/lib/i18n/useTranslation'
+import { translations } from '@/lib/i18n/translations'
+
+const PRICE_MONTHLY = 4900
+const PRICE_YEARLY = 39000
+const YEARLY_DISCOUNT = Math.floor((1 - PRICE_YEARLY / (PRICE_MONTHLY * 12)) * 100)
+
+export default function PricingPage() {
+  const router = useRouter()
+  const { t, locale } = useTranslation()
+  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
+  const [isPro, setIsPro] = useState(false)
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+
+  useEffect(() => {
+    try { setIsPro(localStorage.getItem('demo_pro') === 'true') } catch {}
+  }, [])
+
+  const won = (n: number) => `₩${n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US')}`
+  const pricing = translations[locale].pricing
+
+  const card: React.CSSProperties = {
+    background: 'var(--bg-card)',
+    border: '0.5px solid var(--border)',
+    borderRadius: 14,
+    padding: 24,
+    boxSizing: 'border-box',
+  }
+  const primaryBtn: React.CSSProperties = {
+    width: '100%', padding: '11px 16px', borderRadius: 9, border: 'none',
+    background: 'var(--accent)', color: 'var(--bg-card)',
+    fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+  }
+  const disabledBtn: React.CSSProperties = {
+    width: '100%', padding: '11px 16px', borderRadius: 9, border: '0.5px solid var(--border)',
+    background: 'var(--bg-subtle)', color: 'var(--text-muted)',
+    fontSize: 14, fontWeight: 600, cursor: 'default', fontFamily: 'inherit',
+  }
+
+  const featureRow = (label: string, included: boolean) => (
+    <div key={label} style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '6px 0', fontSize: 13,
+      color: included ? 'var(--text-secondary)' : 'var(--text-muted)',
+    }}>
+      <span style={{ fontSize: 13, color: included ? 'var(--success)' : 'var(--text-muted)' }}>
+        {included ? '✅' : '❌'}
+      </span>
+      {label}
+    </div>
+  )
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
+      fontFamily: 'var(--font-sans)',
+    }}>
+      {/* 상단바 */}
+      <header style={{
+        height: 56, borderBottom: '0.5px solid var(--border)',
+        background: 'var(--bg-card)',
+        display: 'flex', alignItems: 'center', padding: '0 20px',
+        position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        <button onClick={() => router.push('/dashboard')}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--text-secondary)', fontSize: 13, fontFamily: 'inherit',
+          }}>
+          {t('subscribe.back')}
+        </button>
+      </header>
+
+      <main style={{ maxWidth: 880, margin: '0 auto', padding: '40px 20px 64px' }}>
+        {/* 헤더 */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <h1 style={{ fontSize: 32, fontWeight: 600, margin: 0, letterSpacing: -0.5 }}>
+            {pricing.title}
+          </h1>
+          <p style={{ fontSize: 16, color: 'var(--text-tertiary)', marginTop: 10 }}>
+            {pricing.subtitle}
+          </p>
+        </div>
+
+        {/* 월간/연간 토글 */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+          <div style={{ display: 'inline-flex', background: 'var(--bg-subtle)', borderRadius: 9, padding: 3 }}>
+            {(['monthly', 'yearly'] as const).map(b => {
+              const active = billing === b
+              return (
+                <button key={b} onClick={() => setBilling(b)}
+                  style={{
+                    padding: '7px 16px', borderRadius: 6, border: 'none',
+                    background: active ? 'var(--bg-card)' : 'transparent',
+                    color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    fontWeight: active ? 500 : 400, fontSize: 13, cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                  }}>
+                  {b === 'monthly' ? pricing.monthly : `${pricing.yearly} (-${YEARLY_DISCOUNT}%)`}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 플랜 카드 */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 16, marginBottom: 32,
+        }}>
+          {/* Free */}
+          <div style={card}>
+            <div style={{ fontSize: 17, fontWeight: 600 }}>{pricing.free}</div>
+            <div style={{ marginTop: 10, marginBottom: 4 }}>
+              <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1 }}>{pricing.freePriceLabel}</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 18 }}>
+              {pricing.freeSub}
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              {pricing.freeFeatures.map(f => featureRow(f, true))}
+              {pricing.freeExcluded.map(f => featureRow(f, false))}
+            </div>
+            <button style={disabledBtn} disabled>
+              {isPro ? pricing.basePlan : pricing.currentInUse}
+            </button>
+          </div>
+
+          {/* Pro */}
+          <div style={{
+            ...card,
+            border: '1px solid var(--accent)',
+            boxShadow: 'var(--shadow-lg)',
+            position: 'relative',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 17, fontWeight: 600 }}>{pricing.pro}</span>
+              <span style={{
+                fontSize: 11, fontWeight: 600,
+                background: 'var(--warning)', color: '#fff',
+                padding: '2px 8px', borderRadius: 5,
+              }}>{pricing.recommended}</span>
+            </div>
+            <div style={{ marginTop: 10, marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1 }}>
+                {won(billing === 'monthly' ? PRICE_MONTHLY : PRICE_YEARLY)}
+              </span>
+              <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
+                {billing === 'monthly' ? pricing.perMonth : pricing.perYear}
+              </span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 18 }}>
+              {billing === 'monthly'
+                ? pricing.yearlyAlt.replace('{price}', won(PRICE_YEARLY))
+                : pricing.discountBadge.replace('{n}', String(YEARLY_DISCOUNT))}
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              {pricing.proFeatures.map(f => featureRow(f, true))}
+            </div>
+            {isPro ? (
+              <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
+            ) : (
+              <button style={primaryBtn} onClick={() => router.push(`/subscribe?plan=${billing}`)}>
+                {pricing.startTrial}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 일회성 결제 안내 */}
+        <button
+          onClick={() => router.push('/subscribe?type=onetime&plan=1month')}
+          style={{
+            ...card, width: '100%', textAlign: 'left', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 14, marginBottom: 40,
+            borderRadius: 10, padding: 16,
+          }}>
+          <span style={{
+            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+            background: 'var(--bg-subtle)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+          }}>💡</span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{pricing.onetimeTitle}</span>
+            <span style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              {pricing.onetimeDesc}
+            </span>
+          </span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 16 }}>→</span>
+        </button>
+
+        {/* FAQ */}
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 14 }}>{pricing.faqTitle}</h2>
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+            {pricing.faq.map((item, i) => {
+              const open = openFaq === i
+              return (
+                <div key={i} style={{ borderBottom: i < pricing.faq.length - 1 ? '0.5px solid var(--border-light)' : 'none' }}>
+                  <button onClick={() => setOpenFaq(open ? null : i)}
+                    style={{
+                      width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+                      padding: '14px 16px', cursor: 'pointer', fontFamily: 'inherit',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      fontSize: 14, fontWeight: 500, color: 'var(--text-primary)',
+                    }}>
+                    <span>Q. {item.q}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+                  </button>
+                  {open && (
+                    <div style={{
+                      padding: '0 16px 16px', fontSize: 13,
+                      color: 'var(--text-secondary)', lineHeight: 1.7,
+                    }}>
+                      {item.a}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}

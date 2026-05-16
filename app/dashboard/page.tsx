@@ -553,7 +553,7 @@ export default function Dashboard() {
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open profile modal'); closeMenu() }}>
           <span style={{ fontSize: 14 }}>👤</span> {t('settings.profile')}
         </button>
-        <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] navigate /subscription'); closeMenu() }}>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/subscription') }}>
           <span style={{ fontSize: 14 }}>💼</span> {t('settings.subscription')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); logout() }}>
@@ -604,7 +604,7 @@ export default function Dashboard() {
           <>
             <div style={dropdownDivider} />
             <div style={{ padding: '4px 6px 6px' }}>
-              <button onClick={() => { console.log('[phase2] open upgrade modal'); closeMenu() }}
+              <button onClick={() => { closeMenu(); router.push('/pricing') }}
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -714,7 +714,7 @@ export default function Dashboard() {
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
               {plan === 'FREE' && (
-                <button onClick={() => console.log('[phase2] open upgrade modal')}
+                <button onClick={() => router.push('/pricing')}
                   style={proUpgradeBtn}>
                   {t('nav.proUpgrade')}
                 </button>
@@ -1062,7 +1062,7 @@ export default function Dashboard() {
                       {t('proBanner.desc')}
                     </div>
                   </div>
-                  <button onClick={() => console.log('[phase3] open upgrade modal')}
+                  <button onClick={() => router.push('/pricing')}
                     style={{
                       background: 'transparent',
                       border: '0.5px solid var(--text-primary)',
