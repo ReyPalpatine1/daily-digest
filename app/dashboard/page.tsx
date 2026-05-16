@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest } from '@/lib/supabase'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -18,24 +19,28 @@ function kstDateStr(offsetDays = 0): string {
   return kst.toISOString().slice(0, 10)
 }
 
-function timeAgo(iso?: string | null): string {
+type TFn = (key: string, params?: Record<string, string | number>) => string
+
+function timeAgo(iso: string | null | undefined, t: TFn): string {
   if (!iso) return ''
   const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return '방금'
+  if (ms < 0) return t('time.justNow')
   const min = Math.floor(ms / 60_000)
-  if (min < 1) return '방금'
-  if (min < 60) return `${min}분 전`
+  if (min < 1) return t('time.justNow')
+  if (min < 60) return t('time.minutesAgo', { n: min })
   const hour = Math.floor(min / 60)
-  if (hour < 24) return `${hour}시간 전`
+  if (hour < 24) return t('time.hoursAgo', { n: hour })
   const day = Math.floor(hour / 24)
-  if (day < 7) return `${day}일 전`
+  if (day < 7) return t('time.daysAgo', { n: day })
   const week = Math.floor(day / 7)
-  if (week < 4) return `${week}주 전`
+  if (week < 4) return t('time.weeksAgo', { n: week })
   const month = Math.floor(day / 30)
-  return `${month}개월 전`
+  return t('time.monthsAgo', { n: month })
 }
 
 export default function Dashboard() {
+  const { t, locale, changeLocale } = useTranslation()
+  const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
   const [user, setUser] = useState<any>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
@@ -88,7 +93,6 @@ export default function Dashboard() {
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
-  const [lang, setLang] = useState<'KO' | 'EN'>('KO')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
@@ -252,11 +256,11 @@ export default function Dashboard() {
 
   async function addChannel() {
     if (!newChannel.url.trim()) {
-      alert('채널 URL을 입력해 주세요.')
+      alert(t('alerts.needChannelUrl'))
       return
     }
     if (!newChannel.alias.trim()) {
-      alert('채널 별칭을 입력해 주세요.')
+      alert(t('alerts.needChannelAlias'))
       return
     }
     await supabase.from('channels').insert({
@@ -273,14 +277,14 @@ export default function Dashboard() {
 
   async function deleteChannel(id: string) {
     const channel = channels.find(c => c.id === id)
-    if (!confirm(`${channel?.alias} 채널을 삭제할까요?`)) return
+    if (!confirm(t('alerts.confirmDeleteChannel', { name: channel?.alias ?? '' }))) return
     await supabase.from('channels').delete().eq('id', id)
     loadData(user.id)
   }
 
   async function addCategory() {
     if (!newCategory.name.trim()) {
-      alert('카테고리 이름을 입력해 주세요.')
+      alert(t('alerts.needCategoryName'))
       return
     }
     await supabase.from('categories').insert({
@@ -295,7 +299,7 @@ export default function Dashboard() {
 
   async function deleteCategory(id: string) {
     const category = categories.find(c => c.id === id)
-    if (!confirm(`${category?.name} 카테고리를 삭제할까요?\n포함된 채널은 삭제되지 않고 미분류로 이동됩니다.`)) return
+    if (!confirm(t('alerts.confirmDeleteCategory', { name: category?.name ?? '' }))) return
     await supabase.from('channels').update({ category_id: null }).eq('category_id', id)
     await supabase.from('categories').delete().eq('id', id)
     loadData(user.id)
@@ -317,11 +321,11 @@ export default function Dashboard() {
 
   async function updateChannel(id: string) {
     if (!editChannelData.alias.trim()) {
-      alert('채널 별칭을 입력해 주세요.')
+      alert(t('alerts.needChannelAlias'))
       return
     }
     if (!editChannelData.url.trim()) {
-      alert('채널 URL을 입력해 주세요.')
+      alert(t('alerts.needChannelUrl'))
       return
     }
     await supabase.from('channels').update({
@@ -376,7 +380,7 @@ export default function Dashboard() {
       body: JSON.stringify({ userId: user.id }),
     })
     const data = await res.json()
-    setMsg(data.success ? `✅ ${data.sent}개 영상 요약 발송 완료!` : '❌ 오류가 발생했어요')
+    setMsg(data.success ? t('alerts.digestDone', { n: data.sent }) : t('alerts.digestError'))
     setLoading(false)
     loadData(user.id)
   }
@@ -430,9 +434,9 @@ export default function Dashboard() {
 
   // 메뉴 정의 (탑바 + 모바일 시트 공용)
   const tabs: { key: 'channels' | 'schedule' | 'history'; label: string }[] = [
-    { key: 'channels', label: '채널' },
-    { key: 'schedule', label: '발송 설정' },
-    { key: 'history', label: '열람 기록' },
+    { key: 'channels', label: t('nav.channels') },
+    { key: 'schedule', label: t('nav.schedule') },
+    { key: 'history', label: t('nav.history') },
   ]
   const breakingUnread = digests.filter(d => d.is_breaking && !d.is_read).length
 
@@ -574,45 +578,46 @@ export default function Dashboard() {
   function renderSettingsItems(closeMenu: () => void) {
     return (
       <>
-        <div style={dropdownSectionTitle}>계정</div>
+        <div style={dropdownSectionTitle}>{t('settings.account')}</div>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open profile modal'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>👤</span> 프로필
+          <span style={{ fontSize: 14 }}>👤</span> {t('settings.profile')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] navigate /subscription'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>💼</span> 구독 관리
+          <span style={{ fontSize: 14 }}>💼</span> {t('settings.subscription')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); logout() }}>
-          <span style={{ fontSize: 14 }}>🚪</span> 로그아웃
+          <span style={{ fontSize: 14 }}>🚪</span> {t('settings.logout')}
         </button>
 
         <div style={dropdownDivider} />
 
-        <div style={dropdownSectionTitle}>환경 설정</div>
+        <div style={dropdownSectionTitle}>{t('settings.preferences')}</div>
         <div style={{ ...dropdownItemStyle, cursor: 'default' }}>
           <span style={{ fontSize: 14 }}>🌐</span>
-          <span style={{ flex: 1 }}>언어</span>
-          <Segmented options={['KO', 'EN']} value={lang} onChange={(v) => { setLang(v as 'KO' | 'EN'); console.log('[phase2] language', v) }} />
+          <span style={{ flex: 1 }}>{t('settings.language')}</span>
+          <Segmented options={['KO', 'EN']} value={locale === 'ko' ? 'KO' : 'EN'}
+            onChange={(v) => changeLocale(v === 'KO' ? 'ko' : 'en')} />
         </div>
         <div style={{ ...dropdownItemStyle, cursor: 'default' }}>
           <span style={{ fontSize: 14 }}>{theme === 'dark' ? '🌙' : '☀️'}</span>
-          <span style={{ flex: 1 }}>{theme === 'dark' ? '다크 모드' : '라이트 모드'}</span>
+          <span style={{ flex: 1 }}>{theme === 'dark' ? t('settings.darkMode') : t('settings.lightMode')}</span>
           <Switch on={theme === 'dark'} onChange={toggleTheme} />
         </div>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open notification channel modal'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>🔔</span> 알림 채널
+          <span style={{ fontSize: 14 }}>🔔</span> {t('settings.notifications')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open notification time modal'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>⏰</span> 알림 시간
+          <span style={{ fontSize: 14 }}>⏰</span> {t('settings.notifTime')}
         </button>
 
         <div style={dropdownDivider} />
 
-        <div style={dropdownSectionTitle}>지원</div>
+        <div style={dropdownSectionTitle}>{t('settings.support')}</div>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] navigate /help'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>❓</span> 도움말
+          <span style={{ fontSize: 14 }}>❓</span> {t('settings.help')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] navigate /terms'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>📄</span> 이용약관
+          <span style={{ fontSize: 14 }}>📄</span> {t('settings.terms')}
         </button>
 
         {plan === 'FREE' && (
@@ -633,7 +638,7 @@ export default function Dashboard() {
                   fontFamily: 'inherit',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}>
-                ✨ Pro 업그레이드
+                ✨ {t('nav.proUpgrade')}
               </button>
             </div>
           </>
@@ -671,8 +676,19 @@ export default function Dashboard() {
             </div>
             <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
               <button
+                onClick={() => changeLocale(locale === 'ko' ? 'en' : 'ko')}
+                aria-label={t('settings.language')}
+                style={{
+                  width: 36, height: 36, borderRadius: 8,
+                  background: 'transparent', border: 'none',
+                  color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                {locale === 'ko' ? 'KO' : 'EN'}
+              </button>
+              <button
                 onClick={toggleTheme}
-                aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                aria-label={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
                 style={{
                   width: 36, height: 36, borderRadius: 8,
                   background: 'transparent', border: 'none',
@@ -682,7 +698,7 @@ export default function Dashboard() {
                 {theme === 'dark' ? '☀️' : '🌙'}
               </button>
               <button onClick={() => setSidebarOpen(true)}
-                aria-label="메뉴 열기"
+                aria-label={t('nav.openMenu')}
                 style={{
                   width: 36, height: 36, borderRadius: 8,
                   background: 'transparent', border: 'none',
@@ -720,12 +736,12 @@ export default function Dashboard() {
               {plan === 'FREE' && (
                 <button onClick={() => console.log('[phase2] open upgrade modal')}
                   style={proUpgradeBtn}>
-                  Pro 업그레이드
+                  {t('nav.proUpgrade')}
                 </button>
               )}
               {/* 관리자 전용 Free/Pro 임시 모드 토글 */}
               {isAdmin && (
-                <div title="관리자 전용 미리보기 — 실제 구독 상태가 아닙니다"
+                <div title={t('plans.previewHint')}
                   style={{
                     display: 'inline-flex',
                     background: 'var(--bg-subtle)',
@@ -764,11 +780,29 @@ export default function Dashboard() {
                   })}
                 </div>
               )}
+              {/* 빠른 언어 토글 */}
+              <button
+                onClick={() => changeLocale(locale === 'ko' ? 'en' : 'ko')}
+                aria-label={t('settings.language')}
+                title={t('settings.language')}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                style={{
+                  width: 32, height: 32, borderRadius: 6,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'inherit',
+                }}>
+                {locale === 'ko' ? 'KO' : 'EN'}
+              </button>
               {/* 빠른 테마 토글 */}
               <button
                 onClick={toggleTheme}
-                aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
-                title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                aria-label={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
+                title={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 style={{
@@ -783,7 +817,7 @@ export default function Dashboard() {
                 {theme === 'dark' ? '☀️' : '🌙'}
               </button>
               <button ref={settingsBtnRef} onClick={() => setSettingsOpen(o => !o)}
-                aria-label="설정"
+                aria-label={t('common.settings')}
                 style={gearBtn}>
                 ⚙
               </button>
@@ -836,7 +870,7 @@ export default function Dashboard() {
                 <span style={planBadgeStyle(plan)}>{plan}</span>
               </div>
               <button onClick={() => setSidebarOpen(false)}
-                aria-label="메뉴 닫기"
+                aria-label={t('nav.closeMenu')}
                 style={{
                   width: 32, height: 32, borderRadius: 8,
                   background: 'transparent', border: 'none',
@@ -977,19 +1011,18 @@ export default function Dashboard() {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0 }}>
                   <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--text-primary)', letterSpacing: -0.3 }}>
-                    안녕하세요, {userName}님 <span style={{ display: 'inline-block' }}>👋</span>
+                    {t('dashboard.greeting', { name: userName })}
                   </h1>
                   <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                    오늘 <strong style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{channels.length}개 채널</strong>에서{' '}
-                    <strong style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{todayDigestCount}개 영상</strong>을 요약했어요
+                    {t('dashboard.summary', { channels: channels.length, videos: todayDigestCount })}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                   <button onClick={() => setShowAddCategory(v => !v)} style={secondaryBtn}>
-                    + {isMobile ? '분류' : '카테고리'}
+                    {isMobile ? t('dashboard.addCategoryShort') : t('dashboard.addCategory')}
                   </button>
                   <button onClick={() => setShowAddChannel(v => !v)} style={primaryBtn}>
-                    + 채널 추가
+                    {t('dashboard.addChannel')}
                   </button>
                 </div>
               </div>
@@ -1012,10 +1045,10 @@ export default function Dashboard() {
                   }}>✨</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                      속보를 놓치지 않으려면 Pro로 업그레이드
+                      {t('proBanner.title')}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                      무제한 채널 · 정밀 요약 · 30분 단위 속보
+                      {t('proBanner.desc')}
                     </div>
                   </div>
                   <button onClick={() => console.log('[phase3] open upgrade modal')}
@@ -1031,7 +1064,7 @@ export default function Dashboard() {
                       fontFamily: 'inherit',
                       whiteSpace: 'nowrap',
                     }}>
-                    {isMobile ? '자세히 →' : '자세히 보기 →'}
+                    {isMobile ? t('proBanner.ctaShort') : t('proBanner.cta')}
                   </button>
                 </div>
               )}
@@ -1044,7 +1077,7 @@ export default function Dashboard() {
                 marginBottom: 20,
               }}>
                 <div style={cardStyle}>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>구독 채널</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.subscribed')}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
                     <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
                       {channels.length}
@@ -1058,15 +1091,15 @@ export default function Dashboard() {
                     color: !isPro && channels.length >= channelLimit ? 'var(--danger)' : 'var(--text-tertiary)',
                   }}>
                     {isPro
-                      ? '✨ Pro 무제한'
+                      ? t('stats.proUnlimited')
                       : channels.length >= channelLimit
-                        ? '⚠ 한도 도달'
-                        : `Free 한도 ${channelLimit}개`}
+                        ? t('stats.limit')
+                        : t('stats.freeLimit', { n: channelLimit })}
                   </div>
                 </div>
 
                 <div style={cardStyle}>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>오늘 영상</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.todayVideos')}</div>
                   <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
                     {todayDigestCount}
                   </div>
@@ -1074,12 +1107,16 @@ export default function Dashboard() {
                     fontSize: 10, marginTop: 4,
                     color: dailyDelta > 0 ? 'var(--success)' : 'var(--text-tertiary)',
                   }}>
-                    {dailyDelta > 0 ? `+${dailyDelta} 어제 대비` : dailyDelta < 0 ? `${dailyDelta} 어제 대비` : '= 어제 대비'}
+                    {dailyDelta > 0
+                      ? t('stats.compared', { n: dailyDelta })
+                      : dailyDelta < 0
+                        ? t('stats.comparedDown', { n: dailyDelta })
+                        : t('stats.comparedSame')}
                   </div>
                 </div>
 
                 <div style={cardStyle}>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>속보</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.breaking')}</div>
                   <div style={{
                     fontSize: 22, fontWeight: 600, letterSpacing: -0.5,
                     color: (breakingTotal === 0 && plan === 'FREE') ? 'var(--text-muted)' : 'var(--text-primary)',
@@ -1087,17 +1124,17 @@ export default function Dashboard() {
                     {(breakingTotal === 0 && plan === 'FREE') ? '—' : breakingTotal}
                   </div>
                   <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)' }}>
-                    {plan === 'FREE' ? '🔒 Pro 전용' : '누적'}
+                    {plan === 'FREE' ? t('stats.proOnly') : t('stats.accumulated')}
                   </div>
                 </div>
 
                 <div style={cardStyle}>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>기록 보관</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.retention')}</div>
                   <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
-                    {retentionDays}일
+                    {retentionDays}{locale === 'ko' ? '일' : 'd'}
                   </div>
                   <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)' }}>
-                    {plan === 'FREE' ? 'Pro: 30일' : '최대 보관'}
+                    {plan === 'FREE' ? t('stats.proRetention') : t('stats.maxRetention')}
                   </div>
                 </div>
               </div>
@@ -1105,18 +1142,18 @@ export default function Dashboard() {
               {/* 카테고리 추가 폼 (토글) */}
               {showAddCategory && (
                 <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>새 카테고리</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>{t('channels.newCategoryForm')}</div>
                   <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8 }}>
                     <input value={newCategory.name}
                       onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
                       onKeyDown={e => e.key === 'Enter' && addCategory()}
                       onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                       onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                      placeholder="카테고리 이름"
+                      placeholder={t('channels.categoryName')}
                       style={{ ...inputStyle, flex: 1 }} />
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                      <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }} style={secondaryBtn}>취소</button>
-                      <button onClick={addCategory} style={primaryBtn}>추가</button>
+                      <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }} style={secondaryBtn}>{t('common.cancel')}</button>
+                      <button onClick={addCategory} style={primaryBtn}>{t('common.add')}</button>
                     </div>
                   </div>
                 </div>
@@ -1125,10 +1162,10 @@ export default function Dashboard() {
               {/* 채널 추가 폼 (토글) */}
               {showAddChannel && (
                 <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-primary)' }}>새 채널 추가</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-primary)' }}>{t('channels.newChannelForm')}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, marginBottom: 12 }}>
                     <div>
-                      <label style={labelStyle}>채널 URL</label>
+                      <label style={labelStyle}>{t('common.url')}</label>
                       <input value={newChannel.url}
                         onChange={e => setNewChannel({ ...newChannel, url: e.target.value })}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
@@ -1137,25 +1174,25 @@ export default function Dashboard() {
                         style={inputStyle} />
                     </div>
                     <div>
-                      <label style={labelStyle}>채널 별칭</label>
+                      <label style={labelStyle}>{t('common.alias')}</label>
                       <input value={newChannel.alias}
                         onChange={e => setNewChannel({ ...newChannel, alias: e.target.value })}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                        placeholder="표시할 이름"
+                        placeholder={t('common.displayName')}
                         style={inputStyle} />
                     </div>
                     <div>
-                      <label style={labelStyle}>카테고리</label>
+                      <label style={labelStyle}>{t('common.category')}</label>
                       <select value={newChannel.category_id}
                         onChange={e => setNewChannel({ ...newChannel, category_id: e.target.value })}
                         style={inputStyle}>
-                        <option value="">선택 안함</option>
+                        <option value="">{t('common.selectNone')}</option>
                         {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label style={labelStyle}>이모지</label>
+                      <label style={labelStyle}>{t('common.emoji')}</label>
                       <input value={newChannel.emoji}
                         onChange={e => setNewChannel({ ...newChannel, emoji: e.target.value })}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
@@ -1165,8 +1202,8 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button onClick={() => setShowAddChannel(false)} style={secondaryBtn}>취소</button>
-                    <button onClick={addChannel} style={primaryBtn}>추가하기</button>
+                    <button onClick={() => setShowAddChannel(false)} style={secondaryBtn}>{t('common.cancel')}</button>
+                    <button onClick={addChannel} style={primaryBtn}>{t('common.addSubmit')}</button>
                   </div>
                 </div>
               )}
@@ -1179,7 +1216,7 @@ export default function Dashboard() {
                       className={`cat-chip${filterCat === null ? ' active' : ''}`}
                       onClick={() => setFilterCat(null)}
                     >
-                      전체
+                      {t('channels.all')}
                       <span style={{
                         color: filterCat === null ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)',
                         fontSize: 11,
@@ -1247,13 +1284,13 @@ export default function Dashboard() {
                         value={channelSearch}
                         onChange={e => setChannelSearch(e.target.value)}
                         onBlur={() => { if (!channelSearch) setShowChannelSearch(false) }}
-                        placeholder="채널 검색"
+                        placeholder={t('channels.channelSearch')}
                         style={{ ...inputStyle, width: 160, padding: '6px 10px', fontSize: 12 }}
                       />
                     ) : (
                       <button
                         onClick={() => setShowChannelSearch(true)}
-                        aria-label="채널 검색"
+                        aria-label={t('channels.channelSearch')}
                         style={{
                           width: 32, height: 32, borderRadius: 7,
                           background: 'var(--bg-card)', border: '0.5px solid var(--border)',
@@ -1276,14 +1313,13 @@ export default function Dashboard() {
                     fontSize: 24, marginBottom: 16,
                   }}>📺</div>
                   <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
-                    아직 등록된 채널이 없어요
+                    {t('channels.empty')}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 18 }}>
-                    관심 있는 유튜브 채널을 추가하면<br />
-                    매일 아침 요약을 받아볼 수 있어요
+                    {t('channels.emptyDesc')}
                   </div>
                   <button onClick={() => setShowAddChannel(true)} style={{ ...primaryBtn, padding: '10px 18px' }}>
-                    + 첫 번째 채널 추가하기
+                    {t('channels.emptyCta')}
                   </button>
                 </div>
               ) : (
@@ -1295,7 +1331,7 @@ export default function Dashboard() {
                 }}>
                   {visibleChannels.length === 0 ? (
                     <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
-                      일치하는 채널이 없어요
+                      {t('channels.noMatch')}
                     </div>
                   ) : visibleChannels.map(ch => {
                     const cat = getCatById(ch.category_id)
@@ -1306,7 +1342,7 @@ export default function Dashboard() {
                           borderBottom: '0.5px solid var(--border-light)',
                           background: 'var(--bg-subtle)',
                         }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>채널 수정</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>{t('channels.editChannel')}</div>
                           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '60px 1fr' : '60px 1fr 1.5fr', gap: 8, marginBottom: 10 }}>
                             <input value={editChannelData.emoji}
                               onChange={e => setEditChannelData({ ...editChannelData, emoji: e.target.value })}
@@ -1318,18 +1354,18 @@ export default function Dashboard() {
                               onChange={e => setEditChannelData({ ...editChannelData, alias: e.target.value })}
                               onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                               onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                              placeholder="채널 별칭" style={inputStyle} />
+                              placeholder={t('common.alias')} style={inputStyle} />
                             <input value={editChannelData.url}
                               onChange={e => setEditChannelData({ ...editChannelData, url: e.target.value })}
                               onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                               onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                              placeholder="채널 URL"
+                              placeholder={t('common.url')}
                               style={{ ...inputStyle, ...(isMobile ? { gridColumn: '1 / -1' } : {}) }} />
                           </div>
                           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, justifyContent: 'flex-end' }}>
                             <button onClick={() => { setEditingChannel(null); setEditChannelData({ alias: '', emoji: '', url: '' }) }}
-                              style={secondaryBtn}>취소</button>
-                            <button onClick={() => updateChannel(ch.id)} style={primaryBtn}>저장</button>
+                              style={secondaryBtn}>{t('common.cancel')}</button>
+                            <button onClick={() => updateChannel(ch.id)} style={primaryBtn}>{t('common.save')}</button>
                           </div>
                         </div>
                       )
@@ -1341,13 +1377,13 @@ export default function Dashboard() {
                         ? 'var(--text-tertiary)'
                         : 'var(--border)'
                     const infoText = st.unreadBreaking > 0
-                      ? `속보 ${st.unreadBreaking}건`
+                      ? t('channels.breakingCount', { n: st.unreadBreaking })
                       : st.today > 0
-                        ? `${st.today}개 영상`
+                        ? t('channels.newVideo', { n: st.today })
                         : st.total > 0
-                          ? `${st.total}개 누적`
-                          : '영상 없음'
-                    const timeText = st.lastDigest ? timeAgo(st.lastDigest.created_at) : ''
+                          ? t('channels.accumulated', { n: st.total })
+                          : t('channels.noNew')
+                    const timeText = st.lastDigest ? timeAgo(st.lastDigest.created_at, t) : ''
                     return (
                       <div key={ch.id} className="channels-row">
                         <span style={{
@@ -1398,15 +1434,15 @@ export default function Dashboard() {
                                 color: 'var(--text-primary)', fontSize: 11,
                                 fontFamily: 'inherit',
                               }}>
-                              <option value="">미분류</option>
+                              <option value="">{t('common.uncategorized')}</option>
                               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                           ) : (
-                            <button onClick={() => setMovingChannel(ch.id)} title="카테고리 이동" style={rowActionBtn}>↔</button>
+                            <button onClick={() => setMovingChannel(ch.id)} title={t('channels.moveCategory')} style={rowActionBtn}>↔</button>
                           )}
                           <button onClick={() => { setEditingChannel(ch.id); setEditChannelData({ alias: ch.alias, emoji: ch.emoji, url: ch.url }) }}
-                            title="채널 수정" style={rowActionBtn}>✎</button>
-                          <button onClick={() => deleteChannel(ch.id)} title="채널 삭제" style={rowActionBtn}>✕</button>
+                            title={t('channels.editChannelTitle')} style={rowActionBtn}>✎</button>
+                          <button onClick={() => deleteChannel(ch.id)} title={t('channels.deleteChannel')} style={rowActionBtn}>✕</button>
                         </div>
                       </div>
                     )
@@ -1602,10 +1638,10 @@ export default function Dashboard() {
           }
 
           const notifChannels = [
-            { id: 'email', label: '이메일', icon: '📧', checked: true, locked: false, fixed: true },
-            { id: 'kakao', label: '카카오톡', icon: '💬', checked: false, locked: !isPro, fixed: false },
-            { id: 'telegram', label: '텔레그램', icon: '✈️', checked: false, locked: !isPro, fixed: false },
-            { id: 'discord', label: '디스코드', icon: '🎮', checked: false, locked: !isPro, fixed: false },
+            { id: 'email', label: t('schedule.emailChannel'), icon: '📧', checked: true, locked: false, fixed: true },
+            { id: 'kakao', label: t('schedule.kakaoChannel'), icon: '💬', checked: false, locked: !isPro, fixed: false },
+            { id: 'telegram', label: t('schedule.telegramChannel'), icon: '✈️', checked: false, locked: !isPro, fixed: false },
+            { id: 'discord', label: t('schedule.discordChannel'), icon: '🎮', checked: false, locked: !isPro, fixed: false },
           ]
 
           return (
@@ -1613,17 +1649,17 @@ export default function Dashboard() {
               {/* 페이지 헤더 */}
               <div style={{ marginBottom: 6 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--text-primary)', letterSpacing: -0.3 }}>
-                  발송 설정
+                  {t('schedule.title')}
                 </h1>
                 <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                  다이제스트를 받을 시간과 방법을 설정하세요
+                  {t('schedule.subtitle')}
                 </div>
               </div>
 
               {/* 발송 시간 */}
               <div style={cardStyle}>
-                <div style={sectionTitle}><span>⏰</span> 발송 시간</div>
-                <div style={sectionSubtitle}>매일 이 시간에 자동으로 요약을 받아봐요</div>
+                <div style={sectionTitle}><span>⏰</span> {t('schedule.sendTime')}</div>
+                <div style={sectionSubtitle}>{t('schedule.sendTimeDesc')}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <select
                     value={pendingSendTime}
@@ -1634,7 +1670,7 @@ export default function Dashboard() {
                       borderColor: sendTimeChanged ? 'var(--accent)' : 'var(--border)',
                     }}>
                     {!sendTimeOptions.includes(pendingSendTime) && (
-                      <option value={pendingSendTime}>{pendingSendTime} (현재)</option>
+                      <option value={pendingSendTime}>{pendingSendTime} ({locale === 'ko' ? '현재' : 'current'})</option>
                     )}
                     {sendTimeOptions.map(t => (
                       <option key={t} value={t}>{t}</option>
@@ -1642,26 +1678,26 @@ export default function Dashboard() {
                   </select>
                   <button onClick={saveSendTime} disabled={!sendTimeChanged}
                     style={sendTimeChanged ? primaryBtn : disabledBtn}>
-                    저장
+                    {t('common.save')}
                   </button>
                   {sendTimeStatus === 'saved' && (
-                    <span style={{ fontSize: 12, color: 'var(--success)' }}>✓ 저장됨</span>
+                    <span style={{ fontSize: 12, color: 'var(--success)' }}>{t('common.saved')}</span>
                   )}
                   {sendTimeChanged && sendTimeStatus !== 'saved' && (
-                    <span style={{ fontSize: 12, color: 'var(--warning)' }}>● 변경됨</span>
+                    <span style={{ fontSize: 12, color: 'var(--warning)' }}>{t('common.changed')}</span>
                   )}
                 </div>
                 {!isPro && (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, textAlign: 'right' }}>
-                    💡 Pro 사용자는 여러 시간 설정 가능
+                    {t('schedule.proHint')}
                   </div>
                 )}
               </div>
 
               {/* 수신 이메일 */}
               <div style={cardStyle}>
-                <div style={sectionTitle}><span>📧</span> 수신 이메일</div>
-                <div style={sectionSubtitle}>다이제스트를 받을 이메일 주소</div>
+                <div style={sectionTitle}><span>📧</span> {t('schedule.email')}</div>
+                <div style={sectionSubtitle}>{t('schedule.emailDesc')}</div>
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center' }}>
                   <input
                     type="email"
@@ -1677,14 +1713,14 @@ export default function Dashboard() {
                     }} />
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
                     {emailStatus === 'saved' && (
-                      <span style={{ fontSize: 12, color: 'var(--success)' }}>✓ 저장됨</span>
+                      <span style={{ fontSize: 12, color: 'var(--success)' }}>{t('common.saved')}</span>
                     )}
                     {emailChanged && emailStatus !== 'saved' && (
-                      <span style={{ fontSize: 12, color: 'var(--warning)' }}>● 변경됨</span>
+                      <span style={{ fontSize: 12, color: 'var(--warning)' }}>{t('common.changed')}</span>
                     )}
                     <button onClick={saveEmail} disabled={!emailChanged}
                       style={emailChanged ? primaryBtn : disabledBtn}>
-                      저장
+                      {t('common.save')}
                     </button>
                   </div>
                 </div>
@@ -1692,8 +1728,8 @@ export default function Dashboard() {
 
               {/* 알림 채널 */}
               <div style={cardStyle}>
-                <div style={sectionTitle}><span>🔔</span> 알림 채널</div>
-                <div style={sectionSubtitle}>다이제스트를 받을 채널을 선택하세요</div>
+                <div style={sectionTitle}><span>🔔</span> {t('schedule.channels')}</div>
+                <div style={sectionSubtitle}>{t('schedule.channelsDesc')}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {notifChannels.map(ch => (
                     <div key={ch.id}
@@ -1738,7 +1774,7 @@ export default function Dashboard() {
                       )}
                       {ch.fixed && (
                         <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
-                          기본
+                          {t('schedule.defaultLabel')}
                         </span>
                       )}
                     </div>
@@ -1749,9 +1785,9 @@ export default function Dashboard() {
               {/* 속보 키워드 */}
               <div style={{ ...cardStyle, opacity: isPro ? 1 : 0.85 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={sectionTitle}><span>🚨</span> 속보 키워드</div>
+                  <div style={sectionTitle}><span>🚨</span> {t('schedule.breaking')}</div>
                   {!isPro ? (
-                    <span style={proBadge}>🔒 Pro 전용</span>
+                    <span style={proBadge}>{t('schedule.breakingProOnly')}</span>
                   ) : (
                     <div onClick={() => saveSettings({ breaking_alert: !settings?.breaking_alert })}
                       style={{
@@ -1770,7 +1806,7 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-                <div style={sectionSubtitle}>영상 제목에 키워드가 있으면 즉시 알림</div>
+                <div style={sectionSubtitle}>{t('schedule.breakingDesc')}</div>
 
                 {/* 키워드 칩 */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -1799,7 +1835,7 @@ export default function Dashboard() {
                     onKeyDown={e => isPro && e.key === 'Enter' && addKeyword()}
                     onFocus={e => isPro && (e.currentTarget.style.borderColor = 'var(--accent)')}
                     onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                    placeholder={isPro ? '키워드 추가 (예: 긴급, breaking)' : '🔒 Pro 업그레이드 필요'}
+                    placeholder={isPro ? t('schedule.keywordPlaceholder') : t('schedule.keywordPlaceholderLocked')}
                     disabled={!isPro}
                     style={{ ...inputStyle, flex: 1, opacity: isPro ? 1 : 0.6 }} />
                   <button onClick={() => {
@@ -1810,15 +1846,15 @@ export default function Dashboard() {
                       addKeyword()
                     }}
                     style={isPro ? primaryBtn : disabledBtn}>
-                    {isPro ? '+ 추가' : '🔒 Pro'}
+                    {isPro ? t('common.add') : '🔒 Pro'}
                   </button>
                 </div>
               </div>
 
               {/* 지금 바로 실행 */}
               <div style={cardStyle}>
-                <div style={sectionTitle}><span>⚡</span> 지금 바로 실행</div>
-                <div style={sectionSubtitle}>어제 영상을 지금 요약해서 이메일로 받기</div>
+                <div style={sectionTitle}><span>⚡</span> {t('schedule.runNow')}</div>
+                <div style={sectionSubtitle}>{t('schedule.runNowDesc')}</div>
                 {msg && (
                   <div style={{
                     fontSize: 12, marginBottom: 10,
@@ -1833,7 +1869,7 @@ export default function Dashboard() {
                     background: loading ? 'var(--bg-subtle)' : 'var(--accent)',
                     color: loading ? 'var(--text-muted)' : 'var(--bg-card)',
                   }}>
-                  {loading ? '요약 중...' : '🚀 지금 실행하기'}
+                  {loading ? t('schedule.running') : t('schedule.runNowCta')}
                 </button>
               </div>
             </div>
@@ -1876,8 +1912,7 @@ export default function Dashboard() {
           const hasFilter = !!(historySearch || historyDate || historyChannel || historyCategory) || historyFilter !== 'all'
           const formatShortDate = (iso?: string | null) => {
             if (!iso) return '-'
-            const d = new Date(iso)
-            return `${d.getMonth() + 1}.${d.getDate()}.`
+            return new Date(iso).toLocaleDateString(dateLocale, { month: 'numeric', day: 'numeric' })
           }
 
           return (
@@ -1885,19 +1920,19 @@ export default function Dashboard() {
               {/* 페이지 헤더 */}
               <div style={{ marginBottom: 6 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--text-primary)', letterSpacing: -0.3 }}>
-                  열람 기록
+                  {t('history.title')}
                 </h1>
                 <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                  최근 {retentionDays}일간 받은 다이제스트
+                  {t('history.subtitle', { days: retentionDays })}
                 </div>
               </div>
 
               {/* 필터 카드 */}
               <div style={cardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>필터</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t('history.filters')}</span>
                   <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                    총 {filteredDigests.length}개
+                    {t('history.total', { n: filteredDigests.length })}
                   </span>
                 </div>
 
@@ -1906,12 +1941,12 @@ export default function Dashboard() {
                   <button
                     className={`cat-chip${historyFilter === 'all' ? ' active' : ''}`}
                     onClick={() => setHistoryFilter('all')}>
-                    전체
+                    {t('history.all')}
                   </button>
                   <button
                     className={`cat-chip${historyFilter === 'breaking' ? ' active' : ''}`}
                     onClick={() => setHistoryFilter('breaking')}>
-                    🚨 속보만
+                    {t('history.breakingOnly')}
                   </button>
                 </div>
 
@@ -1927,7 +1962,7 @@ export default function Dashboard() {
                       onChange={e => setHistorySearch(e.target.value)}
                       onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                       onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                      placeholder="🔍 제목 또는 내용 검색"
+                      placeholder={t('history.searchPlaceholder')}
                       style={{ ...inputStyle, paddingRight: 32 }}
                     />
                     {historySearch && (
@@ -1950,21 +1985,21 @@ export default function Dashboard() {
                     onChange={e => setHistoryDate(e.target.value)}
                     onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                     onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                    title="발송일 기준 필터"
+                    title={t('history.dateFilter')}
                     style={inputStyle}
                   />
                   <select
                     value={historyChannel}
                     onChange={e => setHistoryChannel(e.target.value)}
                     style={inputStyle}>
-                    <option value="">모든 채널</option>
+                    <option value="">{t('history.allChannels')}</option>
                     {uniqueChannels.map(ch => <option key={ch} value={ch}>{ch}</option>)}
                   </select>
                   <select
                     value={historyCategory}
                     onChange={e => setHistoryCategory(e.target.value)}
                     style={inputStyle}>
-                    <option value="">모든 카테고리</option>
+                    <option value="">{t('history.allCategories')}</option>
                     {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
@@ -1978,7 +2013,7 @@ export default function Dashboard() {
                       setHistoryCategory('')
                       setHistoryFilter('all')
                     }} style={secondaryBtn}>
-                      초기화
+                      {t('history.reset')}
                     </button>
                   </div>
                 )}
@@ -1994,19 +2029,15 @@ export default function Dashboard() {
                     fontSize: 24, marginBottom: 16,
                   }}>📬</div>
                   <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
-                    {hasFilter ? '일치하는 기록이 없어요' : '아직 받은 다이제스트가 없어요'}
+                    {hasFilter ? t('history.noMatch') : t('history.empty')}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 18 }}>
-                    {hasFilter ? (
-                      <>필터를 조정해서 다시 검색해 보세요</>
-                    ) : (
-                      <>채널을 추가하고 발송 시간을 설정하면<br />매일 요약을 받아볼 수 있어요</>
-                    )}
+                    {hasFilter ? t('history.noMatchDesc') : t('history.emptyDesc')}
                   </div>
                   {!hasFilter && (
                     <button onClick={() => setActiveTab('channels')}
                       style={{ ...primaryBtn, padding: '10px 18px' }}>
-                      채널 관리하러 가기 →
+                      {t('history.emptyCta')}
                     </button>
                   )}
                 </div>
@@ -2053,7 +2084,7 @@ export default function Dashboard() {
                                     width: 6, height: 6, borderRadius: '50%',
                                     background: 'currentColor',
                                   }} />
-                                  속보
+                                  {t('history.breakingBadge')}
                                 </span>
                               )}
                               <span style={{
@@ -2104,7 +2135,7 @@ export default function Dashboard() {
                                   fontSize: 11, color: 'var(--text-tertiary)',
                                   fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
                                 }}>
-                                  📌 핵심 포인트
+                                  {t('history.keyPoints')}
                                 </div>
                                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                                   {digest.key_points.map((p, i) => (
@@ -2123,7 +2154,7 @@ export default function Dashboard() {
                                   fontSize: 11, color: 'var(--text-tertiary)',
                                   fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
                                 }}>
-                                  🕐 타임라인
+                                  {t('history.timeline')}
                                 </div>
                                 {digest.timeline.map((t, i) => (
                                   <div key={i} style={{
@@ -2152,7 +2183,7 @@ export default function Dashboard() {
                                 textDecoration: 'none',
                                 fontSize: 12, fontWeight: 600,
                               }}>
-                              ▶ 영상 보기
+                              {t('history.watchVideo')}
                             </a>
                           </div>
                         )}
