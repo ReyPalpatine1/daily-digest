@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
@@ -39,6 +40,7 @@ function timeAgo(iso: string | null | undefined, t: TFn): string {
 }
 
 export default function Dashboard() {
+  const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
   const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
   const [user, setUser] = useState<any>(null)
@@ -55,20 +57,6 @@ export default function Dashboard() {
   const [historyFilter, setHistoryFilter] = useState<'all' | 'breaking'>('all')
   const [historySearch, setHistorySearch] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
-  const [usageStats, setUsageStats] = useState<{
-    today: {
-      gemini: { count: number; input_tokens: number; output_tokens: number }
-      youtube: { count: number }
-      supadata: { count: number }
-    }
-    thisMonth: {
-      gemini: { count: number; input_tokens: number; output_tokens: number }
-      youtube: { count: number }
-      supadata: { count: number }
-    }
-    last7Days: { date: string; gemini: number; youtube: number; supadata: number }[]
-    users: { total: number; activeToday: number; activeThisMonth: number }
-  } | null>(null)
   const [historyDate, setHistoryDate] = useState('')
   const [historyChannel, setHistoryChannel] = useState('')
   const [historyCategory, setHistoryCategory] = useState('')
@@ -166,12 +154,6 @@ export default function Dashboard() {
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
-
-  useEffect(() => {
-    if (isAdmin) {
-      fetchAdminUsage()
-    }
-  }, [isAdmin])
 
   useEffect(() => {
     if (settings) {
@@ -344,17 +326,6 @@ export default function Dashboard() {
     const merged = { ...settings, ...updated, user_id: user.id }
     await supabase.from('settings').upsert(merged)
     loadData(user.id)
-  }
-
-  async function fetchAdminUsage() {
-    try {
-      const res = await fetch('/api/admin/usage')
-      if (!res.ok) return
-      const data = await res.json()
-      setUsageStats(data)
-    } catch (error) {
-      console.error('관리자 사용량 조회 실패:', error)
-    }
   }
 
   async function addKeyword() {
@@ -620,6 +591,15 @@ export default function Dashboard() {
           <span style={{ fontSize: 14 }}>📄</span> {t('settings.terms')}
         </button>
 
+        {isAdmin && (
+          <>
+            <div style={dropdownDivider} />
+            <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/admin') }}>
+              <span style={{ fontSize: 14 }}>🔐</span> {t('admin.adminMode')}
+            </button>
+          </>
+        )}
+
         {plan === 'FREE' && (
           <>
             <div style={dropdownDivider} />
@@ -778,6 +758,37 @@ export default function Dashboard() {
                       </button>
                     )
                   })}
+                </div>
+              )}
+              {/* 사용자 / 관리자 모드 토글 (관리자 전용) */}
+              {isAdmin && (
+                <div style={{
+                  display: 'inline-flex',
+                  background: 'var(--bg-subtle)',
+                  borderRadius: 7,
+                  padding: 2,
+                }}>
+                  <button
+                    style={{
+                      padding: '4px 10px', borderRadius: 5, border: 'none',
+                      background: 'var(--bg-card)', color: 'var(--text-primary)',
+                      fontWeight: 500, fontSize: 11, cursor: 'default',
+                      fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                    }}>
+                    {t('admin.userMode')}
+                  </button>
+                  <button
+                    onClick={() => router.push('/admin')}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                    style={{
+                      padding: '4px 10px', borderRadius: 5, border: 'none',
+                      background: 'transparent', color: 'var(--text-tertiary)',
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'color 0.15s',
+                    }}>
+                    {t('admin.adminMode')}
+                  </button>
                 </div>
               )}
               {/* 빠른 언어 토글 */}
@@ -1450,142 +1461,6 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* 관리자 통계 */}
-              {isAdmin && usageStats && (() => {
-                const GEMINI_DAILY_LIMIT = 1500
-                const todayGemini = usageStats.today.gemini.count
-                const pct = Math.min(100, (todayGemini / GEMINI_DAILY_LIMIT) * 100)
-                const barColor = pct >= 80 ? 'var(--danger)' : pct >= 50 ? 'var(--warning)' : 'var(--success)'
-                const max7d = Math.max(1, ...usageStats.last7Days.map(d => d.gemini + d.youtube + d.supadata))
-                const formatNum = (n: number) => n.toLocaleString('en-US')
-                const innerCard: React.CSSProperties = {
-                  background: 'var(--bg-subtle)',
-                  border: '0.5px solid var(--border-light)',
-                  borderRadius: 8,
-                  padding: 14,
-                  marginBottom: 10,
-                }
-                return (
-                  <div style={{ ...cardStyle, padding: 18, marginTop: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 8 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>🔒 관리자 통계</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Gemini · YouTube · Supadata API 사용 현황 (KST)</div>
-                      </div>
-                      <button onClick={fetchAdminUsage} style={secondaryBtn}>새로고침</button>
-                    </div>
-
-                    {/* 사용자 현황 */}
-                    <div style={innerCard}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>👥 사용자 현황</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                        {[
-                          { label: '전체', value: usageStats.users.total },
-                          { label: '오늘 활동', value: usageStats.users.activeToday },
-                          { label: '이번 달', value: usageStats.users.activeThisMonth },
-                        ].map(u => (
-                          <div key={u.label} style={{
-                            background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-                            borderRadius: 8, padding: 10, textAlign: 'center',
-                          }}>
-                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>{u.label}</div>
-                            <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: -0.5 }}>
-                              {formatNum(u.value)}
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>명</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Gemini 진행률 */}
-                    <div style={innerCard}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Gemini API</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>무료 한도 {formatNum(GEMINI_DAILY_LIMIT)}건/일</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>오늘</span>
-                        <span style={{ fontSize: 20, fontWeight: 600, color: barColor, letterSpacing: -0.5 }}>{formatNum(todayGemini)}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>건</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 11, color: barColor, fontWeight: 600 }}>{pct.toFixed(1)}%</span>
-                      </div>
-                      <div style={{ width: '100%', height: 6, background: 'var(--bg-card)', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: barColor, transition: 'width 0.3s' }} />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 8, fontSize: 11 }}>
-                        <div>
-                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>오늘 입력 토큰</div>
-                          <div style={{ color: 'var(--text-primary)' }}>{formatNum(usageStats.today.gemini.input_tokens)}</div>
-                        </div>
-                        <div>
-                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>오늘 출력 토큰</div>
-                          <div style={{ color: 'var(--text-primary)' }}>{formatNum(usageStats.today.gemini.output_tokens)}</div>
-                        </div>
-                        <div>
-                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>이번 달 호출</div>
-                          <div style={{ color: 'var(--text-primary)' }}>{formatNum(usageStats.thisMonth.gemini.count)}건</div>
-                        </div>
-                        <div>
-                          <div style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}>이번 달 토큰</div>
-                          <div style={{ color: 'var(--text-primary)' }}>
-                            {formatNum(usageStats.thisMonth.gemini.input_tokens + usageStats.thisMonth.gemini.output_tokens)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 최근 7일 추이 */}
-                    <div style={innerCard}>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 10 }}>최근 7일 추이 (서비스 합계)</div>
-                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 70, marginBottom: 6 }}>
-                        {usageStats.last7Days.map(d => {
-                          const total = d.gemini + d.youtube + d.supadata
-                          const heightPct = (total / max7d) * 100
-                          return (
-                            <div key={d.date} title={`${d.date}\nGemini ${d.gemini} · YouTube ${d.youtube} · Supadata ${d.supadata}`}
-                              style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                              <div style={{
-                                height: `${heightPct}%`,
-                                minHeight: total > 0 ? 2 : 0,
-                                background: 'linear-gradient(to top, var(--accent), var(--text-tertiary))',
-                                borderRadius: 3,
-                              }} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, fontSize: 10, color: 'var(--text-muted)' }}>
-                        {usageStats.last7Days.map(d => (
-                          <div key={d.date} style={{ flex: 1, textAlign: 'center' }}>
-                            {d.date.slice(5)}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 다른 서비스 */}
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 8 }}>
-                      <div style={{ ...innerCard, marginBottom: 0, padding: 12 }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>YouTube API</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                          오늘 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.today.youtube.count)}</span>건
-                          <span style={{ margin: '0 6px', color: 'var(--text-muted)' }}>·</span>
-                          이번 달 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.thisMonth.youtube.count)}</span>건
-                        </div>
-                      </div>
-                      <div style={{ ...innerCard, marginBottom: 0, padding: 12 }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>Supadata API</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                          오늘 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.today.supadata.count)}</span>건
-                          <span style={{ margin: '0 6px', color: 'var(--text-muted)' }}>·</span>
-                          이번 달 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNum(usageStats.thisMonth.supadata.count)}</span>건
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
             </>
           )
         })()}
