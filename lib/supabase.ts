@@ -36,6 +36,7 @@ export type Settings = {
   breaking_keywords: string[]
   breaking_alert: boolean
   active: boolean
+  locale: 'ko' | 'en'
 }
 
 export type Digest = {

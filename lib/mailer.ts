@@ -1,6 +1,12 @@
 import nodemailer from 'nodemailer'
 import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
+import { et, type EmailLocale } from './i18n/email-translations'
+import {
+  buildDigestHtml,
+  buildBreakingHtml,
+  buildWelcomeHtml,
+} from './email-templates'
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -18,120 +24,21 @@ type DigestItem = {
   summary: SummaryResult
 }
 
-function formatTime(isoString: string): string {
-  const date = new Date(isoString)
-  return date.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function truncateErrorInfo(errorInfo?: string): string | undefined {
-  if (!errorInfo) return undefined
-  const firstLine = errorInfo.trim().split('\n')[0]
-  return firstLine.length > 120 ? `${firstLine.slice(0, 120)}...` : firstLine
-}
-
-function buildEmailHtml(items: DigestItem[], userName: string): string {
-  const today = new Date().toLocaleDateString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-
-  const grouped: Record<string, DigestItem[]> = {}
-  items.forEach(item => {
-    if (!grouped[item.category]) grouped[item.category] = []
-    grouped[item.category].push(item)
-  })
-
-  const categorySections = Object.entries(grouped).map(([cat, catItems]) => `
-    <div style="margin-bottom:32px">
-      <h2 style="font-size:18px;color:#1a1a1a;border-bottom:2px solid #e8ff47;padding-bottom:8px;margin-bottom:16px">
-        ${cat}
-      </h2>
-      ${catItems.map(item => `
-        <div style="background:#f9f9f9;border-radius:12px;padding:20px;margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <span style="font-size:20px">${item.emoji}</span>
-            <span style="font-size:13px;color:#666">${item.channel}</span>
-          </div>
-          <h3 style="font-size:16px;margin:0 0 4px">
-            <a href="${item.video.url}" style="color:#1a1a1a;text-decoration:none">
-              ${item.video.title}
-            </a>
-          </h3>
-          <div style="font-size:12px;color:#999;margin-bottom:12px">
-            🕐 ${formatTime(item.video.publishedAt)} 업로드
-          </div>
-          <div style="font-size:11px;color:#999;margin-bottom:6px">
-            📌 ${item.summary.summaryBasis ?? '요약'}
-          </div>
-          ${item.summary.errorInfo ? `
-            <div style="font-size:12px;color:#b00;margin-bottom:10px;line-height:1.4">
-              <strong>오류 코드:</strong> ${truncateErrorInfo(item.summary.errorInfo)}
-            </div>
-          ` : ''}
-          <p style="font-size:14px;color:#333;line-height:1.7;margin:0 0 12px">
-            ${item.summary.summary}
-          </p>
-          ${item.summary.keyPoints.length > 0 ? `
-            <div style="margin-bottom:12px">
-              <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:6px">핵심 포인트</div>
-              <ul style="margin:0;padding-left:16px">
-                ${item.summary.keyPoints.map(p =>
-                  `<li style="font-size:13px;color:#333;margin-bottom:4px">${p}</li>`
-                ).join('')}
-              </ul>
-            </div>
-          ` : ''}
-          ${item.summary.timeline.length > 0 ? `
-            <div>
-              <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:6px">타임라인</div>
-              ${item.summary.timeline.map(t => `
-                <div style="font-size:12px;color:#555;margin-bottom:4px">
-                  <span style="background:#e8ff47;color:#000;padding:1px 6px;border-radius:4px;margin-right:6px">${t.time}</span>
-                  ${t.content}
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
-          <div style="margin-top:12px">
-            <a href="${item.video.url}"
-              style="background:#ff0000;color:#fff;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px">
-              ▶ 영상 보기
-            </a>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `).join('')
-
-  return `
-    <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:640px;margin:0 auto;padding:24px">
-      <div style="background:#0a0a0a;padding:24px;border-radius:12px;margin-bottom:24px">
-        <h1 style="font-size:28px;color:#e8ff47;margin:0;letter-spacing:2px">DAILY DIGEST</h1>
-        <p style="color:#888;margin:4px 0 0;font-size:14px">${today} · ${userName}님의 유튜브 요약</p>
-      </div>
-      ${categorySections}
-      <div style="text-align:center;font-size:12px;color:#999;margin-top:32px">
-        Daily Digest AI 에이전트가 자동으로 생성했습니다
-      </div>
-    </div>
-  `
+// locale 정규화 — 잘못된 값이 들어와도 'ko' 폴백
+function normalizeLocale(locale?: string | null): EmailLocale {
+  return locale === 'en' ? 'en' : 'ko'
 }
 
 export async function sendDigestEmail(
   to: string,
   userName: string,
-  items: DigestItem[]
+  items: DigestItem[],
+  locale: 'ko' | 'en' = 'ko'
 ): Promise<void> {
-  const today = new Date().toLocaleDateString('ko-KR', {
+  const lc = normalizeLocale(locale)
+  const date = new Date().toLocaleDateString(lc === 'ko' ? 'ko-KR' : 'en-US', {
     timeZone: 'Asia/Seoul',
+    year: 'numeric',
     month: 'long',
     day: 'numeric',
   })
@@ -139,21 +46,36 @@ export async function sendDigestEmail(
   await transporter.sendMail({
     from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
     to,
-    subject: `📺 ${today} Daily Digest — ${items.length}개 영상 요약`,
-    html: buildEmailHtml(items, userName),
+    subject: et(lc, 'digest.subject', { date }),
+    html: buildDigestHtml(items, userName, lc),
   })
 }
 
 export async function sendBreakingAlert(
   to: string,
   userName: string,
-  item: DigestItem
+  item: DigestItem,
+  locale: 'ko' | 'en' = 'ko'
 ): Promise<void> {
+  const lc = normalizeLocale(locale)
   await transporter.sendMail({
-    from: `"Daily Digest 속보" <${process.env.GMAIL_USER}>`,
+    from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
     to,
-    subject: `🚨 속보 감지 — ${item.video.title}`,
-    html: buildEmailHtml([item], userName),
+    subject: et(lc, 'breaking.subject', { title: item.video.title }),
+    html: buildBreakingHtml(item, userName, lc),
+  })
+}
+
+export async function sendWelcomeEmail(
+  to: string,
+  locale: 'ko' | 'en' = 'ko'
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  await transporter.sendMail({
+    from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: et(lc, 'welcome.subject'),
+    html: buildWelcomeHtml(lc),
   })
 }
 
@@ -185,6 +107,7 @@ export function resolveAdminRecipients(): string[] {
   return []
 }
 
+// 관리자 오류 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
 export async function sendAdminBulkErrorEmail(
   userName: string,
   userEmail: string,

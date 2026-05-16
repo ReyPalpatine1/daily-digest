@@ -28,6 +28,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '설정 없음' }, { status: 400 })
     }
 
+    // 사용자 이메일 언어 (미설정 시 'ko')
+    const userLocale: 'ko' | 'en' = settings.locale === 'en' ? 'en' : 'ko'
+
     // 유저 프로필 가져오기
     const { data: profile } = await supabase
       .from('profiles')
@@ -137,7 +140,8 @@ export async function POST(req: Request) {
           await sendBreakingAlert(
             settings.email,
             profile?.name ?? '사용자',
-            digestItem
+            digestItem,
+            userLocale
           )
         }
       }
@@ -148,7 +152,8 @@ export async function POST(req: Request) {
       await sendDigestEmail(
         settings.email,
         profile?.name ?? '사용자',
-        digestItems
+        digestItems,
+        userLocale
       )
     }
 

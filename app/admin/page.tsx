@@ -188,11 +188,12 @@ export default function AdminPage() {
         : t('admin.cronError')
 
   const max7d = Math.max(1, ...s.last7Days.map(d => d.gemini + d.youtube + d.supadata))
-  const navItems = [
+  const navItems: { key: string; label: string; active: boolean; href?: string }[] = [
     { key: 'dashboard', label: t('admin.menuDashboard'), active: true },
     { key: 'users', label: t('admin.menuUsers'), active: false },
     { key: 'content', label: t('admin.menuContent'), active: false },
     { key: 'system', label: t('admin.menuSystem'), active: false },
+    { key: 'email', label: '📧 Email', active: false, href: '/admin/email-preview' },
   ]
 
   return (
@@ -226,6 +227,7 @@ export default function AdminPage() {
         <nav style={{ display: 'flex', gap: 2 }}>
           {navItems.map(item => (
             <button key={item.key}
+              onClick={() => { if (item.href) router.push(item.href) }}
               style={{
                 padding: '6px 12px', borderRadius: 7, border: 'none',
                 background: item.active ? ADMIN_BAR_SUBTLE : 'transparent',

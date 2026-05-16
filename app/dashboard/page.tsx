@@ -162,6 +162,25 @@ export default function Dashboard() {
     }
   }, [settings])
 
+  // 언어 설정을 DB(settings.locale)에 동기화 — 이메일 발송 언어로 사용됨.
+  // 최초 마운트(settings 로드)에는 저장하지 않고, 이후 사용자가 언어를 바꿀 때만 저장.
+  const localeSyncReady = useRef(false)
+  useEffect(() => {
+    if (!user || !settings) return
+    if (!localeSyncReady.current) {
+      localeSyncReady.current = true
+      return
+    }
+    if (settings.locale === locale) return
+    supabase
+      .from('settings')
+      .update({ locale })
+      .eq('user_id', user.id)
+      .then(({ error }) => {
+        if (error) console.warn('[locale] DB 저장 실패 (settings.locale 컬럼 확인 필요):', error.message)
+      })
+  }, [locale, user, settings])
+
   // 테마 초기 동기화 (layout.tsx bootstrap script 가 이미 html.dataset.theme 설정) +
   // OS 선호도 변경 자동 반영 (사용자가 명시 토글하지 않은 경우에만)
   useEffect(() => {

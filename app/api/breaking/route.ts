@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
     const { data: settings, error: settingsError } = await supabase
       .from('settings')
-      .select('breaking_alert, breaking_keywords, email')
+      .select('*')
       .eq('user_id', userId)
       .single()
 
@@ -46,6 +46,9 @@ export async function POST(req: Request) {
     if (!settings?.breaking_alert || !settings?.email) {
       return NextResponse.json({ message: 'breaking alert not enabled or email missing' })
     }
+
+    // 사용자 이메일 언어 (미설정 시 'ko')
+    const userLocale: 'ko' | 'en' = settings.locale === 'en' ? 'en' : 'ko'
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -159,7 +162,7 @@ export async function POST(req: Request) {
         isBreaking: true,
       }
 
-      await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem)
+      await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem, userLocale)
 
       if (summary.errorInfo) {
         failedItems.push({
