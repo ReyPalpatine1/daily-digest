@@ -58,18 +58,24 @@ export async function POST(req: Request) {
     const failedItems = []
     const keywords: string[] = settings.breaking_keywords ?? ['속보']
 
-    // 이미 처리된 영상 ID 미리 조회 (cron 재시도 시 중복 발송 방지)
-    const { data: existingDigests } = await supabase
-      .from('digests')
-      .select('video_id')
-      .eq('user_id', userId)
-    const processedVideoIds = new Set((existingDigests ?? []).map(d => d.video_id))
+    // 수동 발송("지금 실행하기")은 사용자가 일부러 누른 거니 중복 체크 스킵 — 항상 다시 처리/발송
+    // 자동 발송(cron)은 같은 영상 중복 발송 방지를 위해 기존 처리분 제외
+    const isManual = trigger === 'manual'
+    let processedVideoIds = new Set<string>()
+    if (!isManual) {
+      const { data: existingDigests } = await supabase
+        .from('digests')
+        .select('video_id')
+        .eq('user_id', userId)
+      processedVideoIds = new Set((existingDigests ?? []).map(d => d.video_id))
+    }
 
-    // 1단계: 모든 채널의 영상을 수집 (중복/이미 처리된 영상 제외)
+    // 1단계: 모든 채널의 영상을 수집
     type Channel = (typeof channels)[number]
     type Video = Awaited<ReturnType<typeof getYesterdayVideos>>[number]
     type VideoTask = { channel: Channel; video: Video }
     const videoTasks: VideoTask[] = []
+    const seenInThisRun = new Set<string>() // 같은 채널/실행 내 중복 방지
 
     for (const channel of channels) {
       let channelId = channel.channel_id
@@ -86,8 +92,10 @@ export async function POST(req: Request) {
 
       const videos = await getYesterdayVideos(channelId, userId)
       for (const video of videos) {
+        if (seenInThisRun.has(video.videoId)) continue
+        // manual=true이면 processedVideoIds는 비어있으므로 항상 통과 (재처리)
         if (processedVideoIds.has(video.videoId)) continue
-        processedVideoIds.add(video.videoId)
+        seenInThisRun.add(video.videoId)
         videoTasks.push({ channel, video })
         if (videoTasks.length >= MAX_VIDEOS_PER_RUN) break
       }
@@ -97,7 +105,9 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log(`🎬 처리 대상 영상: ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩)`)
+    console.log(
+      `🎬 ${isManual ? '수동' : '자동'} 발송: 처리 대상 영상 ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩)`
+    )
 
     // 단일 영상 처리 함수
     const processVideo = async (task: VideoTask) => {
@@ -122,22 +132,27 @@ export async function POST(req: Request) {
       }
 
       const dbStart = Date.now()
-      await supabase.from('digests').insert({
-        user_id: userId,
-        channel_alias: channel.alias,
-        channel_emoji: channel.emoji,
-        category_name: categoryName,
-        video_id: video.videoId,
-        video_title: video.title,
-        video_url: video.url,
-        published_at: video.publishedAt,
-        summary: summary.summary,
-        key_points: summary.keyPoints,
-        timeline: summary.timeline,
-        is_breaking: isBreaking,
-        is_read: false,
-        summary_basis: summary.summaryBasis,
-      })
+      // (user_id, video_id) UNIQUE 위에서 upsert: 수동 재발송 시 행을 새로 만들지 않고
+      // 기존 행의 요약/타임라인을 새 결과로 갱신. cron 재시도에도 안전한 멱등 처리.
+      await supabase.from('digests').upsert(
+        {
+          user_id: userId,
+          channel_alias: channel.alias,
+          channel_emoji: channel.emoji,
+          category_name: categoryName,
+          video_id: video.videoId,
+          video_title: video.title,
+          video_url: video.url,
+          published_at: video.publishedAt,
+          summary: summary.summary,
+          key_points: summary.keyPoints,
+          timeline: summary.timeline,
+          is_breaking: isBreaking,
+          is_read: false,
+          summary_basis: summary.summaryBasis,
+        },
+        { onConflict: 'user_id,video_id' }
+      )
       const dbElapsed = Date.now() - dbStart
 
       let breakingElapsed = 0

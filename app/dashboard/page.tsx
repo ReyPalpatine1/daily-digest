@@ -374,7 +374,8 @@ export default function Dashboard() {
       const res = await fetch('/api/digest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        // trigger='manual': 사용자가 일부러 누른 거니 중복 체크 스킵하고 항상 재처리
+        body: JSON.stringify({ userId: user.id, trigger: 'manual' }),
         signal: controller.signal,
       })
 
