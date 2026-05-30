@@ -2,6 +2,15 @@ import { logApiUsage } from '@/lib/api-usage'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 
+// 외부 API 무한 대기 방지
+const SUPADATA_TIMEOUT_MS = 15000
+const YOUTUBE_HTML_TIMEOUT_MS = 8000
+const GEMINI_TIMEOUT_MS = 30000
+
+function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs: number) {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) })
+}
+
 export type SummaryResult = {
   summary: string
   keyPoints: string[]
@@ -20,6 +29,8 @@ export async function summarizeVideo(
   // Tier 1 유료 전환: 503은 가끔 발생, 429는 거의 없음
   const maxRetries = 2
   const retryDelay = 2000 // 2초
+
+  const fnStart = Date.now()
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -52,7 +63,8 @@ ${content || '(자막 및 설명 없음)'}
 
 참고: 자막이 없으면 timeline은 빈 배열 []로 하세요. 응답은 유효한 JSON이어야 합니다.`
 
-      const res = await fetch(
+      const callStart = Date.now()
+      const res = await fetchWithTimeout(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
@@ -61,8 +73,10 @@ ${content || '(자막 및 설명 없음)'}
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { temperature: 0.3 },
           }),
-        }
+        },
+        GEMINI_TIMEOUT_MS
       )
+      console.log(`⏱ [gemini fetch] ${Date.now() - callStart}ms (status=${res.status}, attempt=${attempt})`)
 
       if (res.status === 503) {
         if (attempt < maxRetries) {
@@ -123,7 +137,10 @@ ${content || '(자막 및 설명 없음)'}
       const usage = data.usageMetadata ?? {}
       const inputTokens = usage.promptTokenCount ?? 0
       const outputTokens = usage.candidatesTokenCount ?? 0
-      await logApiUsage(userId, 'gemini', inputTokens, outputTokens)
+      // fire-and-forget: 사용량 기록 실패가 핵심 경로를 막지 않도록
+      logApiUsage(userId, 'gemini', inputTokens, outputTokens).catch(e =>
+        console.error('[gemini] logApiUsage 실패:', e)
+      )
       
       // JSON 파싱 시도
       let parsed
@@ -142,6 +159,7 @@ ${content || '(자막 및 설명 없음)'}
         }
       }
 
+      console.log(`⏱ [summarizeVideo total] ${Date.now() - fnStart}ms (basis=${summaryBasis})`)
       return { ...parsed, summaryBasis, attempts: attempt }
     } catch (e) {
       const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
@@ -173,56 +191,63 @@ ${content || '(자막 및 설명 없음)'}
 }
 
 export async function getTranscript(videoId: string, userId?: string): Promise<{ transcript: string; description: string }> {
+  const fnStart = Date.now()
   let transcript = ''
   let description = ''
 
-  // Supadata API로 자막 추출
+  // Supadata API로 자막 추출 (timeout 적용)
+  const supadataStart = Date.now()
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&lang=ko&text=true`,
-      {
-        headers: {
-          'x-api-key': process.env.SUPADATA_API_KEY!,
-        },
-      }
+      { headers: { 'x-api-key': process.env.SUPADATA_API_KEY! } },
+      SUPADATA_TIMEOUT_MS
     )
-    if (userId) await logApiUsage(userId, 'supadata')
+    if (userId) {
+      logApiUsage(userId, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
+    }
 
     if (res.ok) {
       const data = await res.json()
       transcript = data.content ?? ''
-      console.log(`✅ Supadata 자막 추출 성공: ${videoId}`)
+      console.log(`✅ Supadata 자막 추출 성공: ${videoId} (${Date.now() - supadataStart}ms)`)
     } else {
       // 한국어 없으면 기본 언어로 재시도
-      const fallback = await fetch(
+      const fbStart = Date.now()
+      const fallback = await fetchWithTimeout(
         `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true`,
-        {
-          headers: {
-            'x-api-key': process.env.SUPADATA_API_KEY!,
-          },
-        }
+        { headers: { 'x-api-key': process.env.SUPADATA_API_KEY! } },
+        SUPADATA_TIMEOUT_MS
       )
-      if (userId) await logApiUsage(userId, 'supadata')
+      if (userId) {
+        logApiUsage(userId, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
+      }
       if (fallback.ok) {
         const data = await fallback.json()
         transcript = data.content ?? ''
-        console.log(`✅ Supadata 기본 자막 추출 성공: ${videoId}`)
+        console.log(`✅ Supadata 기본 자막 추출 성공: ${videoId} (${Date.now() - fbStart}ms)`)
       } else {
-        console.log(`❌ Supadata 자막 추출 실패: ${videoId}`)
+        console.log(`❌ Supadata 자막 추출 실패: ${videoId} (${Date.now() - supadataStart}ms)`)
       }
     }
   } catch (e) {
-    console.log(`❌ Supadata 에러: ${videoId}`, e)
+    const msg = e instanceof Error ? e.message : String(e)
+    console.log(`❌ Supadata 에러/timeout: ${videoId} (${Date.now() - supadataStart}ms) — ${msg}`)
   }
 
-  // 영상 설명 추출 시도
+  // 영상 설명 추출 시도 (timeout 적용)
+  const descStart = Date.now()
   try {
-    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept-Language': 'ko-KR,ko;q=0.9',
-      }
-    })
+    const res = await fetchWithTimeout(
+      `https://www.youtube.com/watch?v=${videoId}`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept-Language': 'ko-KR,ko;q=0.9',
+        },
+      },
+      YOUTUBE_HTML_TIMEOUT_MS
+    )
     const html = await res.text()
     const descMatch = html.match(/"shortDescription":"(.*?)"(?:,"isCrawlable")/)
     if (descMatch) {
@@ -231,9 +256,12 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
         .replace(/\\"/g, '"')
         .slice(0, 2000)
     }
-  } catch {
-    console.log(`❌ 설명 추출 실패: ${videoId}`)
+    console.log(`⏱ [yt html] ${videoId} (${Date.now() - descStart}ms, descLen=${description.length})`)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.log(`❌ 설명 추출 실패/timeout: ${videoId} (${Date.now() - descStart}ms) — ${msg}`)
   }
 
+  console.log(`⏱ [getTranscript total] ${videoId} ${Date.now() - fnStart}ms (transcriptLen=${transcript.length})`)
   return { transcript, description }
 }

@@ -101,9 +101,14 @@ export async function POST(req: Request) {
 
     // 단일 영상 처리 함수
     const processVideo = async (task: VideoTask) => {
+      const vStart = Date.now()
       const { channel, video } = task
+      const tStart = Date.now()
       const { transcript, description } = await getTranscript(video.videoId, userId)
+      const tElapsed = Date.now() - tStart
+      const sStart = Date.now()
       const summary = await summarizeVideo(userId, video.title, transcript, description)
+      const sElapsed = Date.now() - sStart
       const isBreaking = keywords.some(kw => video.title.includes(kw))
       const categoryName = (channel as any).categories?.name ?? '미분류'
 
@@ -116,6 +121,7 @@ export async function POST(req: Request) {
         isBreaking,
       }
 
+      const dbStart = Date.now()
       await supabase.from('digests').insert({
         user_id: userId,
         channel_alias: channel.alias,
@@ -132,15 +138,25 @@ export async function POST(req: Request) {
         is_read: false,
         summary_basis: summary.summaryBasis,
       })
+      const dbElapsed = Date.now() - dbStart
 
+      let breakingElapsed = 0
       if (settings.breaking_alert && isBreaking) {
+        const bStart = Date.now()
         await sendBreakingAlert(
           settings.email,
           profile?.name ?? '사용자',
           digestItem,
           userLocale
         )
+        breakingElapsed = Date.now() - bStart
       }
+
+      console.log(
+        `🎞 [video ${video.videoId}] total=${Date.now() - vStart}ms ` +
+          `transcript=${tElapsed}ms gemini=${sElapsed}ms db=${dbElapsed}ms` +
+          (breakingElapsed ? ` breaking=${breakingElapsed}ms` : '')
+      )
 
       return digestItem
     }
@@ -148,7 +164,12 @@ export async function POST(req: Request) {
     // 2단계: CONCURRENCY 묶음으로 병렬 처리 (Promise.allSettled로 부분 실패 허용)
     for (let i = 0; i < videoTasks.length; i += CONCURRENCY) {
       const batch = videoTasks.slice(i, i + CONCURRENCY)
+      const batchNum = Math.floor(i / CONCURRENCY) + 1
+      const totalBatches = Math.ceil(videoTasks.length / CONCURRENCY)
+      const batchStart = Date.now()
+      console.log(`▶ 묶음 ${batchNum}/${totalBatches} 시작 (영상 ${batch.length}개)`)
       const batchResults = await Promise.allSettled(batch.map(processVideo))
+      console.log(`◀ 묶음 ${batchNum}/${totalBatches} 완료 (${Date.now() - batchStart}ms)`)
       for (let j = 0; j < batchResults.length; j++) {
         const result = batchResults[j]
         const task = batch[j]
