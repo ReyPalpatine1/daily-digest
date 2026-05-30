@@ -362,17 +362,47 @@ export default function Dashboard() {
 
   async function runDigestNow() {
     if (!user) return
+    if (loading) return // 중복 클릭 방지
     setLoading(true)
     setMsg('')
-    const res = await fetch('/api/digest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id }),
-    })
-    const data = await res.json()
-    setMsg(data.success ? t('alerts.digestDone', { n: data.sent }) : t('alerts.digestError'))
-    setLoading(false)
-    loadData(user.id)
+
+    // 서버 maxDuration=60s + 네트워크/콜드스타트 여유 = 90s
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90_000)
+
+    try {
+      const res = await fetch('/api/digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        setMsg(t('alerts.digestError'))
+        return
+      }
+
+      const data = await res.json()
+      if (data.success) {
+        const n = data.processed ?? data.succeeded ?? data.sent ?? 0
+        setMsg(t('alerts.digestDone', { n }))
+      } else {
+        setMsg(t('alerts.digestError'))
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        setMsg(t('alerts.digestTimeout'))
+      } else {
+        setMsg(t('alerts.digestError'))
+      }
+      console.error('[runDigestNow] 실패:', err)
+    } finally {
+      clearTimeout(timeoutId)
+      setLoading(false) // 무조건 로딩 해제
+      // 부분 처리됐을 수도 있으니 데이터는 다시 로드
+      loadData(user.id)
+    }
   }
 
   async function markAsRead(digestId: string) {

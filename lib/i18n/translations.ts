@@ -171,6 +171,7 @@ export const translations = {
       confirmDeleteCategory: '{name} 카테고리를 삭제할까요?\n포함된 채널은 삭제되지 않고 미분류로 이동됩니다.',
       digestDone: '✅ {n}개 영상 요약 발송 완료!',
       digestError: '❌ 오류가 발생했어요',
+      digestTimeout: '⏱ 처리 시간이 초과됐어요. 영상이 많으면 시간이 걸릴 수 있어요. 잠시 후 이메일을 확인해주세요.',
     },
     auth: {
       loginTitle: 'Daily Digest',
@@ -502,6 +503,7 @@ export const translations = {
       confirmDeleteCategory: 'Delete the category "{name}"?\nChannels inside will be kept and moved to Uncategorized.',
       digestDone: '✅ {n} video summaries sent!',
       digestError: '❌ Something went wrong',
+      digestTimeout: '⏱ Processing took too long. With many videos this can take a while — check your email shortly.',
     },
     auth: {
       loginTitle: 'Daily Digest',

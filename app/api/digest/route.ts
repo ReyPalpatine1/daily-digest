@@ -242,7 +242,9 @@ export async function POST(req: Request) {
       success: true,
       sent: digestItems.length,
       succeeded: successCount,
+      processed: successCount, // 클라이언트 호환용 별칭
       failed: failedCount,
+      total: videoTasks.length,
       elapsedSeconds: Number(elapsed),
     })
   } catch (error) {
