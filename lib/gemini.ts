@@ -17,8 +17,9 @@ export async function summarizeVideo(
   transcript: string,
   description?: string
 ): Promise<SummaryResult> {
-  const maxRetries = 3
-  const retryDelay = 3000 // 3초
+  // Tier 1 유료 전환: 503은 가끔 발생, 429는 거의 없음
+  const maxRetries = 2
+  const retryDelay = 2000 // 2초
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -74,6 +75,30 @@ ${content || '(자막 및 설명 없음)'}
         }
       }
 
+      if (res.status === 429) {
+        // Tier 1에선 거의 없지만, 만약 발생 시 retryDelay 또는 응답의 retryDelay 만큼 대기
+        let waitMs = retryDelay
+        try {
+          const errData = await res.clone().json()
+          const retryInfo = errData?.error?.details?.find(
+            (d: any) => d['@type']?.includes('RetryInfo')
+          )
+          const retryDelayStr: string | undefined = retryInfo?.retryDelay
+          if (retryDelayStr) {
+            const sec = parseInt(retryDelayStr.replace(/[^0-9]/g, ''), 10)
+            if (!isNaN(sec) && sec > 0) waitMs = sec * 1000
+          }
+        } catch {}
+        if (attempt < maxRetries) {
+          console.log(`⚠️ Gemini 429 에러, ${waitMs}ms 후 재시도 (${attempt}/${maxRetries})`)
+          await new Promise(resolve => setTimeout(resolve, waitMs))
+          continue
+        } else {
+          console.log('❌ Gemini 429 에러, 최대 재시도 횟수 초과')
+          throw new Error('429 Too Many Requests after retries')
+        }
+      }
+
       let data
       try {
         data = await res.json()
@@ -120,7 +145,8 @@ ${content || '(자막 및 설명 없음)'}
       return { ...parsed, summaryBasis, attempts: attempt }
     } catch (e) {
       const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
-      if (attempt === maxRetries || !errorInfo.includes('503')) {
+      const isRetryable = errorInfo.includes('503') || errorInfo.includes('429')
+      if (attempt === maxRetries || !isRetryable) {
         console.log('❌ Gemini 요약 에러:', e)
         return {
           summary: '요약을 가져오지 못했습니다.',
@@ -131,7 +157,7 @@ ${content || '(자막 및 설명 없음)'}
           attempts: attempt,
         }
       }
-      // 503 에러는 재시도
+      // 503/429 에러는 재시도
     }
   }
 

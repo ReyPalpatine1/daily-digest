@@ -11,7 +11,13 @@ const supabase = createClient(
 
 export const maxDuration = 60
 
+// Tier 1 유료 전환: 60초 timeout 안에 안전한 상한
+const MAX_VIDEOS_PER_RUN = 20
+// 한 묶음에 동시에 처리할 영상 수 (Tier 1 분당 150건 한도 내에서 안전)
+const CONCURRENCY = 5
+
 export async function POST(req: Request) {
+  const startTime = Date.now()
   try {
     const body = await req.json()
     const userId: string = body.userId
@@ -59,8 +65,13 @@ export async function POST(req: Request) {
       .eq('user_id', userId)
     const processedVideoIds = new Set((existingDigests ?? []).map(d => d.video_id))
 
+    // 1단계: 모든 채널의 영상을 수집 (중복/이미 처리된 영상 제외)
+    type Channel = (typeof channels)[number]
+    type Video = Awaited<ReturnType<typeof getYesterdayVideos>>[number]
+    type VideoTask = { channel: Channel; video: Video }
+    const videoTasks: VideoTask[] = []
+
     for (const channel of channels) {
-      // 채널 ID 추출
       let channelId = channel.channel_id
       if (!channelId) {
         channelId = await getChannelId(channel.url, userId)
@@ -73,76 +84,98 @@ export async function POST(req: Request) {
       }
       if (!channelId) continue
 
-      // 전날 영상 가져오기
       const videos = await getYesterdayVideos(channelId, userId)
-
       for (const video of videos) {
-        // 이미 처리된 영상이면 스킵 (idempotent)
         if (processedVideoIds.has(video.videoId)) continue
         processedVideoIds.add(video.videoId)
+        videoTasks.push({ channel, video })
+        if (videoTasks.length >= MAX_VIDEOS_PER_RUN) break
+      }
+      if (videoTasks.length >= MAX_VIDEOS_PER_RUN) {
+        console.log(`⚠️ 최대 처리 한도 ${MAX_VIDEOS_PER_RUN}개 도달, 나머지는 다음 실행으로 이월`)
+        break
+      }
+    }
 
-        // API 한도 방지를 위한 딜레이
-        await new Promise(r => setTimeout(r, 1500))
+    console.log(`🎬 처리 대상 영상: ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩)`)
 
-        // 자막 + 설명 추출
-        const { transcript, description } = await getTranscript(video.videoId, userId)
+    // 단일 영상 처리 함수
+    const processVideo = async (task: VideoTask) => {
+      const { channel, video } = task
+      const { transcript, description } = await getTranscript(video.videoId, userId)
+      const summary = await summarizeVideo(userId, video.title, transcript, description)
+      const isBreaking = keywords.some(kw => video.title.includes(kw))
+      const categoryName = (channel as any).categories?.name ?? '미분류'
 
-        // Gemini로 요약
-        const summary = await summarizeVideo(userId, video.title, transcript, description)
+      const digestItem = {
+        channel: channel.alias,
+        category: categoryName,
+        emoji: channel.emoji,
+        video,
+        summary,
+        isBreaking,
+      }
 
-        // 속보 감지
-        const isBreaking = keywords.some(kw => video.title.includes(kw))
+      await supabase.from('digests').insert({
+        user_id: userId,
+        channel_alias: channel.alias,
+        channel_emoji: channel.emoji,
+        category_name: categoryName,
+        video_id: video.videoId,
+        video_title: video.title,
+        video_url: video.url,
+        published_at: video.publishedAt,
+        summary: summary.summary,
+        key_points: summary.keyPoints,
+        timeline: summary.timeline,
+        is_breaking: isBreaking,
+        is_read: false,
+        summary_basis: summary.summaryBasis,
+      })
 
-        const digestItem = {
-          channel: channel.alias,
-          category: (channel as any).categories?.name ?? '미분류',
-          emoji: channel.emoji,
-          video,
-          summary,
-          isBreaking,
-        }
+      if (settings.breaking_alert && isBreaking) {
+        await sendBreakingAlert(
+          settings.email,
+          profile?.name ?? '사용자',
+          digestItem,
+          userLocale
+        )
+      }
 
-        digestItems.push(digestItem)
+      return digestItem
+    }
 
-        // Supabase에 저장
-        await supabase.from('digests').insert({
-          user_id: userId,
-          channel_alias: channel.alias,
-          channel_emoji: channel.emoji,
-          category_name: (channel as any).categories?.name ?? '미분류',
-          video_id: video.videoId,
-          video_title: video.title,
-          video_url: video.url,
-          published_at: video.publishedAt,
-          summary: summary.summary,
-          key_points: summary.keyPoints,
-          timeline: summary.timeline,
-          is_breaking: isBreaking,
-          is_read: false,
-          summary_basis: summary.summaryBasis,
-        })
-
-        // 오류난 항목 수집
-        if (summary.errorInfo) {
+    // 2단계: CONCURRENCY 묶음으로 병렬 처리 (Promise.allSettled로 부분 실패 허용)
+    for (let i = 0; i < videoTasks.length; i += CONCURRENCY) {
+      const batch = videoTasks.slice(i, i + CONCURRENCY)
+      const batchResults = await Promise.allSettled(batch.map(processVideo))
+      for (let j = 0; j < batchResults.length; j++) {
+        const result = batchResults[j]
+        const task = batch[j]
+        if (result.status === 'fulfilled') {
+          const item = result.value
+          digestItems.push(item)
+          if (item.summary.errorInfo) {
+            failedItems.push({
+              channel: item.channel,
+              category: item.category,
+              emoji: item.emoji,
+              videoTitle: item.video.title,
+              videoUrl: item.video.url,
+              errorInfo: item.summary.errorInfo,
+              attempts: item.summary.attempts,
+            })
+          }
+        } else {
+          console.error(`❌ 영상 처리 실패 (${task.video.videoId}):`, result.reason)
           failedItems.push({
-            channel: channel.alias,
-            category: (channel as any).categories?.name ?? '미분류',
-            emoji: channel.emoji,
-            videoTitle: video.title,
-            videoUrl: video.url,
-            errorInfo: summary.errorInfo,
-            attempts: summary.attempts,
+            channel: task.channel.alias,
+            category: (task.channel as any).categories?.name ?? '미분류',
+            emoji: task.channel.emoji,
+            videoTitle: task.video.title,
+            videoUrl: task.video.url,
+            errorInfo: result.reason instanceof Error ? result.reason.message : String(result.reason),
           })
-        }
-
-        // 속보 즉시 발송
-        if (settings.breaking_alert && isBreaking) {
-          await sendBreakingAlert(
-            settings.email,
-            profile?.name ?? '사용자',
-            digestItem,
-            userLocale
-          )
         }
       }
     }
@@ -177,12 +210,23 @@ export async function POST(req: Request) {
     // 30일 지난 기록 삭제
     await supabase.rpc('delete_old_digests')
 
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+    const successCount = digestItems.filter(i => !i.summary.errorInfo).length
+    const failedCount = failedItems.length
+    console.log(
+      `📊 처리 완료: 성공 ${successCount}개, 실패 ${failedCount}개, 소요시간 ${elapsed}초 (userId=${userId})`
+    )
+
     return NextResponse.json({
       success: true,
       sent: digestItems.length,
+      succeeded: successCount,
+      failed: failedCount,
+      elapsedSeconds: Number(elapsed),
     })
   } catch (error) {
-    console.error(error)
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+    console.error(`❌ digest 서버 오류 (소요시간 ${elapsed}초):`, error)
     return NextResponse.json({ error: '서버 오류' }, { status: 500 })
   }
 }
