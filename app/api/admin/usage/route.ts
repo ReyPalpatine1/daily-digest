@@ -145,8 +145,10 @@ export async function GET() {
   }
 
   const totalUsers = profileRows.length
+  // 결제 Pro와 VIP(무료) 분리 — 수익/전환율은 결제 Pro만 집계
   const proUsers = profileRows.filter(p => p.plan === 'pro' || p.plan === 'PRO').length
-  const freeUsers = totalUsers - proUsers
+  const vipUsers = profileRows.filter(p => p.plan === 'vip').length
+  const freeUsers = totalUsers - proUsers - vipUsers
   const proConversionRate = totalUsers > 0 ? Math.round((proUsers / totalUsers) * 1000) / 10 : 0
 
   let newToday = 0
@@ -186,11 +188,15 @@ export async function GET() {
   }
 
   // === 최근 가입자 ===
-  const recentUsers = profileRows.slice(0, 10).map(p => ({
-    email: p.email ?? '-',
-    plan: (p.plan === 'pro' || p.plan === 'PRO') ? 'pro' : 'free',
-    joinedAt: p.created_at ?? null,
-  }))
+  const recentUsers = profileRows.slice(0, 10).map(p => {
+    const raw = (p.plan ?? 'free').toString().toLowerCase()
+    const plan = raw === 'pro' || raw === 'vip' ? raw : 'free'
+    return {
+      email: p.email ?? '-',
+      plan,
+      joinedAt: p.created_at ?? null,
+    }
+  })
 
   // === 인기 콘텐츠 (구독자 많은 채널) ===
   const { data: channelRows } = await serviceClient
@@ -224,6 +230,7 @@ export async function GET() {
       total: totalUsers,
       free: freeUsers,
       pro: proUsers,
+      vip: vipUsers,
       dau,
       mau,
       newToday,

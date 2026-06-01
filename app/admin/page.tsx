@@ -8,7 +8,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 type AdminStats = {
   generatedAt: string
   users: {
-    total: number; free: number; pro: number
+    total: number; free: number; pro: number; vip: number
     dau: number; mau: number
     newToday: number; newThisWeek: number
     proConversionRate: number
@@ -190,7 +190,7 @@ export default function AdminPage() {
   const max7d = Math.max(1, ...s.last7Days.map(d => d.gemini + d.youtube + d.supadata))
   const navItems: { key: string; label: string; active: boolean; href?: string }[] = [
     { key: 'dashboard', label: t('admin.menuDashboard'), active: true },
-    { key: 'users', label: t('admin.menuUsers'), active: false },
+    { key: 'users', label: t('admin.menuUsers'), active: false, href: '/admin/users' },
     { key: 'content', label: t('admin.menuContent'), active: false },
     { key: 'system', label: t('admin.menuSystem'), active: false },
     { key: 'email', label: '📧 Email', active: false, href: '/admin/email-preview' },
@@ -296,7 +296,8 @@ export default function AdminPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {statCell(t('admin.total'), nf.format(s.users.total))}
               {statCell(t('admin.free'), nf.format(s.users.free))}
-              {statCell(t('admin.pro'), nf.format(s.users.pro))}
+              {statCell(t('admin.proPaid'), nf.format(s.users.pro), s.users.pro > 0 ? 'var(--success)' : undefined)}
+              {statCell(t('admin.vip'), nf.format(s.users.vip ?? 0), (s.users.vip ?? 0) > 0 ? '#8B5CF6' : undefined)}
               {statCell(t('admin.dau'), nf.format(s.users.dau))}
               {statCell(t('admin.mau'), nf.format(s.users.mau))}
               {statCell(

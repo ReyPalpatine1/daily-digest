@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, checkIsPro } from '@/lib/supabase'
+import type { Profile } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 const ONETIME_PLANS = [
@@ -17,16 +18,31 @@ export default function SubscriptionPage() {
   const { t, locale } = useTranslation()
   const [ready, setReady] = useState(false)
   const [isPro, setIsPro] = useState(false)
+  const [isVip, setIsVip] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [selectedOnetime, setSelectedOnetime] = useState('1month')
 
   useEffect(() => {
     let cancelled = false
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (cancelled) return
       if (!data.user) { router.push('/'); return }
-      try { setIsPro(localStorage.getItem('demo_pro') === 'true') } catch {}
+
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
+        .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+      const isAdmin = adminEmails.includes((data.user.email ?? '').toLowerCase())
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single()
+      if (cancelled) return
+
+      const p = profile as Profile | null
+      setIsVip(p?.plan === 'vip')
+      setIsPro(checkIsPro(p, isAdmin))
       setReady(true)
     })
     return () => { cancelled = true }
@@ -93,7 +109,24 @@ export default function SubscriptionPage() {
         {/* === 현재 플랜 === */}
         <div style={{ ...card$, marginBottom: 14 }}>
           <div style={sectionTitle}>{t('subscription.currentPlan')}</div>
-          {isPro ? (
+          {isVip ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 18, fontWeight: 700 }}>👑 {t('subscription.vipTitle')}</span>
+                <span style={{
+                  background: 'linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)',
+                  color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+                  padding: '2px 7px', borderRadius: 4,
+                }}>PRO</span>
+              </div>
+              <div style={{
+                background: 'var(--bg-subtle)', borderRadius: 10, padding: 14,
+                fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6,
+              }}>
+                {t('subscription.vipDesc')}
+              </div>
+            </>
+          ) : isPro ? (
             <>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 18, fontWeight: 700 }}>✨ Pro</span>
@@ -173,7 +206,8 @@ export default function SubscriptionPage() {
           </div>
         )}
 
-        {/* === 일회성 구매 === */}
+        {/* === 일회성 구매 (VIP는 결제 유도 안 함) === */}
+        {!isVip && (
         <div style={card$}>
           <div style={sectionTitle}>{t('subscription.onetimeTitle')}</div>
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>
@@ -222,6 +256,7 @@ export default function SubscriptionPage() {
             {t('subscription.buySelected')}
           </button>
         </div>
+        )}
       </main>
 
       {/* === 해지 모달 === */}

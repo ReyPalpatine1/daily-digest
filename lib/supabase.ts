@@ -9,6 +9,27 @@ export type Profile = {
   id: string
   name: string
   email: string
+  plan: 'free' | 'pro' | 'vip'
+  plan_expires_at: string | null
+  vip_granted_by: string | null
+  vip_granted_at: string | null
+}
+
+// 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)
+export function checkIsPro(profile: Profile | null, isAdmin: boolean): boolean {
+  if (isAdmin) return true // 관리자는 항상 Pro
+  if (!profile) return false
+
+  // VIP는 무기한 Pro
+  if (profile.plan === 'vip') return true
+
+  // Pro 결제: 만료일 확인
+  if (profile.plan === 'pro') {
+    if (!profile.plan_expires_at) return true // 만료일 없으면 유효
+    return new Date(profile.plan_expires_at) > new Date() // 만료 안 됐으면 유효
+  }
+
+  return false // free
 }
 
 export type Category = {

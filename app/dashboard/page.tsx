@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import type { Category, Channel, Settings, Digest } from '@/lib/supabase'
+import { supabase, checkIsPro } from '@/lib/supabase'
+import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 function randomColor(usedColors: string[] = []) {
@@ -84,10 +84,16 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
-  // 실제 구독 상태 (지금은 항상 false. 추후 결제 연동 시 settings/profile에서 가져옴)
-  const [isPro, setIsPro] = useState(false)
+  // 실제 구독 상태는 profile.plan(free/pro/vip)에서 판정
+  const [profile, setProfile] = useState<Profile | null>(null)
   // 관리자 전용 임시 모드 토글 ('free' | 'pro') — localStorage에 영속화
   const [adminPlanMode, setAdminPlanMode] = useState<'free' | 'pro'>('free')
+
+  // 실제 Pro 여부 (VIP/Pro 결제 통합 판정)
+  const realIsPro = checkIsPro(profile, isAdmin)
+  // 관리자는 미리보기 토글 우선, 일반 사용자는 실제 plan 기반
+  const isPro = isAdmin ? (adminPlanMode === 'pro') : realIsPro
+  // VIP/Pro 모두 사용자에겐 "PRO"로 표시 (구분 없음)
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
   // --- Phase 3: 채널 탭 검색 상태 ---
@@ -105,29 +111,35 @@ export default function Dashboard() {
       const isAdminUser = adminEmails.includes(data.user.email?.toLowerCase() ?? '')
       setIsAdmin(isAdminUser)
 
-      // 관리자: localStorage에 저장된 임시 모드 복원 / 일반 사용자: 항상 Free
+      // 관리자: localStorage에 저장된 임시 미리보기 모드 복원
       if (isAdminUser) {
         const savedMode = localStorage.getItem('admin_plan_mode')
         if (savedMode === 'pro') {
           setAdminPlanMode('pro')
-          setIsPro(true)
         }
-      } else {
-        setIsPro(false)
       }
 
-      // 프로필 없으면 자동 생성
-      const { data: profile } = await supabase
+      // 프로필 없으면 자동 생성 (신규 가입자는 plan='free')
+      const { data: profileRow } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
         .single()
 
-      if (!profile) {
-        await supabase.from('profiles').insert({
+      if (!profileRow) {
+        const email = data.user.email ?? ''
+        const newProfile = {
           id: data.user.id,
-          name: data.user.user_metadata?.full_name ?? data.user.email,
-          email: data.user.email,
+          name: data.user.user_metadata?.full_name ?? email,
+          email,
+          plan: 'free' as const,
+        }
+        await supabase.from('profiles').insert(newProfile)
+        setProfile({
+          ...newProfile,
+          plan_expires_at: null,
+          vip_granted_by: null,
+          vip_granted_at: null,
         })
         // 기본 설정 자동 생성
         await supabase.from('settings').insert({
@@ -142,6 +154,8 @@ export default function Dashboard() {
         await supabase.from('categories').insert([
           { user_id: data.user.id, name: '기본 카테고리', color: '#4da6ff' },
         ])
+      } else {
+        setProfile(profileRow as Profile)
       }
 
       loadData(data.user.id)
@@ -434,7 +448,6 @@ export default function Dashboard() {
 
   function switchPlanMode(mode: 'free' | 'pro') {
     setAdminPlanMode(mode)
-    setIsPro(mode === 'pro')
     try { localStorage.setItem('admin_plan_mode', mode) } catch {}
     console.log(`[Admin] Plan mode switched to: ${mode}`)
   }
