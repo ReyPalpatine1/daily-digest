@@ -10,11 +10,25 @@ export const maxDuration = 60
 
 export async function GET(req: Request) {
   try {
+    // === 진단 1: cron route 진입 자체 확인 (인증 전) ===
+    console.log(`🕐 [cron] 실행됨 (진입): ${new Date().toISOString()}`)
+    console.log(`🕐 [cron] KST: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`)
+    console.log(`🔧 [cron] NEXT_PUBLIC_APP_URL=${JSON.stringify(process.env.NEXT_PUBLIC_APP_URL)}`)
+
+    // === 진단 2: 인증 ===
     const authHeader = req.headers.get('authorization')
     const expected = `Bearer ${process.env.CRON_SECRET}`
     if (!process.env.CRON_SECRET || authHeader !== expected) {
+      // 조용히 401만 반환하지 말고 원인 로그를 남긴다 (시크릿 불일치 진단)
+      console.warn(
+        `🚫 [cron] 인증 실패 → 401. ` +
+          `CRON_SECRET 설정됨=${Boolean(process.env.CRON_SECRET)}, ` +
+          `헤더 수신=${Boolean(authHeader)}, ` +
+          `일치=${authHeader === expected}`
+      )
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    console.log(`✅ [cron] 인증 통과`)
 
     const now = new Date()
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -100,15 +114,39 @@ export async function GET(req: Request) {
       console.log(`  user=${s.user_id} send_time=${s.send_time} ${status}`)
     }
 
+    // === 진단: 발송 대상이 있는데 APP_URL이 비어있으면 fetch가 전부 실패한다 ===
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    if (digestUsers.length > 0 && !appUrl) {
+      console.error(
+        `❌ [cron] NEXT_PUBLIC_APP_URL 미설정 → /api/digest 호출 불가. ` +
+          `발송 대상 ${digestUsers.length}명이 있으나 전부 실패합니다. ` +
+          `Vercel 환경변수에 NEXT_PUBLIC_APP_URL을 설정하세요.`
+      )
+    }
+
     const digestResults = digestUsers.length > 0
       ? await Promise.allSettled(
-          digestUsers.map(userId =>
-            fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/digest`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId, trigger: 'cron' }),
-            }).then(res => res.json())
-          )
+          digestUsers.map(async userId => {
+            const target = `${appUrl}/api/digest`
+            try {
+              const res = await fetch(target, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, trigger: 'cron' }),
+              })
+              const text = await res.text()
+              console.log(
+                `📧 [cron] digest 호출 user=${userId} url=${target} status=${res.status} body=${text.slice(0, 300)}`
+              )
+              if (!res.ok) {
+                throw new Error(`/api/digest ${res.status}: ${text.slice(0, 200)}`)
+              }
+              try { return JSON.parse(text) } catch { return { raw: text } }
+            } catch (err) {
+              console.error(`❌ [cron] digest 호출 실패 user=${userId} url=${target}:`, err)
+              throw err
+            }
+          })
         )
       : []
 
@@ -132,6 +170,13 @@ export async function GET(req: Request) {
     console.log(
       `[cron] digest 성공:${digestSucceeded} 실패:${digestFailed}, breaking 성공:${breakingSucceeded} 실패:${breakingFailed}`
     )
+    // 실패한 호출의 사유를 명시적으로 노출 (원인 진단용)
+    for (const r of digestResults) {
+      if (r.status === 'rejected') console.error(`❌ [cron] digest rejected:`, r.reason)
+    }
+    for (const r of breakingResults) {
+      if (r.status === 'rejected') console.error(`❌ [cron] breaking rejected:`, r.reason)
+    }
 
     return NextResponse.json({
       kst: `${todayKstDate} ${currentHour}:${currentMinute}`,
