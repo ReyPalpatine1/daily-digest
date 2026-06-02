@@ -115,7 +115,8 @@ export async function GET(req: Request) {
     }
 
     // === 진단: 발송 대상이 있는데 APP_URL이 비어있으면 fetch가 전부 실패한다 ===
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    // 끝의 슬래시를 제거해 '//api/...' 중복 슬래시 방지
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
     if (digestUsers.length > 0 && !appUrl) {
       console.error(
         `❌ [cron] NEXT_PUBLIC_APP_URL 미설정 → /api/digest 호출 불가. ` +
@@ -153,10 +154,11 @@ export async function GET(req: Request) {
     const breakingResults = breakingUsers.length > 0
       ? await Promise.allSettled(
           breakingUsers.map(userId =>
-            fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/breaking`, {
+            // background:true → /api/breaking이 즉시 202 후 백그라운드 처리 (cron 60초 미점유)
+            fetch(`${appUrl}/api/breaking`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId }),
+              body: JSON.stringify({ userId, background: true }),
             }).then(res => res.json())
           )
         )

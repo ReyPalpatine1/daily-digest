@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getRecentVideos } from '@/lib/youtube'
 import { getTranscript, summarizeVideo } from '@/lib/gemini'
@@ -26,12 +26,38 @@ type RecentVideoItem = {
 }
 
 export async function POST(req: Request) {
+  let body: any
   try {
-    const { userId } = await req.json()
-    if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 })
-    }
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'invalid body' }, { status: 400 })
+  }
+  const userId: string = body.userId
+  const background = body.background === true
+  if (!userId) {
+    return NextResponse.json({ error: 'userId required' }, { status: 400 })
+  }
 
+  // 자동(cron) 호출은 즉시 202를 반환하고 무거운 처리는 after()로 백그라운드 실행.
+  // → 호출자(/api/cron)가 자신의 60초(Hobby 상한)를 잠식하지 않게 함.
+  if (background) {
+    after(async () => {
+      try {
+        const r = await runBreaking(userId)
+        console.log(`📨 [breaking][bg] 완료 userId=${userId} status=${r.status} ${JSON.stringify(r.body)}`)
+      } catch (e) {
+        console.error(`❌ [breaking][bg] 처리 실패 userId=${userId}:`, e)
+      }
+    })
+    return NextResponse.json({ accepted: true, mode: 'background' }, { status: 202 })
+  }
+
+  const { status, body: respBody } = await runBreaking(userId)
+  return NextResponse.json(respBody, { status })
+}
+
+async function runBreaking(userId: string): Promise<{ status: number; body: any }> {
+  try {
     const { data: settings, error: settingsError } = await supabase
       .from('settings')
       .select('*')
@@ -40,11 +66,11 @@ export async function POST(req: Request) {
 
     if (settingsError) {
       console.error('Settings fetch error:', settingsError)
-      return NextResponse.json({ error: settingsError.message }, { status: 500 })
+      return { status: 500, body: { error: settingsError.message } }
     }
 
     if (!settings?.breaking_alert || !settings?.email) {
-      return NextResponse.json({ message: 'breaking alert not enabled or email missing' })
+      return { status: 200, body: { message: 'breaking alert not enabled or email missing' } }
     }
 
     // 사용자 이메일 언어 (미설정 시 'ko')
@@ -58,7 +84,7 @@ export async function POST(req: Request) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: profileError.message }, { status: 500 })
+      return { status: 500, body: { error: profileError.message } }
     }
 
     const { data: channels, error: channelsError } = await supabase
@@ -68,11 +94,11 @@ export async function POST(req: Request) {
 
     if (channelsError) {
       console.error('Channels fetch error:', channelsError)
-      return NextResponse.json({ error: channelsError.message }, { status: 500 })
+      return { status: 500, body: { error: channelsError.message } }
     }
 
     if (!channels?.length) {
-      return NextResponse.json({ message: '채널 없음' })
+      return { status: 200, body: { message: '채널 없음' } }
     }
 
     const keywords = ((settings.breaking_keywords as string[]) ?? ['속보'])
@@ -109,7 +135,7 @@ export async function POST(req: Request) {
     }
 
     if (!recentVideos.length) {
-      return NextResponse.json({ message: '최근 영상 없음' })
+      return { status: 200, body: { message: '최근 영상 없음' } }
     }
 
     const breakingVideos = recentVideos.filter(video =>
@@ -117,7 +143,7 @@ export async function POST(req: Request) {
     )
 
     if (!breakingVideos.length) {
-      return NextResponse.json({ message: '속보 영상 없음' })
+      return { status: 200, body: { message: '속보 영상 없음' } }
     }
 
     const { data: existingDigests, error: existingError } = await supabase
@@ -127,14 +153,14 @@ export async function POST(req: Request) {
 
     if (existingError) {
       console.error('Existing digests fetch error:', existingError)
-      return NextResponse.json({ error: existingError.message }, { status: 500 })
+      return { status: 500, body: { error: existingError.message } }
     }
 
     const existingIds = new Set((existingDigests ?? []).map((item: any) => item.video_id))
     const newVideos = breakingVideos.filter(video => !existingIds.has(video.videoId))
 
     if (!newVideos.length) {
-      return NextResponse.json({ message: '새로운 속보 없음', skipped: breakingVideos.length })
+      return { status: 200, body: { message: '새로운 속보 없음', skipped: breakingVideos.length } }
     }
 
     const failedItems: {
@@ -212,14 +238,17 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      sentCount,
-      totalBreaking: breakingVideos.length,
-      skipped: breakingVideos.length - sentCount,
-    })
+    return {
+      status: 200,
+      body: {
+        success: true,
+        sentCount,
+        totalBreaking: breakingVideos.length,
+        skipped: breakingVideos.length - sentCount,
+      },
+    }
   } catch (error) {
     console.error('Breaking route error:', error)
-    return NextResponse.json({ error: '서버 오류' }, { status: 500 })
+    return { status: 500, body: { error: '서버 오류' } }
   }
 }

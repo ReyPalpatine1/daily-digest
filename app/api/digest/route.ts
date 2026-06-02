@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getYesterdayVideos } from '@/lib/youtube'
 import { summarizeVideo, getTranscript } from '@/lib/gemini'
@@ -17,12 +17,45 @@ const MAX_VIDEOS_PER_RUN = 20
 const CONCURRENCY = 5
 
 export async function POST(req: Request) {
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'invalid body' }, { status: 400 })
+  }
+  const userId: string = body.userId
+  const trigger: DigestTrigger = body.trigger === 'cron' ? 'cron' : 'manual'
+  if (!userId) {
+    return NextResponse.json({ error: 'userId required' }, { status: 400 })
+  }
+
+  // 자동(cron) 호출은 즉시 202를 반환하고 무거운 처리는 after()로 백그라운드 실행한다.
+  // → 호출자(/api/cron)가 digest 완료를 기다리며 자신의 60초(Hobby 상한)를 소진하는 문제를 방지.
+  //   각 digest 인보케이션은 자기만의 60초 budget에서 메일까지 완료한다
+  //   (수동 발송이 이미 60초 내 완료됨이 증명됨).
+  if (trigger === 'cron') {
+    after(async () => {
+      try {
+        const r = await runDigest(userId, trigger)
+        console.log(`📨 [digest][bg] 완료 userId=${userId} status=${r.status} ${JSON.stringify(r.body)}`)
+      } catch (e) {
+        console.error(`❌ [digest][bg] 처리 실패 userId=${userId}:`, e)
+      }
+    })
+    return NextResponse.json({ accepted: true, mode: 'background' }, { status: 202 })
+  }
+
+  // 수동 발송은 완료까지 기다렸다가 결과(처리 건수 등)를 반환 — UI가 사용.
+  const { status, body: respBody } = await runDigest(userId, trigger)
+  return NextResponse.json(respBody, { status })
+}
+
+async function runDigest(
+  userId: string,
+  trigger: DigestTrigger
+): Promise<{ status: number; body: any }> {
   const startTime = Date.now()
   try {
-    const body = await req.json()
-    const userId: string = body.userId
-    const trigger: DigestTrigger = body.trigger === 'cron' ? 'cron' : 'manual'
-
     // 유저 설정 가져오기
     const { data: settings } = await supabase
       .from('settings')
@@ -31,7 +64,7 @@ export async function POST(req: Request) {
       .single()
 
     if (!settings?.active || !settings?.email) {
-      return NextResponse.json({ error: '설정 없음' }, { status: 400 })
+      return { status: 400, body: { error: '설정 없음' } }
     }
 
     // 사용자 이메일 언어 (미설정 시 'ko')
@@ -51,7 +84,7 @@ export async function POST(req: Request) {
       .eq('user_id', userId)
 
     if (!channels?.length) {
-      return NextResponse.json({ message: '채널 없음' })
+      return { status: 200, body: { message: '채널 없음' } }
     }
 
     const digestItems = []
@@ -253,18 +286,21 @@ export async function POST(req: Request) {
       `📊 처리 완료: 성공 ${successCount}개, 실패 ${failedCount}개, 소요시간 ${elapsed}초 (userId=${userId})`
     )
 
-    return NextResponse.json({
-      success: true,
-      sent: digestItems.length,
-      succeeded: successCount,
-      processed: successCount, // 클라이언트 호환용 별칭
-      failed: failedCount,
-      total: videoTasks.length,
-      elapsedSeconds: Number(elapsed),
-    })
+    return {
+      status: 200,
+      body: {
+        success: true,
+        sent: digestItems.length,
+        succeeded: successCount,
+        processed: successCount, // 클라이언트 호환용 별칭
+        failed: failedCount,
+        total: videoTasks.length,
+        elapsedSeconds: Number(elapsed),
+      },
+    }
   } catch (error) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     console.error(`❌ digest 서버 오류 (소요시간 ${elapsed}초):`, error)
-    return NextResponse.json({ error: '서버 오류' }, { status: 500 })
+    return { status: 500, body: { error: '서버 오류' } }
   }
 }
