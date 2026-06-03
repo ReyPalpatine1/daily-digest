@@ -259,6 +259,22 @@ export const translations = {
       summaryVip: 'VIP (무료)',
       paidProWarn: '결제 Pro 사용자는 여기서 변경할 수 없습니다',
       actionFailed: '처리에 실패했습니다',
+      // 테이블 컬럼
+      colUser: '사용자',
+      colNote: '메모',
+      colChannels: '채널',
+      colAvg: '평균요약',
+      colSendRate: '발송률',
+      // 메모 인라인 편집
+      notePlaceholder: '+ 메모',
+      noteInputPlaceholder: '메모 입력...',
+      noteSaveFailed: '메모 저장 실패',
+      // 가입/구독기간 표시
+      joinedPrefix: '가입',
+      daysSuffix: '일째',
+      perDay: '/일',
+      channelUnit: '개',
+      noData: '—',
     },
     pricing: {
       title: '요금제 비교',
@@ -622,6 +638,22 @@ export const translations = {
       summaryVip: 'VIP (free)',
       paidProWarn: 'Paid Pro users cannot be changed here',
       actionFailed: 'Action failed',
+      // table columns
+      colUser: 'User',
+      colNote: 'Note',
+      colChannels: 'Channels',
+      colAvg: 'Avg digests',
+      colSendRate: 'Send rate',
+      // inline note editing
+      notePlaceholder: '+ Note',
+      noteInputPlaceholder: 'Enter note...',
+      noteSaveFailed: 'Failed to save note',
+      // joined / plan duration
+      joinedPrefix: 'Joined',
+      daysSuffix: 'd',
+      perDay: '/d',
+      channelUnit: '',
+      noData: '—',
     },
     pricing: {
       title: 'Pricing',

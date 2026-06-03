@@ -158,6 +158,13 @@ export default function Dashboard() {
         setProfile(profileRow as Profile)
       }
 
+      // 마지막 접속 기록 (실패해도 무시 - 통계용)
+      supabase
+        .from('profiles')
+        .update({ last_active_at: new Date().toISOString() })
+        .eq('id', data.user.id)
+        .then(() => {}, () => {})
+
       loadData(data.user.id)
     })
   }, [])
