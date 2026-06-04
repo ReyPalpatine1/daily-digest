@@ -47,6 +47,7 @@ export type Channel = {
   emoji: string
   url: string
   channel_id: string | null
+  is_active?: boolean
 }
 
 export type Settings = {

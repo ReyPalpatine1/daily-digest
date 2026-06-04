@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getYesterdayVideos } from '@/lib/youtube'
 import { summarizeVideo, getTranscript } from '@/lib/gemini'
 import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, DigestTrigger } from '@/lib/mailer'
+import { syncUserPlan } from '@/lib/plan-sync'
+
+const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -70,6 +73,9 @@ async function runDigest(
     // 사용자 이메일 언어 (미설정 시 'ko')
     const userLocale: 'ko' | 'en' = settings.locale === 'en' ? 'en' : 'ko'
 
+    // 만료 체크 + 동기화 (접속 안 해도 여기서 만료 강등이 잡힘)
+    const currentPlan = await syncUserPlan(userId)
+
     // 유저 프로필 가져오기
     const { data: profile } = await supabase
       .from('profiles')
@@ -77,11 +83,21 @@ async function runDigest(
       .eq('id', userId)
       .single()
 
+    const isPro =
+      currentPlan === 'pro' ||
+      currentPlan === 'vip' ||
+      (profile?.email && adminEmails.includes(String(profile.email).toLowerCase()))
+
     // 채널 목록 가져오기
-    const { data: channels } = await supabase
+    const { data: allChannels } = await supabase
       .from('channels')
       .select('*, categories(name, color)')
       .eq('user_id', userId)
+
+    // Free는 활성 채널(오래된 5개)만 요약. Pro/VIP/관리자는 전체.
+    const channels = isPro
+      ? allChannels
+      : (allChannels ?? []).filter(c => c.is_active !== false)
 
     if (!channels?.length) {
       return { status: 200, body: { message: '채널 없음' } }

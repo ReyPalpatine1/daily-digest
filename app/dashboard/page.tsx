@@ -103,6 +103,9 @@ export default function Dashboard() {
   // Free 한도 (Pro는 한도 없음 → 렌더에서 '무제한' 처리)
   const channelLimit = 5
   const retentionDays = isPro ? 30 : 7
+  // 활성/비활성 채널 수 (plan 강등 시 비활성 채널 존재 가능)
+  const activeChannelCount = channels.filter(c => c.is_active !== false).length
+  const inactiveChannelCount = channels.length - activeChannelCount
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -299,8 +302,8 @@ export default function Dashboard() {
       alert(t('alerts.channelDuplicate'))
       return
     }
-    // Free 사용자 채널 수 제한 (프론트 1차 체크)
-    if (!isPro && channels.length >= channelLimit) {
+    // Free 사용자 채널 수 제한 (활성 채널 기준, 프론트 1차 체크)
+    if (!isPro && activeChannelCount >= channelLimit) {
       promptChannelLimit()
       return
     }
@@ -1138,7 +1141,7 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={() => {
-                      if (!isPro && channels.length >= channelLimit) {
+                      if (!isPro && activeChannelCount >= channelLimit) {
                         promptChannelLimit()
                         return
                       }
@@ -1148,7 +1151,7 @@ export default function Dashboard() {
                     {t('dashboard.addChannel')}
                     {!isPro && (
                       <span style={{ opacity: 0.7, marginLeft: 6, fontWeight: 400 }}>
-                        ({channels.length}/{channelLimit})
+                        ({activeChannelCount}/{channelLimit})
                       </span>
                     )}
                   </button>
@@ -1208,7 +1211,7 @@ export default function Dashboard() {
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.subscribed')}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
                     <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
-                      {channels.length}
+                      {isPro ? channels.length : activeChannelCount}
                     </span>
                     {!isPro && (
                       <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>/ {channelLimit}</span>
@@ -1216,13 +1219,15 @@ export default function Dashboard() {
                   </div>
                   <div style={{
                     fontSize: 10, marginTop: 4,
-                    color: !isPro && channels.length >= channelLimit ? 'var(--danger)' : 'var(--text-tertiary)',
+                    color: !isPro && inactiveChannelCount > 0 ? 'var(--danger)' : 'var(--text-tertiary)',
                   }}>
                     {isPro
                       ? t('stats.proUnlimited')
-                      : channels.length >= channelLimit
-                        ? t('stats.limit')
-                        : t('stats.freeLimit', { n: channelLimit })}
+                      : inactiveChannelCount > 0
+                        ? t('stats.lockedCount', { n: inactiveChannelCount })
+                        : activeChannelCount >= channelLimit
+                          ? t('stats.limit')
+                          : t('stats.freeLimit', { n: channelLimit })}
                   </div>
                 </div>
 
@@ -1431,6 +1436,29 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* Free 안내: 잠긴 채널이 있을 때 */}
+              {!isPro && inactiveChannelCount > 0 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: 'var(--bg-subtle)', border: '0.5px solid var(--border-light)',
+                  borderRadius: 9, padding: '10px 14px', marginBottom: 12,
+                }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>🔒</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, lineHeight: 1.5 }}>
+                    {t('channels.lockedNotice', { n: channelLimit })}
+                  </span>
+                  <button onClick={() => router.push('/pricing')}
+                    style={{
+                      flexShrink: 0, padding: '5px 11px', borderRadius: 7,
+                      border: '0.5px solid var(--text-primary)', background: 'transparent',
+                      color: 'var(--text-primary)', fontSize: 11, fontWeight: 500,
+                      cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    }}>
+                    {t('proBanner.ctaShort')}
+                  </button>
+                </div>
+              )}
+
               {/* 채널 목록 / 빈 상태 */}
               {channels.length === 0 ? (
                 <div style={{ ...cardStyle, padding: '48px 24px', textAlign: 'center' }}>
@@ -1512,8 +1540,12 @@ export default function Dashboard() {
                           ? t('channels.accumulated', { n: st.total })
                           : t('channels.noNew')
                     const timeText = st.lastDigest ? timeAgo(st.lastDigest.created_at, t) : ''
+                    // plan 강등으로 비활성화된 채널 (Free 사용자만 잠금 표시)
+                    const isLocked = !isPro && ch.is_active === false
                     return (
-                      <div key={ch.id} className="channels-row">
+                      <div key={ch.id} className="channels-row"
+                        title={isLocked ? t('channels.lockedTooltip') : undefined}
+                        style={isLocked ? { opacity: 0.5 } : undefined}>
                         <span style={{
                           width: 6, height: 6, borderRadius: '50%',
                           background: dotColor, flexShrink: 0,
@@ -1525,6 +1557,14 @@ export default function Dashboard() {
                           maxWidth: isMobile ? 100 : 220,
                           flexShrink: 0,
                         }}>{ch.alias}</span>
+                        {isLocked && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
+                            background: 'var(--bg-subtle)', color: 'var(--text-tertiary)',
+                            padding: '2px 7px', borderRadius: 5, flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                          }}>🔒 Pro</span>
+                        )}
                         {cat && (
                           <span style={{
                             fontSize: 11,

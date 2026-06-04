@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   // === 기존 채널 조회 (중복 체크 + 개수 제한에 함께 사용) ===
   const { data: existing } = await supabase
     .from('channels')
-    .select('url')
+    .select('url, is_active')
     .eq('user_id', user.id)
   const existingChannels = existing ?? []
 
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     )
   }
 
-  // === Free 사용자 채널 수 제한 ===
+  // === Free 사용자 채널 수 제한 (활성 채널 기준) ===
   const { data: profile } = await supabase
     .from('profiles')
     .select('plan, plan_expires_at')
@@ -81,8 +81,9 @@ export async function POST(request: Request) {
     .single()
 
   const isPro = isProPlan(profile?.plan, profile?.plan_expires_at, user.email)
+  const activeCount = existingChannels.filter(ch => ch.is_active !== false).length
 
-  if (!isPro && existingChannels.length >= FREE_CHANNEL_LIMIT) {
+  if (!isPro && activeCount >= FREE_CHANNEL_LIMIT) {
     return NextResponse.json(
       { error: '무료 플랜은 최대 5개까지 추가 가능합니다.', code: 'CHANNEL_LIMIT' },
       { status: 403 }
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
       alias,
       emoji: body.emoji ?? '📺',
       category_id: body.category_id || null,
+      is_active: true,
     })
     .select()
     .single()

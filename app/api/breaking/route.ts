@@ -3,11 +3,14 @@ import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getRecentVideos } from '@/lib/youtube'
 import { getTranscript, summarizeVideo } from '@/lib/gemini'
 import { sendBreakingAlert, sendAdminBulkErrorEmail } from '@/lib/mailer'
+import { syncUserPlan } from '@/lib/plan-sync'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
+
+const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
 export const maxDuration = 60
 
@@ -76,9 +79,12 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
     // 사용자 이메일 언어 (미설정 시 'ko')
     const userLocale: 'ko' | 'en' = settings.locale === 'en' ? 'en' : 'ko'
 
+    // 만료 체크 + 동기화
+    const currentPlan = await syncUserPlan(userId)
+
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('name')
+      .select('name, email')
       .eq('id', userId)
       .single()
 
@@ -87,7 +93,12 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       return { status: 500, body: { error: profileError.message } }
     }
 
-    const { data: channels, error: channelsError } = await supabase
+    const isPro =
+      currentPlan === 'pro' ||
+      currentPlan === 'vip' ||
+      (profile?.email && adminEmails.includes(String(profile.email).toLowerCase()))
+
+    const { data: allChannels, error: channelsError } = await supabase
       .from('channels')
       .select('*')
       .eq('user_id', userId)
@@ -96,6 +107,11 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       console.error('Channels fetch error:', channelsError)
       return { status: 500, body: { error: channelsError.message } }
     }
+
+    // Free는 활성 채널만 속보 감시. Pro/VIP/관리자는 전체.
+    const channels = isPro
+      ? allChannels
+      : (allChannels ?? []).filter(c => c.is_active !== false)
 
     if (!channels?.length) {
       return { status: 200, body: { message: '채널 없음' } }

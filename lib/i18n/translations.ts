@@ -49,6 +49,7 @@ export const translations = {
       retention: '기록 보관',
       proOnly: '🔒 Pro 전용',
       limit: '⚠ 한도 도달',
+      lockedCount: '외 {n}개 잠김',
       compared: '+{n} 어제 대비',
       comparedDown: '{n} 어제 대비',
       comparedSame: '= 어제 대비',
@@ -84,6 +85,8 @@ export const translations = {
       moveCategory: '카테고리 이동',
       editChannelTitle: '채널 수정',
       deleteChannel: '채널 삭제',
+      lockedTooltip: 'Pro로 업그레이드하면 다시 활성화됩니다',
+      lockedNotice: '무료 플랜은 채널 {n}개까지 요약됩니다. 나머지는 Pro 전용입니다.',
     },
     schedule: {
       title: '발송 설정',
@@ -432,6 +435,7 @@ export const translations = {
       retention: 'Retention',
       proOnly: '🔒 Pro Only',
       limit: '⚠ Limit Reached',
+      lockedCount: '+{n} locked',
       compared: '+{n} vs yesterday',
       comparedDown: '{n} vs yesterday',
       comparedSame: '= vs yesterday',
@@ -467,6 +471,8 @@ export const translations = {
       moveCategory: 'Move category',
       editChannelTitle: 'Edit channel',
       deleteChannel: 'Delete channel',
+      lockedTooltip: 'Upgrade to Pro to reactivate',
+      lockedNotice: 'The Free plan summarizes up to {n} channels. The rest are Pro only.',
     },
     schedule: {
       title: 'Schedule',

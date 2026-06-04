@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { enforceChannelLimit, activateAllChannels } from '@/lib/plan-sync'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -94,6 +95,13 @@ export async function POST(request: Request) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
+  }
+
+  // 플랜 변경에 따른 채널 활성화 동기화
+  if (plan === 'free') {
+    await enforceChannelLimit(targetUserId)   // VIP 해제 → 오래된 5개만 활성
+  } else {
+    await activateAllChannels(targetUserId)   // VIP 지정 → 전체 활성
   }
 
   return NextResponse.json({ success: true, targetUserId, plan, email: target.email })
