@@ -81,8 +81,21 @@ export async function GET() {
     if (uid) digestCount.set(uid, (digestCount.get(uid) ?? 0) + 1)
   }
 
-  // 이메일 발송 추적 테이블이 아직 없음 → 발송 성공률은 null (UI에서 "—")
-  const emailSuccessRate: number | null = null
+  // === 이메일 발송 성공률 집계 (email_logs 기준, user_id별) ===
+  // email_logs 테이블이 없거나 비어 있으면 데이터 없음 → UI에서 "—"
+  const emailTotal = new Map<string, number>()
+  const emailSuccess = new Map<string, number>()
+  const { data: emailRows } = await serviceClient
+    .from('email_logs')
+    .select('user_id, status')
+  for (const row of emailRows ?? []) {
+    const uid = (row as any).user_id
+    if (!uid) continue
+    emailTotal.set(uid, (emailTotal.get(uid) ?? 0) + 1)
+    if ((row as any).status === 'success') {
+      emailSuccess.set(uid, (emailSuccess.get(uid) ?? 0) + 1)
+    }
+  }
 
   const users = rows.map(p => {
     const plan = (p.plan as 'free' | 'pro' | 'vip') ?? 'free'
@@ -98,6 +111,12 @@ export async function GET() {
     const avgDigestsPerDay = joinDays > 0
       ? Math.round((totalDigests / joinDays) * 10) / 10
       : 0
+
+    // 발송 성공률: 로그 있으면 % (반올림), 없으면 null
+    const mailTotal = emailTotal.get(p.id) ?? 0
+    const emailSuccessRate = mailTotal > 0
+      ? Math.round(((emailSuccess.get(p.id) ?? 0) / mailTotal) * 100)
+      : null
 
     return {
       id: p.id,

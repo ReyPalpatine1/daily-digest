@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { createClient } from '@supabase/supabase-js'
 import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
 import { et, type EmailLocale } from './i18n/email-translations'
@@ -15,6 +16,35 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_APP_PASSWORD,
   },
 })
+
+// 이메일 발송 로그 기록용 (서버 전용 service client)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+)
+
+export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome'
+
+// 발송 결과를 email_logs에 기록. 실패해도 메일 발송 흐름을 막지 않음.
+async function logEmailResult(
+  userId: string | null,
+  email: string,
+  type: EmailLogType,
+  success: boolean,
+  errorMessage?: string
+): Promise<void> {
+  try {
+    await supabase.from('email_logs').insert({
+      user_id: userId,
+      email,
+      type,
+      status: success ? 'success' : 'failed',
+      error_message: errorMessage ?? null,
+    })
+  } catch (e) {
+    console.error('이메일 로그 기록 실패:', e)
+  }
+}
 
 type DigestItem = {
   channel: string
@@ -33,7 +63,8 @@ export async function sendDigestEmail(
   to: string,
   userName: string,
   items: DigestItem[],
-  locale: 'ko' | 'en' = 'ko'
+  locale: 'ko' | 'en' = 'ko',
+  userId: string | null = null
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   const date = new Date().toLocaleDateString(lc === 'ko' ? 'ko-KR' : 'en-US', {
@@ -43,27 +74,40 @@ export async function sendDigestEmail(
     day: 'numeric',
   })
 
-  await transporter.sendMail({
-    from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
-    to,
-    subject: et(lc, 'digest.subject', { date }),
-    html: buildDigestHtml(items, userName, lc),
-  })
+  try {
+    await transporter.sendMail({
+      from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+      to,
+      subject: et(lc, 'digest.subject', { date }),
+      html: buildDigestHtml(items, userName, lc),
+    })
+    await logEmailResult(userId, to, 'digest', true)
+  } catch (e) {
+    await logEmailResult(userId, to, 'digest', false, String(e))
+    throw e
+  }
 }
 
 export async function sendBreakingAlert(
   to: string,
   userName: string,
   item: DigestItem,
-  locale: 'ko' | 'en' = 'ko'
+  locale: 'ko' | 'en' = 'ko',
+  userId: string | null = null
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await transporter.sendMail({
-    from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
-    to,
-    subject: et(lc, 'breaking.subject', { title: item.video.title }),
-    html: buildBreakingHtml(item, userName, lc),
-  })
+  try {
+    await transporter.sendMail({
+      from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+      to,
+      subject: et(lc, 'breaking.subject', { title: item.video.title }),
+      html: buildBreakingHtml(item, userName, lc),
+    })
+    await logEmailResult(userId, to, 'breaking', true)
+  } catch (e) {
+    await logEmailResult(userId, to, 'breaking', false, String(e))
+    throw e
+  }
 }
 
 export async function sendWelcomeEmail(

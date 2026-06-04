@@ -204,7 +204,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
         isBreaking: true,
       }
 
-      await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem, userLocale)
+      await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem, userLocale, userId)
 
       if (summary.errorInfo) {
         failedItems.push({

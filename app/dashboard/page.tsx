@@ -1207,19 +1207,27 @@ export default function Dashboard() {
                 gap: 10,
                 marginBottom: 20,
               }}>
+                {(() => {
+                  // Free + 활성 채널이 한도(5)에 도달하면 빨간색 강조
+                  const limitReached = !isPro && activeChannelCount >= channelLimit
+                  return (
                 <div style={cardStyle}>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.subscribed')}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                    <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5, color: 'var(--text-primary)' }}>
+                    <span style={{
+                      fontSize: 22, fontWeight: 600, letterSpacing: -0.5,
+                      color: limitReached ? 'var(--danger)' : 'var(--text-primary)',
+                    }}>
                       {isPro ? channels.length : activeChannelCount}
                     </span>
                     {!isPro && (
-                      <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>/ {channelLimit}</span>
+                      <span style={{ fontSize: 12, color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)' }}>/ {channelLimit}</span>
                     )}
                   </div>
                   <div style={{
                     fontSize: 10, marginTop: 4,
-                    color: !isPro && inactiveChannelCount > 0 ? 'var(--danger)' : 'var(--text-tertiary)',
+                    fontWeight: limitReached ? 500 : 400,
+                    color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)',
                   }}>
                     {isPro
                       ? t('stats.proUnlimited')
@@ -1230,6 +1238,8 @@ export default function Dashboard() {
                           : t('stats.freeLimit', { n: channelLimit })}
                   </div>
                 </div>
+                  )
+                })()}
 
                 <div style={cardStyle}>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.todayVideos')}</div>

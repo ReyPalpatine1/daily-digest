@@ -211,7 +211,8 @@ async function runDigest(
           settings.email,
           profile?.name ?? '사용자',
           digestItem,
-          userLocale
+          userLocale,
+          userId
         )
         breakingElapsed = Date.now() - bStart
       }
@@ -271,7 +272,8 @@ async function runDigest(
         settings.email,
         profile?.name ?? '사용자',
         digestItems,
-        userLocale
+        userLocale,
+        userId
       )
     }
 
