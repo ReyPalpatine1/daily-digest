@@ -276,6 +276,13 @@ export default function Dashboard() {
     setDigests(digs ?? [])
   }
 
+  // Free 플랜 채널 한도 도달 시 업그레이드 유도 (확인 시 /pricing 이동)
+  function promptChannelLimit() {
+    if (confirm(t('alerts.channelLimitReached'))) {
+      router.push('/pricing')
+    }
+  }
+
   async function addChannel() {
     if (!newChannel.url.trim()) {
       alert(t('alerts.needChannelUrl'))
@@ -285,13 +292,31 @@ export default function Dashboard() {
       alert(t('alerts.needChannelAlias'))
       return
     }
-    await supabase.from('channels').insert({
-      user_id: user.id,
-      url: newChannel.url.trim(),
-      alias: newChannel.alias.trim(),
-      emoji: newChannel.emoji,
-      category_id: newChannel.category_id || null,
+    // Free 사용자 채널 수 제한 (프론트 1차 체크)
+    if (!isPro && channels.length >= channelLimit) {
+      promptChannelLimit()
+      return
+    }
+    // 서버 라우트로 추가 (서버에서도 plan/한도 재검증 - 보안)
+    const res = await fetch('/api/channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: newChannel.url.trim(),
+        alias: newChannel.alias.trim(),
+        emoji: newChannel.emoji,
+        category_id: newChannel.category_id || null,
+      }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      if (res.status === 403 && err.code === 'CHANNEL_LIMIT') {
+        promptChannelLimit()
+      } else {
+        alert(t('alerts.channelAddFailed'))
+      }
+      return
+    }
     setNewChannel({ url: '', alias: '', emoji: '📺', category_id: '' })
     setShowAddChannel(false)
     loadData(user.id)
@@ -1102,8 +1127,21 @@ export default function Dashboard() {
                   <button onClick={() => setShowAddCategory(v => !v)} style={secondaryBtn}>
                     {isMobile ? t('dashboard.addCategoryShort') : t('dashboard.addCategory')}
                   </button>
-                  <button onClick={() => setShowAddChannel(v => !v)} style={primaryBtn}>
+                  <button
+                    onClick={() => {
+                      if (!isPro && channels.length >= channelLimit) {
+                        promptChannelLimit()
+                        return
+                      }
+                      setShowAddChannel(v => !v)
+                    }}
+                    style={primaryBtn}>
                     {t('dashboard.addChannel')}
+                    {!isPro && (
+                      <span style={{ opacity: 0.7, marginLeft: 6, fontWeight: 400 }}>
+                        ({channels.length}/{channelLimit})
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
