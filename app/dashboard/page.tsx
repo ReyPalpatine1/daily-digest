@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
+import { normalizeChannelUrl } from '@/lib/channel-url'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 function randomColor(usedColors: string[] = []) {
@@ -292,6 +293,12 @@ export default function Dashboard() {
       alert(t('alerts.needChannelAlias'))
       return
     }
+    // 중복 채널 방지 (정규화 URL 기준)
+    const normalizedNew = normalizeChannelUrl(newChannel.url)
+    if (channels.some(ch => normalizeChannelUrl(ch.url) === normalizedNew)) {
+      alert(t('alerts.channelDuplicate'))
+      return
+    }
     // Free 사용자 채널 수 제한 (프론트 1차 체크)
     if (!isPro && channels.length >= channelLimit) {
       promptChannelLimit()
@@ -312,6 +319,8 @@ export default function Dashboard() {
       const err = await res.json().catch(() => ({}))
       if (res.status === 403 && err.code === 'CHANNEL_LIMIT') {
         promptChannelLimit()
+      } else if (res.status === 409 && err.code === 'CHANNEL_DUPLICATE') {
+        alert(t('alerts.channelDuplicate'))
       } else {
         alert(t('alerts.channelAddFailed'))
       }

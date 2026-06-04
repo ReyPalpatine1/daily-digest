@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { normalizeChannelUrl } from '@/lib/channel-url'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -56,6 +57,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'url과 alias가 필요합니다' }, { status: 400 })
   }
 
+  // === 기존 채널 조회 (중복 체크 + 개수 제한에 함께 사용) ===
+  const { data: existing } = await supabase
+    .from('channels')
+    .select('url')
+    .eq('user_id', user.id)
+  const existingChannels = existing ?? []
+
+  // === 중복 채널 방지 (정규화 URL 기준) ===
+  const normalizedNew = normalizeChannelUrl(url)
+  if (existingChannels.some(ch => normalizeChannelUrl(ch.url) === normalizedNew)) {
+    return NextResponse.json(
+      { error: '이미 추가된 채널입니다.', code: 'CHANNEL_DUPLICATE' },
+      { status: 409 }
+    )
+  }
+
   // === Free 사용자 채널 수 제한 ===
   const { data: profile } = await supabase
     .from('profiles')
@@ -65,18 +82,11 @@ export async function POST(request: Request) {
 
   const isPro = isProPlan(profile?.plan, profile?.plan_expires_at, user.email)
 
-  if (!isPro) {
-    const { count } = await supabase
-      .from('channels')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-
-    if ((count ?? 0) >= FREE_CHANNEL_LIMIT) {
-      return NextResponse.json(
-        { error: '무료 플랜은 채널을 최대 5개까지 추가할 수 있어요.', code: 'CHANNEL_LIMIT' },
-        { status: 403 }
-      )
-    }
+  if (!isPro && existingChannels.length >= FREE_CHANNEL_LIMIT) {
+    return NextResponse.json(
+      { error: '무료 플랜은 최대 5개까지 추가 가능합니다.', code: 'CHANNEL_LIMIT' },
+      { status: 403 }
+    )
   }
 
   // === 채널 추가 (RLS 적용된 사용자 컨텍스트로 삽입) ===
