@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { PlanBadge, getPlanBadge } from '@/components/PlanBadge'
 
 type AdminUser = {
   id: string
@@ -156,22 +157,6 @@ export default function AdminUsersPage() {
     } finally {
       setSavingNoteId(null)
     }
-  }
-
-  // ---- 플랜 뱃지 (관리자 화면에서만 VIP를 보라색으로 구분) ----
-  const planBadge = (plan: 'free' | 'pro' | 'vip') => {
-    const map = {
-      free: { label: 'FREE', bg: 'var(--bg-subtle)', fg: 'var(--text-tertiary)' },
-      pro: { label: 'PRO', bg: '#E0EDFF', fg: '#1D4ED8' },           // 결제 → 파랑
-      vip: { label: 'VIP', bg: '#EEEDFE', fg: '#3C3489' },           // VIP → 보라
-    }[plan]
-    return (
-      <span style={{
-        background: map.bg, color: map.fg,
-        fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
-        padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap',
-      }}>{map.label}</span>
-    )
   }
 
   // ---- 발송률 색상 ----
@@ -432,7 +417,10 @@ export default function AdminUsersPage() {
                     {t('adminUsers.empty')}
                   </td>
                 </tr>
-              ) : visible.map(u => (
+              ) : visible.map(u => {
+                const badgeKind = getPlanBadge(u.email, u.plan)
+                const isAdminRow = badgeKind === 'ADMIN'
+                return (
                 <tr key={u.id}>
                   {/* 1. 사용자 (이메일 + 가입/구독기간) */}
                   <td style={{ ...tdStyle, minWidth: 180, maxWidth: 240 }}>
@@ -482,7 +470,7 @@ export default function AdminUsersPage() {
 
                   {/* 3. 플랜 뱃지 */}
                   <td style={{ ...tdStyle, textAlign: 'center', width: 70 }}>
-                    {planBadge(u.plan)}
+                    <PlanBadge plan={badgeKind} />
                   </td>
 
                   {/* 4. 채널 수 */}
@@ -503,17 +491,22 @@ export default function AdminUsersPage() {
 
                   {/* 7. 액션 */}
                   <td style={{ ...tdStyle, textAlign: 'right', width: 110 }}>
-                    {u.plan === 'pro' ? (
+                    {isAdminRow ? (
+                      // 관리자 계정은 VIP 지정 대상이 아님 — 텍스트만
+                      <span style={{ fontSize: 12, color: '#52525B', fontWeight: 500 }}>
+                        {t('adminUsers.adminLabel')}
+                      </span>
+                    ) : u.plan === 'pro' ? (
                       <span title={t('adminUsers.paidProWarn')}
-                        style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        style={{ fontSize: 12, color: '#52525B' }}>
                         {t('adminUsers.paidProLocked')}
                       </span>
                     ) : u.plan === 'vip' ? (
                       <button onClick={() => setPlan(u, 'free')} disabled={busyId === u.id}
                         style={{
-                          padding: '5px 10px', borderRadius: 6,
-                          border: '0.5px solid var(--border)', background: 'var(--bg-card)',
-                          color: 'var(--text-secondary)', fontSize: 11, fontWeight: 500,
+                          fontSize: 12, padding: '6px 14px', borderRadius: 6,
+                          border: '1px solid #3F3F46', background: 'transparent',
+                          color: '#A1A1AA', fontWeight: 500,
                           cursor: busyId === u.id ? 'wait' : 'pointer', fontFamily: 'inherit',
                           opacity: busyId === u.id ? 0.6 : 1, whiteSpace: 'nowrap',
                         }}>
@@ -522,9 +515,9 @@ export default function AdminUsersPage() {
                     ) : (
                       <button onClick={() => setPlan(u, 'vip')} disabled={busyId === u.id}
                         style={{
-                          padding: '5px 10px', borderRadius: 6, border: 'none',
-                          background: 'var(--accent)', color: 'var(--bg-card)',
-                          fontSize: 11, fontWeight: 600,
+                          fontSize: 12, padding: '6px 14px', borderRadius: 6,
+                          border: '1px solid #D4D4D8', background: '#FFFFFF',
+                          color: '#0A0A0A', fontWeight: 600,
                           cursor: busyId === u.id ? 'wait' : 'pointer', fontFamily: 'inherit',
                           opacity: busyId === u.id ? 0.6 : 1, whiteSpace: 'nowrap',
                         }}>
@@ -533,7 +526,8 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

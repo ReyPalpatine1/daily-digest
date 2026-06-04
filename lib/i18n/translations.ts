@@ -275,6 +275,7 @@ export const translations = {
       perDay: '/일',
       channelUnit: '개',
       noData: '—',
+      adminLabel: '관리자',
     },
     pricing: {
       title: '요금제 비교',
@@ -654,6 +655,7 @@ export const translations = {
       perDay: '/d',
       channelUnit: '',
       noData: '—',
+      adminLabel: 'Admin',
     },
     pricing: {
       title: 'Pricing',

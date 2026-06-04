@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { PlanBadge, getPlanBadge } from '@/components/PlanBadge'
 
 type AdminStats = {
   generatedAt: string
@@ -165,13 +166,15 @@ export default function AdminPage() {
     )
   }
 
-  const statCell = (label: string, value: React.ReactNode, accent?: string) => (
+  const statCell = (label: string, value: React.ReactNode, accent?: string, badge?: React.ReactNode) => (
     <div style={{
       background: 'var(--bg-subtle)',
       border: '0.5px solid var(--border-light)',
       borderRadius: 8, padding: '10px 12px',
     }}>
-      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>{label}</div>
+      <div style={{ marginBottom: 4, minHeight: 16, display: 'flex', alignItems: 'center' }}>
+        {badge ?? <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{label}</span>}
+      </div>
       <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: accent ?? 'var(--text-primary)' }}>
         {value}
       </div>
@@ -295,9 +298,9 @@ export default function AdminPage() {
             {sectionLabel(1, t('admin.sec1'))}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {statCell(t('admin.total'), nf.format(s.users.total))}
-              {statCell(t('admin.free'), nf.format(s.users.free))}
-              {statCell(t('admin.proPaid'), nf.format(s.users.pro), s.users.pro > 0 ? 'var(--success)' : undefined)}
-              {statCell(t('admin.vip'), nf.format(s.users.vip ?? 0), (s.users.vip ?? 0) > 0 ? '#8B5CF6' : undefined)}
+              {statCell(t('admin.free'), nf.format(s.users.free), undefined, <PlanBadge plan="FREE" size="sm" />)}
+              {statCell(t('admin.proPaid'), nf.format(s.users.pro), undefined, <PlanBadge plan="PRO" size="sm" />)}
+              {statCell(t('admin.vip'), nf.format(s.users.vip ?? 0), undefined, <PlanBadge plan="VIP" size="sm" />)}
               {statCell(t('admin.dau'), nf.format(s.users.dau))}
               {statCell(t('admin.mau'), nf.format(s.users.mau))}
               {statCell(
@@ -398,11 +401,7 @@ export default function AdminPage() {
                       fontSize: 12, color: 'var(--text-primary)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
                     }}>{u.email}</span>
-                    <span style={{
-                      fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                      background: 'var(--bg-subtle)', color: 'var(--text-tertiary)',
-                      textTransform: 'uppercase', flexShrink: 0,
-                    }}>{u.plan}</span>
+                    <PlanBadge plan={getPlanBadge(u.email, u.plan)} size="sm" />
                     <span style={{ fontSize: 10, color: 'var(--text-tertiary)', flexShrink: 0 }}>
                       {u.joinedAt ? new Date(u.joinedAt).toLocaleDateString(dateLocale, { month: 'numeric', day: 'numeric' }) : '-'}
                     </span>
