@@ -1824,6 +1824,29 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* 새 영상 없는 날 알림 */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={sectionTitle}><span>📭</span> {t('schedule.notifyEmpty')}</div>
+                  <div onClick={() => saveSettings({ notify_when_empty: !(settings?.notify_when_empty !== false) })}
+                    style={{
+                      width: 36, height: 20, borderRadius: 999,
+                      background: settings?.notify_when_empty !== false ? 'var(--accent)' : 'var(--bg-subtle)',
+                      border: '0.5px solid var(--border)',
+                      position: 'relative', cursor: 'pointer',
+                      transition: 'background 0.2s', flexShrink: 0,
+                    }}>
+                    <div style={{
+                      position: 'absolute', top: 2, left: settings?.notify_when_empty !== false ? 18 : 2,
+                      width: 14, height: 14, borderRadius: '50%',
+                      background: settings?.notify_when_empty !== false ? 'var(--bg-card)' : 'var(--text-tertiary)',
+                      transition: 'left 0.2s',
+                    }} />
+                  </div>
+                </div>
+                <div style={sectionSubtitle}>{t('schedule.notifyEmptyDesc')}</div>
+              </div>
+
               {/* 속보 키워드 */}
               <div style={{ ...cardStyle, opacity: isPro ? 1 : 0.85 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>

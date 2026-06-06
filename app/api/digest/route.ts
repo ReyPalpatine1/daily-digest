@@ -2,8 +2,9 @@ import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getYesterdayVideos } from '@/lib/youtube'
 import { summarizeVideo, getTranscript } from '@/lib/gemini'
-import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, DigestTrigger } from '@/lib/mailer'
+import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, sendEmptyDigestEmail, DigestTrigger } from '@/lib/mailer'
 import { syncUserPlan } from '@/lib/plan-sync'
+import { markScheduledSent, markScheduledFailed, logManualSend } from '@/lib/send-guard'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
@@ -100,6 +101,8 @@ async function runDigest(
       : (allChannels ?? []).filter(c => c.is_active !== false)
 
     if (!channels?.length) {
+      // 보낼 채널이 없어도 정각 발송은 "오늘 처리함"으로 마감 (재시도 루프 방지)
+      if (trigger === 'cron') await markScheduledSent(userId)
       return { status: 200, body: { message: '채널 없음' } }
     }
 
@@ -110,6 +113,8 @@ async function runDigest(
     // 수동 발송("지금 실행하기")은 사용자가 일부러 누른 거니 중복 체크 스킵 — 항상 다시 처리/발송
     // 자동 발송(cron)은 같은 영상 중복 발송 방지를 위해 기존 처리분 제외
     const isManual = trigger === 'manual'
+    // 수동 발송은 통계용으로만 기록 (멱등성과 무관, best-effort)
+    if (isManual) void logManualSend(userId)
     let processedVideoIds = new Set<string>()
     if (!isManual) {
       const { data: existingDigests } = await supabase
@@ -125,6 +130,7 @@ async function runDigest(
     type VideoTask = { channel: Channel; video: Video }
     const videoTasks: VideoTask[] = []
     const seenInThisRun = new Set<string>() // 같은 채널/실행 내 중복 방지
+    let rawVideoCount = 0 // dedup 이전, 어제 올라온 영상 총개수 (빈 다이제스트 판정용)
 
     for (const channel of channels) {
       let channelId = channel.channel_id
@@ -140,6 +146,7 @@ async function runDigest(
       if (!channelId) continue
 
       const videos = await getYesterdayVideos(channelId, userId)
+      rawVideoCount += videos.length
       for (const video of videos) {
         if (seenInThisRun.has(video.videoId)) continue
         // manual=true이면 processedVideoIds는 비어있으므로 항상 통과 (재처리)
@@ -155,8 +162,26 @@ async function runDigest(
     }
 
     console.log(
-      `🎬 ${isManual ? '수동' : '자동'} 발송: 처리 대상 영상 ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩)`
+      `🎬 ${isManual ? '수동' : '자동'} 발송: 처리 대상 영상 ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩, 어제 총 ${rawVideoCount}개)`
     )
+
+    // 처리할 영상이 없는 경우 (어제 새 영상 0개 or 이미 처리된 영상뿐)
+    if (videoTasks.length === 0) {
+      // 어제 새 영상이 전혀 없던 날만 "영상 없음" 안내 (cron + notify_when_empty 한정)
+      if (trigger === 'cron' && rawVideoCount === 0 && settings.notify_when_empty !== false) {
+        try {
+          await sendEmptyDigestEmail(settings.email, profile?.name ?? '사용자', userLocale, userId)
+        } catch (e) {
+          console.error(`[digest] 빈 다이제스트 메일 발송 실패 userId=${userId}:`, e)
+        }
+      }
+      // 0개여도 정각 발송은 "오늘 처리함"으로 마감 (재시도 방지)
+      if (trigger === 'cron') await markScheduledSent(userId)
+      return {
+        status: 200,
+        body: { success: true, sent: 0, succeeded: 0, processed: 0, failed: 0, total: 0, empty: rawVideoCount === 0 },
+      }
+    }
 
     // 단일 영상 처리 함수
     const processVideo = async (task: VideoTask) => {
@@ -304,6 +329,9 @@ async function runDigest(
       `📊 처리 완료: 성공 ${successCount}개, 실패 ${failedCount}개, 소요시간 ${elapsed}초 (userId=${userId})`
     )
 
+    // 정각 발송 완료 기록 (멱등성: 같은 날 재실행 방지)
+    if (trigger === 'cron') await markScheduledSent(userId)
+
     return {
       status: 200,
       body: {
@@ -319,6 +347,10 @@ async function runDigest(
   } catch (error) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     console.error(`❌ digest 서버 오류 (소요시간 ${elapsed}초):`, error)
+    // 정각 발송 실패 기록 → 다음 cron 슬롯에서 재시도됨
+    if (trigger === 'cron') {
+      try { await markScheduledFailed(userId, String(error)) } catch { /* 기록 실패는 무시 */ }
+    }
     return { status: 500, body: { error: '서버 오류' } }
   }
 }

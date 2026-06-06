@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { nowUtc, toZoned, dateKey, startOfDayUtc, isSendTimeSlot } from '@/lib/time'
+import { nowUtc, toZoned, dateKey, isSendTimeSlot } from '@/lib/time'
+import { tryStartScheduled } from '@/lib/send-guard'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,7 +34,6 @@ export async function GET(req: Request) {
 
     const now = nowUtc()
     const todayKstDate = dateKey(now)                        // KST "YYYY-MM-DD"
-    const todayKstStartIso = startOfDayUtc().toISOString()   // KST 오늘 자정을 UTC로
     const zoned = toZoned(now)                               // 로그/표시용 KST 시:분
     const currentHour = String(zoned.hour).padStart(2, '0')
     const currentMinute = String(zoned.minute).padStart(2, '0')
@@ -53,17 +53,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: '활성 유저 없음' })
     }
 
-    const userIds = allSettings.map(s => s.user_id)
-    const { data: todayDigests } = await supabase
-      .from('digests')
-      .select('user_id, is_breaking')
-      .in('user_id', userIds)
-      .gte('created_at', todayKstStartIso)
-
-    const sentDigestUserIds = new Set(
-      (todayDigests ?? []).filter(d => !d.is_breaking).map(d => d.user_id)
-    )
-
     const digestUsers: string[] = []
     const skipReasons: Record<string, string> = {}
 
@@ -74,15 +63,18 @@ export async function GET(req: Request) {
         continue
       }
 
-      // cron 15분 주기 → send_time이 현재 슬롯(예: 07:00~07:14)에 맞는지 판정
+      // 1) cron 15분 주기 → send_time이 현재 슬롯(예: 07:00~07:14)에 맞는지 판정
       const isMatch = isSendTimeSlot(sendTime, 'Asia/Seoul', 15, now)
-      console.log(`발송시간 ${sendTime}, 슬롯매칭 ${isMatch}`)
       if (!isMatch) {
         skipReasons[s.user_id] = `slot mismatch (now ${currentHour}:${currentMinute}, send ${sendTime})`
         continue
       }
-      if (sentDigestUserIds.has(s.user_id)) {
-        skipReasons[s.user_id] = 'already sent today'
+
+      // 2) 발송 시작 시도 — send_log 멱등성 + 동시성 방어 (이미 보냈거나 처리 중이면 false)
+      const canSend = await tryStartScheduled(s.user_id)
+      console.log(`정각발송 user=${s.user_id} send_time=${sendTime} 슬롯매칭=${isMatch} canSend=${canSend}`)
+      if (!canSend) {
+        skipReasons[s.user_id] = 'already sent/sending today (send_log)'
         continue
       }
       digestUsers.push(s.user_id)

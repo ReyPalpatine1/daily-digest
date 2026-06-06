@@ -59,6 +59,7 @@ export type Settings = {
   breaking_alert: boolean
   active: boolean
   locale: 'ko' | 'en'
+  notify_when_empty?: boolean
 }
 
 export type Digest = {

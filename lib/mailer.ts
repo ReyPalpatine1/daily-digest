@@ -88,6 +88,46 @@ export async function sendDigestEmail(
   }
 }
 
+// 어제 새 영상이 없던 날 보내는 안내 메일 (notify_when_empty=true인 경우만).
+export async function sendEmptyDigestEmail(
+  to: string,
+  userName: string,
+  locale: 'ko' | 'en' = 'ko',
+  userId: string | null = null
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  const date = new Date().toLocaleDateString(lc === 'ko' ? 'ko-KR' : 'en-US', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  const html = `
+    <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px">
+      <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px">${et(lc, 'digest.greeting')}</h1>
+      <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 8px">${userName}님,</p>
+      <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 24px">${et(lc, 'digest.emptyBody')}</p>
+      <p style="font-size:12px;color:#999;border-top:1px solid #eee;padding-top:16px;margin:0">
+        ${et(lc, 'digest.footer')} · ${et(lc, 'digest.sentTo', { email: to })}
+      </p>
+    </div>
+  `
+
+  try {
+    await transporter.sendMail({
+      from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+      to,
+      subject: et(lc, 'digest.emptySubject', { date }),
+      html,
+    })
+    await logEmailResult(userId, to, 'digest', true)
+  } catch (e) {
+    await logEmailResult(userId, to, 'digest', false, String(e))
+    throw e
+  }
+}
+
 export async function sendBreakingAlert(
   to: string,
   userName: string,
