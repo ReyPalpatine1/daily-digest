@@ -444,8 +444,13 @@ export default function Dashboard() {
 
       const data = await res.json()
       if (data.success) {
-        const n = data.processed ?? data.succeeded ?? data.sent ?? 0
-        setMsg(t('alerts.digestDone', { n }))
+        if (data.empty) {
+          // 어제 새 영상이 없던 경우: 서버 안내 메시지 우선, 없으면 번역 키
+          setMsg(data.message ?? t('alerts.digestEmpty'))
+        } else {
+          const n = data.processed ?? data.succeeded ?? data.sent ?? 0
+          setMsg(t('alerts.digestDone', { n }))
+        }
       } else {
         setMsg(t('alerts.digestError'))
       }

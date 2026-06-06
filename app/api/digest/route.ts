@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId, getYesterdayVideos } from '@/lib/youtube'
+import { yesterdayRangeUtc, formatDateKst } from '@/lib/time'
 import { summarizeVideo, getTranscript } from '@/lib/gemini'
 import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, sendEmptyDigestEmail, DigestTrigger } from '@/lib/mailer'
 import { syncUserPlan } from '@/lib/plan-sync'
@@ -130,7 +131,13 @@ async function runDigest(
     type VideoTask = { channel: Channel; video: Video }
     const videoTasks: VideoTask[] = []
     const seenInThisRun = new Set<string>() // 같은 채널/실행 내 중복 방지
-    let rawVideoCount = 0 // dedup 이전, 어제 올라온 영상 총개수 (빈 다이제스트 판정용)
+    let rawVideoCount = 0 // 쇼츠제외 후, 어제 올라온 영상 총개수 (빈 다이제스트 판정용)
+    let dedupSkipped = 0 // dedup(이미 처리/중복)으로 제외된 개수
+
+    // 어제 범위가 정상인지 즉시 확인 가능하게 1회 로깅
+    const dbgRange = yesterdayRangeUtc('Asia/Seoul')
+    console.log(`📅 어제범위 UTC: ${dbgRange.start.toISOString()} ~ ${dbgRange.end.toISOString()}`)
+    console.log(`📅 KST환산: ${formatDateKst(dbgRange.start)} ~ ${formatDateKst(dbgRange.end)}`)
 
     for (const channel of channels) {
       let channelId = channel.channel_id
@@ -148,9 +155,9 @@ async function runDigest(
       const videos = await getYesterdayVideos(channelId, userId)
       rawVideoCount += videos.length
       for (const video of videos) {
-        if (seenInThisRun.has(video.videoId)) continue
+        if (seenInThisRun.has(video.videoId)) { dedupSkipped++; continue }
         // manual=true이면 processedVideoIds는 비어있으므로 항상 통과 (재처리)
-        if (processedVideoIds.has(video.videoId)) continue
+        if (processedVideoIds.has(video.videoId)) { dedupSkipped++; continue }
         seenInThisRun.add(video.videoId)
         videoTasks.push({ channel, video })
         if (videoTasks.length >= MAX_VIDEOS_PER_RUN) break
@@ -162,7 +169,11 @@ async function runDigest(
     }
 
     console.log(
-      `🎬 ${isManual ? '수동' : '자동'} 발송: 처리 대상 영상 ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩, 어제 총 ${rawVideoCount}개)`
+      `🎬 ${isManual ? '수동' : '자동'} 발송: 처리 대상 영상 ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩)`
+    )
+    // 0개의 출처 구분용: API/쇼츠 단계는 youtube.ts 로그, dedup/최종은 여기서
+    console.log(
+      `📊 어제(쇼츠제외) ${rawVideoCount}개 → dedup제외 ${dedupSkipped}개 → 최종 처리대상 ${videoTasks.length}개`
     )
 
     // 처리할 영상이 없는 경우 (어제 새 영상 0개 or 이미 처리된 영상뿐)
@@ -177,9 +188,13 @@ async function runDigest(
       }
       // 0개여도 정각 발송은 "오늘 처리함"으로 마감 (재시도 방지)
       if (trigger === 'cron') await markScheduledSent(userId)
+      // 수동 발송은 빈 메일 대신 화면(응답)으로 즉시 안내 (방법 B)
+      const message = userLocale === 'en'
+        ? 'No new videos were uploaded yesterday.'
+        : '어제 올라온 새 영상이 없어요.'
       return {
         status: 200,
-        body: { success: true, sent: 0, succeeded: 0, processed: 0, failed: 0, total: 0, empty: rawVideoCount === 0 },
+        body: { success: true, sent: 0, succeeded: 0, processed: 0, failed: 0, total: 0, empty: rawVideoCount === 0, message },
       }
     }
 

@@ -51,21 +51,36 @@ function isShortsVideo(video: any): boolean {
 
 // 전날 업로드된 영상 가져오기
 export async function getYesterdayVideos(channelId: string, userId?: string): Promise<VideoItem[]> {
+  // KST 어제 0시 ~ 오늘 0시 범위를 UTC로 (publishedAt이 UTC이므로 그대로 비교)
+  const { start, end } = yesterdayRangeUtc()
+  const publishedAfter = start.toISOString()
+  const publishedBefore = end.toISOString()
+
   try {
-    // KST 어제 0시 ~ 오늘 0시 범위를 UTC로 (publishedAt이 UTC이므로 그대로 비교)
-    const { start, end } = yesterdayRangeUtc()
-    const publishedAfter = start.toISOString()
-    const publishedBefore = end.toISOString()
+    console.log(`🔍 getYesterdayVideos channel=${channelId}`)
+    console.log(`   범위 publishedAfter=${publishedAfter}, publishedBefore=${publishedBefore}`)
 
     const searchRes = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&publishedAfter=${publishedAfter}&publishedBefore=${publishedBefore}&maxResults=10&key=${YOUTUBE_API_KEY}`
     )
     if (userId) await logApiUsage(userId, 'youtube')
     const searchData = await searchRes.json()
+
+    // 쿼터 초과(403)/잘못된 요청(400) 등 API 오류를 조용히 0개로 넘기지 말고 노출
+    if (!searchRes.ok || searchData.error) {
+      console.error(
+        `❌ YouTube search API 오류 (channel=${channelId}, status=${searchRes.status}): ` +
+          `code=${searchData.error?.code ?? '-'} reason=${searchData.error?.errors?.[0]?.reason ?? '-'} ` +
+          `message=${searchData.error?.message ?? '-'}`
+      )
+      return []
+    }
+
     const items = searchData.items ?? []
     const videoIds = items
       .map((item: any) => item.id.videoId)
       .filter((id: string) => Boolean(id))
+    console.log(`   search 응답 영상 ${items.length}개 (videoId 유효 ${videoIds.length}개)`)
 
     if (!videoIds.length) {
       return []
@@ -77,7 +92,17 @@ export async function getYesterdayVideos(channelId: string, userId?: string): Pr
     if (userId) await logApiUsage(userId, 'youtube')
     const videosData = await videosRes.json()
 
-    return (videosData.items ?? [])
+    if (!videosRes.ok || videosData.error) {
+      console.error(
+        `❌ YouTube videos API 오류 (channel=${channelId}, status=${videosRes.status}): ` +
+          `code=${videosData.error?.code ?? '-'} reason=${videosData.error?.errors?.[0]?.reason ?? '-'} ` +
+          `message=${videosData.error?.message ?? '-'}`
+      )
+      return []
+    }
+
+    const detailed = videosData.items ?? []
+    const result = detailed
       .filter((video: any) => !isShortsVideo(video))
       .map((video: any) => ({
         videoId: video.id,
@@ -86,7 +111,11 @@ export async function getYesterdayVideos(channelId: string, userId?: string): Pr
         channelTitle: video.snippet.channelTitle,
         url: `https://youtube.com/watch?v=${video.id}`,
       }))
-  } catch {
+    console.log(`   videos 상세 ${detailed.length}개 → 쇼츠제외 후 ${result.length}개`)
+    return result
+  } catch (e) {
+    // YouTube API 쿼터/요청/파싱 에러를 명확히 로깅 (이전엔 통째로 삼켜 "0개"로 위장됨)
+    console.error(`❌ getYesterdayVideos 실패 (channel=${channelId}):`, e)
     return []
   }
 }
