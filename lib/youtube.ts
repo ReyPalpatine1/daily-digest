@@ -1,4 +1,5 @@
 import { logApiUsage } from './api-usage'
+import { yesterdayRangeUtc, nowUtc } from './time'
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 
@@ -27,34 +28,6 @@ export async function getChannelId(channelUrl: string, userId?: string): Promise
   }
 }
 
-function getSeoulMidnightUtc(date: Date): Date {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(date)
-
-  const map = Object.fromEntries(
-    parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value])
-  ) as Record<string, string>
-
-  return new Date(
-    Date.UTC(
-      Number(map.year),
-      Number(map.month) - 1,
-      Number(map.day),
-      0,
-      0,
-      0
-    )
-  )
-}
-
 function parseDurationToSeconds(duration: string): number {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
   if (!match) return 0
@@ -79,12 +52,10 @@ function isShortsVideo(video: any): boolean {
 // 전날 업로드된 영상 가져오기
 export async function getYesterdayVideos(channelId: string, userId?: string): Promise<VideoItem[]> {
   try {
-    const now = new Date()
-    const todayKstMidnightUtc = getSeoulMidnightUtc(now)
-    const yesterdayKstMidnightUtc = new Date(todayKstMidnightUtc.getTime() - 24 * 60 * 60 * 1000)
-
-    const publishedAfter = yesterdayKstMidnightUtc.toISOString()
-    const publishedBefore = todayKstMidnightUtc.toISOString()
+    // KST 어제 0시 ~ 오늘 0시 범위를 UTC로 (publishedAt이 UTC이므로 그대로 비교)
+    const { start, end } = yesterdayRangeUtc()
+    const publishedAfter = start.toISOString()
+    const publishedBefore = end.toISOString()
 
     const searchRes = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&publishedAfter=${publishedAfter}&publishedBefore=${publishedBefore}&maxResults=10&key=${YOUTUBE_API_KEY}`
@@ -122,7 +93,7 @@ export async function getYesterdayVideos(channelId: string, userId?: string): Pr
 
 export async function getRecentVideos(channelId: string, minutes: number, userId?: string): Promise<VideoItem[]> {
   try {
-    const now = new Date()
+    const now = nowUtc()
     const publishedAfter = new Date(now.getTime() - minutes * 60 * 1000).toISOString()
 
     const searchRes = await fetch(

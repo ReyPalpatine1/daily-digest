@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { nowUtc, toZoned, dateKey, startOfDayUtc, isSendTimeSlot } from '@/lib/time'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,26 +31,12 @@ export async function GET(req: Request) {
     }
     console.log(`✅ [cron] 인증 통과`)
 
-    const now = new Date()
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Seoul',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).formatToParts(now)
-
-    const kst = Object.fromEntries(
-      parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value])
-    ) as Record<string, string>
-
-    const todayKstDate = `${kst.year}-${kst.month}-${kst.day}`
-    const todayKstStartIso = new Date(`${todayKstDate}T00:00:00+09:00`).toISOString()
-    const currentHour = kst.hour.padStart(2, '0')
-    const currentMinute = kst.minute.padStart(2, '0')
-    const currentMinutesTotal = Number(currentHour) * 60 + Number(currentMinute)
+    const now = nowUtc()
+    const todayKstDate = dateKey(now)                        // KST "YYYY-MM-DD"
+    const todayKstStartIso = startOfDayUtc().toISOString()   // KST 오늘 자정을 UTC로
+    const zoned = toZoned(now)                               // 로그/표시용 KST 시:분
+    const currentHour = String(zoned.hour).padStart(2, '0')
+    const currentMinute = String(zoned.minute).padStart(2, '0')
 
     const { data: allSettings, error } = await supabase
       .from('settings')
@@ -86,11 +73,12 @@ export async function GET(req: Request) {
         skipReasons[s.user_id] = `invalid send_time=${JSON.stringify(s.send_time)}`
         continue
       }
-      const [sendH, sendM] = sendTime.split(':').map(Number)
-      const sendMinutes = sendH * 60 + sendM
 
-      if (currentMinutesTotal < sendMinutes) {
-        skipReasons[s.user_id] = `not yet (now ${currentHour}:${currentMinute} < ${sendTime})`
+      // cron 15분 주기 → send_time이 현재 슬롯(예: 07:00~07:14)에 맞는지 판정
+      const isMatch = isSendTimeSlot(sendTime, 'Asia/Seoul', 15, now)
+      console.log(`발송시간 ${sendTime}, 슬롯매칭 ${isMatch}`)
+      if (!isMatch) {
+        skipReasons[s.user_id] = `slot mismatch (now ${currentHour}:${currentMinute}, send ${sendTime})`
         continue
       }
       if (sentDigestUserIds.has(s.user_id)) {

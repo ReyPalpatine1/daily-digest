@@ -2,6 +2,7 @@
 // ⚠️ SUPABASE_SERVICE_KEY 를 사용하므로 서버(라우트 핸들러)에서만 import 할 것.
 //    클라이언트 컴포넌트에서 import 금지.
 import { createClient } from '@supabase/supabase-js'
+import { nowUtc } from './time'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,7 +50,7 @@ export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vi
   if (!profile) return 'free'
 
   if (profile.plan === 'pro' && profile.plan_expires_at) {
-    const isExpired = new Date(profile.plan_expires_at) < new Date()
+    const isExpired = new Date(profile.plan_expires_at) < nowUtc()
     if (isExpired) {
       await supabase
         .from('profiles')
