@@ -51,6 +51,23 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
 }
 
+// JSONB에서 읽은 값이 배열이 아닐 수 있어(문자열/객체/null) .map 호출 전 안전 변환.
+// - 배열이면 그대로
+// - JSON 문자열이면 파싱해서 배열이면 사용 (이중 인코딩 방어)
+// - 그 외엔 빈 배열
+function safeArray<T = any>(value: any): T[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 // 이메일 공통 레이아웃 (라이트 테마 고정 — 메일은 디자인 시스템 변수 미지원)
 function shell(title: string, locale: EmailLocale, inner: string, footer: string): string {
   return `<!DOCTYPE html>
@@ -86,8 +103,8 @@ function footerBlock(locale: EmailLocale, email?: string): string {
 }
 
 function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
-  const kp = item.summary.keyPoints ?? []
-  const tl = item.summary.timeline ?? []
+  const kp = safeArray<string>(item.summary.keyPoints)
+  const tl = safeArray<{ time: string; content: string }>(item.summary.timeline)
   return `
     <div style="background:#FFFFFF;border-radius:10px;padding:20px 24px;border:1px solid #E5E5E5;margin-bottom:12px;">
       ${item.summary.errorInfo ? '' : ''}

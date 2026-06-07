@@ -266,6 +266,20 @@ async function processInBatches<T>(items: T[], size: number, fn: (item: T) => Pr
   }
 }
 
+// Gemini 응답이 가끔 배열이 아닌 형태로 와도 JSONB엔 항상 배열로 저장 (렌더 .map 안전)
+function asArray<T = any>(value: any): T[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 // 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
 async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
   const { transcript, description } = await getTranscript(video.video_id) // userId 없음 (공유)
@@ -274,8 +288,8 @@ async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
     {
       video_id: video.video_id,
       summary: result.summary,
-      key_points: result.keyPoints, // JSONB (배열 그대로)
-      timeline: result.timeline, // JSONB
+      key_points: asArray(result.keyPoints), // JSONB 배열로 정규화
+      timeline: asArray(result.timeline), // JSONB 배열로 정규화
       model: result.model ?? null,
     },
     { onConflict: 'video_id' }
