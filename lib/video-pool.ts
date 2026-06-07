@@ -12,8 +12,11 @@ const supabase = createClient(
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 
-// 채널당 playlistItems 페이지 상한 (쿼터/시간 보호)
-const MAX_PAGES = 5
+// 채널당 playlistItems 페이지 상한 (쿼터/시간 보호).
+// 증분 수집(last_video_published_at 이후만)이므로 2페이지면 신규분 충분.
+const MAX_PAGES = 2
+// 요약 대상 기간 (일). 발송에 쓰이는 어제+당일만 요약 → 과거 영상 Gemini 낭비 방지.
+const SUMMARY_LOOKBACK_DAYS = 2
 // 한 번 수집 실행에서 요약할 영상 상한 (60초 budget 보호)
 // ⚠️ 요약은 영상당 자막+Gemini로 느려서 작게 유지. 나머지는 다음 주기 + 발송 시 폴백 C가 처리.
 const SUMMARY_LIMIT = 5
@@ -238,12 +241,15 @@ async function upsertChannelState(channelId: string, playlistId: string | null, 
 // ── 공유 요약 (영상당 1번) ────────────────────────────────────
 type PendingVideo = { video_id: string; title: string; description: string | null }
 
-// 아직 요약이 없는 (쇼츠 아닌) 영상 목록
+// 아직 요약이 없는 (쇼츠 아닌, 최근 N일) 영상 목록.
+// ⚠️ 과거 영상은 발송에 안 쓰이므로 요약하지 않는다 (Gemini 비용 절감).
 async function getVideosWithoutSummary(): Promise<PendingVideo[]> {
+  const cutoff = new Date(Date.now() - SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
   const { data: vids } = await supabase
     .from('videos')
     .select('video_id, title, description')
     .eq('is_short', false)
+    .gte('published_at', cutoff.toISOString())
     .order('published_at', { ascending: false })
     .limit(200)
 

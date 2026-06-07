@@ -7,10 +7,24 @@ on:
   workflow_dispatch: # 수동 실행 가능
 
 jobs:
-  trigger-cron:
+  # 1) 공유 풀 수집 (영상 적재 + 미요약분 일부 요약). 발송보다 먼저 돌아야 폴백 C 효과.
+  trigger-collect:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Vercel Cron API
+      - name: Call /api/collect
+        run: |
+          curl -X GET "https://daily-digest-one-vert.vercel.app/api/collect" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 90 || echo "collect 호출 실패(무시) — 다음 주기/발송 폴백으로 보강"
+
+  # 2) 정각 발송 (공유 풀 읽기). 수집 완료 후 실행 (성공/실패 무관하게 항상 실행).
+  trigger-cron:
+    runs-on: ubuntu-latest
+    needs: trigger-collect
+    if: ${{ always() }}
+    steps:
+      - name: Call /api/cron
         run: |
           curl -X GET "https://daily-digest-one-vert.vercel.app/api/cron" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
