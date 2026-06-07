@@ -15,9 +15,14 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 // 채널당 playlistItems 페이지 상한 (쿼터/시간 보호)
 const MAX_PAGES = 5
 // 한 번 수집 실행에서 요약할 영상 상한 (60초 budget 보호)
-const SUMMARY_LIMIT = 20
+// ⚠️ 요약은 영상당 자막+Gemini로 느려서 작게 유지. 나머지는 다음 주기 + 발송 시 폴백 C가 처리.
+const SUMMARY_LIMIT = 5
 // 요약 동시 처리 수
 const SUMMARY_CONCURRENCY = 5
+
+// 60초 함수 budget 보호용 시간 컷오프 (ms, 실행 시작 기준)
+const COLLECT_CUTOFF_MS = 35_000 // 이후엔 새 채널 수집 중단 (다음 주기로 이월)
+const SUMMARY_START_CUTOFF_MS = 25_000 // 이후엔 새 요약 배치를 시작하지 않음 (배치가 ~30s까지 갈 수 있어 60s 내 종료 보장)
 
 export type UniqueChannel = {
   channelId: string
@@ -283,15 +288,21 @@ async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
 }
 
 // 미요약 영상 요약 → video_summaries 적재 (영상당 1번, 전역 공유). 요약한 개수 반환.
-export async function summarizePendingVideos(): Promise<number> {
+// deadlineTs(ms): 이 시각을 넘으면 다음 배치를 시작하지 않음 (60초 budget 보호).
+export async function summarizePendingVideos(deadlineTs?: number): Promise<number> {
   const pending = await getVideosWithoutSummary()
-  console.log(`🤖 요약 대기: ${pending.length}개`)
+  console.log(`🤖 요약 대기: ${pending.length}개 (이번 실행 최대 ${SUMMARY_LIMIT}개)`)
   if (!pending.length) return 0
 
   let done = 0
-  await processInBatches(pending, SUMMARY_CONCURRENCY, async (video) => {
-    if (await summarizeAndStore(video)) done++
-  })
+  for (let i = 0; i < pending.length; i += SUMMARY_CONCURRENCY) {
+    if (deadlineTs && Date.now() > deadlineTs) {
+      console.log(`⏱ 요약 시간 budget 도달 → 나머지는 다음 주기/발송 폴백으로 이월`)
+      break
+    }
+    const batch = pending.slice(i, i + SUMMARY_CONCURRENCY)
+    await Promise.allSettled(batch.map(async v => { if (await summarizeAndStore(v)) done++ }))
+  }
   console.log(`🤖 요약 완료: ${done}개`)
   return done
 }
@@ -392,22 +403,37 @@ export function matchesKeyword(title: string, keywords: string[] | null | undefi
 // ── 오케스트레이터 ────────────────────────────────────────────
 export async function runCollection(): Promise<{
   channels: number
+  channelsProcessed: number
   collected: number
   summarized: number
+  timedOutCollecting: boolean
 }> {
+  const t0 = Date.now()
   const channels = await getUniqueChannels()
   console.log(`📡 수집 대상 고유 채널: ${channels.length}개`)
 
   let collected = 0
+  let processed = 0
+  let timedOut = false
   for (const channel of channels) {
+    // 60초 budget 보호: 일정 시각 넘으면 나머지 채널은 다음 주기로 이월
+    if (Date.now() - t0 > COLLECT_CUTOFF_MS) {
+      timedOut = true
+      console.log(`⏱ 수집 시간 budget 도달 → 채널 ${channels.length - processed}개는 다음 주기로 이월`)
+      break
+    }
     try {
       collected += await collectChannelVideos(channel)
     } catch (e) {
       console.error(`❌ 채널 수집 실패 (${channel.channelId}):`, e)
     }
+    processed++
   }
 
-  const summarized = await summarizePendingVideos()
-  console.log(`✅ 수집 요약 완료: 채널 ${channels.length} / 신규영상 ${collected} / 요약 ${summarized}`)
-  return { channels: channels.length, collected, summarized }
+  // 남은 시간 안에서만 요약 (배치가 ~30s까지 갈 수 있어 시작 컷오프를 보수적으로)
+  const summarized = await summarizePendingVideos(t0 + SUMMARY_START_CUTOFF_MS)
+  console.log(
+    `✅ 수집 완료: 채널 ${processed}/${channels.length} / 신규영상 ${collected} / 요약 ${summarized} / 소요 ${((Date.now() - t0) / 1000).toFixed(1)}s`
+  )
+  return { channels: channels.length, channelsProcessed: processed, collected, summarized, timedOutCollecting: timedOut }
 }
