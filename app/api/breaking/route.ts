@@ -1,9 +1,11 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getChannelId, getRecentVideos } from '@/lib/youtube'
-import { getTranscript, summarizeVideo } from '@/lib/gemini'
+import { getChannelId } from '@/lib/youtube'
 import { sendBreakingAlert, sendAdminBulkErrorEmail } from '@/lib/mailer'
 import { syncUserPlan } from '@/lib/plan-sync'
+import { getRecentPoolVideos, getSummary, summarizeNow, matchesKeyword } from '@/lib/video-pool'
+import { tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
+import { nowUtc, startOfDayUtc } from '@/lib/time'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,20 +15,6 @@ const supabase = createClient(
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
 export const maxDuration = 60
-
-type RecentVideoItem = {
-  videoId: string
-  title: string
-  publishedAt: string
-  channelTitle: string
-  url: string
-  channel: {
-    alias: string
-    emoji: string
-    categoryName?: string
-    channel_id?: string
-  }
-}
 
 export async function POST(req: Request) {
   let body: any
@@ -117,66 +105,47 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       return { status: 200, body: { message: '채널 없음' } }
     }
 
-    const keywords = ((settings.breaking_keywords as string[]) ?? ['속보'])
-      .map((kw: string) => kw.toLowerCase().trim())
+    const keywords = ((settings.breaking_keywords as string[]) ?? [])
+      .map((kw: string) => kw.trim())
       .filter(Boolean)
+    if (!keywords.length) {
+      return { status: 200, body: { message: '속보 키워드 없음' } }
+    }
 
-    const recentVideos: RecentVideoItem[] = []
-
+    // 채널 메타 + channel_id 보정 (channel_id → alias/emoji/category)
+    const channelMeta = new Map<string, { alias: string; emoji: string; category: string }>()
     for (const channel of channels) {
       let channelId = channel.channel_id
       if (!channelId) {
         channelId = await getChannelId(channel.url, userId)
         if (channelId) {
-          await supabase
-            .from('channels')
-            .update({ channel_id: channelId })
-            .eq('id', channel.id)
+          await supabase.from('channels').update({ channel_id: channelId }).eq('id', channel.id)
         }
       }
       if (!channelId) continue
-
-      const videos = await getRecentVideos(channelId, 15, userId)
-      recentVideos.push(
-        ...videos.map(video => ({
-          ...video,
-          channel: {
-            alias: channel.alias,
-            emoji: channel.emoji,
-            categoryName: (channel as any).category_name ?? '미분류',
-            channel_id: channelId,
-          },
-        }))
-      )
+      if (!channelMeta.has(channelId)) {
+        channelMeta.set(channelId, {
+          alias: channel.alias,
+          emoji: channel.emoji,
+          category: (channel as any).category_name ?? '미분류',
+        })
+      }
+    }
+    const channelIds = [...channelMeta.keys()]
+    if (!channelIds.length) {
+      return { status: 200, body: { message: '채널 없음(channel_id)' } }
     }
 
-    if (!recentVideos.length) {
-      return { status: 200, body: { message: '최근 영상 없음' } }
-    }
+    // 감지 윈도우: 당일(KST) 전체 + 자정 직후엔 전날 막판 6시간도 보강 (놓친 속보 방지)
+    const todayStart = startOfDayUtc('Asia/Seoul')
+    const sixHoursAgo = new Date(nowUtc().getTime() - 6 * 3600_000)
+    const since = todayStart < sixHoursAgo ? todayStart : sixHoursAgo
 
-    const breakingVideos = recentVideos.filter(video =>
-      keywords.some(kw => video.title.toLowerCase().includes(kw))
-    )
-
-    if (!breakingVideos.length) {
+    // 공유 풀에서 최근 영상 → 사용자 키워드 매칭 (공유 풀엔 is_breaking 없음)
+    const recent = await getRecentPoolVideos(channelIds, since)
+    const matched = recent.filter(v => matchesKeyword(v.title, keywords))
+    if (!matched.length) {
       return { status: 200, body: { message: '속보 영상 없음' } }
-    }
-
-    const { data: existingDigests, error: existingError } = await supabase
-      .from('digests')
-      .select('video_id')
-      .in('video_id', breakingVideos.map(video => video.videoId))
-
-    if (existingError) {
-      console.error('Existing digests fetch error:', existingError)
-      return { status: 500, body: { error: existingError.message } }
-    }
-
-    const existingIds = new Set((existingDigests ?? []).map((item: any) => item.video_id))
-    const newVideos = breakingVideos.filter(video => !existingIds.has(video.videoId))
-
-    if (!newVideos.length) {
-      return { status: 200, body: { message: '새로운 속보 없음', skipped: breakingVideos.length } }
     }
 
     const failedItems: {
@@ -190,52 +159,72 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
     }[] = []
 
     let sentCount = 0
-    for (const video of newVideos) {
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      const { transcript, description } = await getTranscript(video.videoId, userId)
-      const summary = await summarizeVideo(userId, video.title, transcript, description)
+    let skipped = 0
+    for (const video of matched) {
+      // 속보 멱등성 (user_id, video_id) — 이미 보냈거나 처리 중이면 skip
+      const canSend = await tryStartBreaking(userId, video.video_id)
+      if (!canSend) { skipped++; continue }
 
-      const digestItem = {
-        channel: video.channel.alias,
-        category: video.channel.categoryName ?? '미분류',
-        emoji: video.channel.emoji,
-        video,
-        summary,
-        isBreaking: true,
+      const meta = channelMeta.get(video.channel_id) ?? { alias: '채널', emoji: '📺', category: '미분류' }
+      const url = `https://youtube.com/watch?v=${video.video_id}`
+      try {
+        // 요약 (공유 풀, 없으면 폴백 C: 즉시 요약)
+        let s = await getSummary(video.video_id)
+        if (!s) {
+          await summarizeNow([video.video_id])
+          s = await getSummary(video.video_id)
+        }
+
+        const digestItem = {
+          channel: meta.alias,
+          category: meta.category,
+          emoji: meta.emoji,
+          video: { videoId: video.video_id, title: video.title, publishedAt: video.published_at, channelTitle: meta.alias, url },
+          summary: {
+            summary: s?.summary ?? '요약을 준비 중이에요.',
+            keyPoints: s?.key_points ?? [],
+            timeline: s?.timeline ?? [],
+            summaryBasis: s?.model ? `공유 요약 (${s.model})` : '공유 요약',
+          },
+          isBreaking: true,
+        }
+
+        await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem, userLocale, userId)
+
+        if (!s) {
+          failedItems.push({
+            channel: meta.alias, category: meta.category, emoji: meta.emoji,
+            videoTitle: video.title, videoUrl: url, errorInfo: '요약 없음 (즉시요약 실패)',
+          })
+        }
+
+        // 히스토리/읽음 표시용 digests 기록 (멱등 upsert)
+        await supabase.from('digests').upsert(
+          {
+            user_id: userId,
+            channel_alias: meta.alias,
+            channel_emoji: meta.emoji,
+            category_name: meta.category,
+            video_id: video.video_id,
+            video_title: video.title,
+            video_url: url,
+            published_at: video.published_at,
+            summary: digestItem.summary.summary,
+            key_points: digestItem.summary.keyPoints,
+            timeline: digestItem.summary.timeline,
+            is_breaking: true,
+            is_read: false,
+            summary_basis: digestItem.summary.summaryBasis,
+          },
+          { onConflict: 'user_id,video_id' }
+        )
+
+        await markBreakingSent(userId, video.video_id)
+        sentCount += 1
+      } catch (e) {
+        await markBreakingFailed(userId, video.video_id, String(e))
+        console.error(`[breaking] 발송 실패 user=${userId} video=${video.video_id}:`, e)
       }
-
-      await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem, userLocale, userId)
-
-      if (summary.errorInfo) {
-        failedItems.push({
-          channel: video.channel.alias,
-          category: video.channel.categoryName ?? '미분류',
-          emoji: video.channel.emoji,
-          videoTitle: video.title,
-          videoUrl: video.url,
-          errorInfo: summary.errorInfo,
-          attempts: summary.attempts,
-        })
-      }
-
-      await supabase.from('digests').insert({
-        user_id: userId,
-        channel_alias: video.channel.alias,
-        channel_emoji: video.channel.emoji,
-        category_name: video.channel.categoryName ?? '미분류',
-        video_id: video.videoId,
-        video_title: video.title,
-        video_url: video.url,
-        published_at: video.publishedAt,
-        summary: summary.summary,
-        key_points: summary.keyPoints,
-        timeline: summary.timeline,
-        is_breaking: true,
-        is_read: false,
-        summary_basis: summary.summaryBasis,
-      })
-
-      sentCount += 1
     }
 
     if (failedItems.length > 0) {
@@ -248,7 +237,6 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
           failedItems,
           'breaking'
         )
-        console.log(`[breaking] 관리자 오류 메일 발송 완료: userId=${userId}`)
       } catch (adminMailError) {
         console.error(`[breaking] 관리자 오류 메일 발송 실패: userId=${userId}`, adminMailError)
       }
@@ -256,12 +244,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
 
     return {
       status: 200,
-      body: {
-        success: true,
-        sentCount,
-        totalBreaking: breakingVideos.length,
-        skipped: breakingVideos.length - sentCount,
-      },
+      body: { success: true, sentCount, matched: matched.length, skipped },
     }
   } catch (error) {
     console.error('Breaking route error:', error)

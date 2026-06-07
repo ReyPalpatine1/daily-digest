@@ -1,11 +1,11 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getChannelId, getYesterdayVideos } from '@/lib/youtube'
+import { getChannelId } from '@/lib/youtube'
 import { yesterdayRangeUtc, formatDateKst } from '@/lib/time'
-import { summarizeVideo, getTranscript } from '@/lib/gemini'
 import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, sendEmptyDigestEmail, DigestTrigger } from '@/lib/mailer'
 import { syncUserPlan } from '@/lib/plan-sync'
-import { markScheduledSent, markScheduledFailed, logManualSend } from '@/lib/send-guard'
+import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
+import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword } from '@/lib/video-pool'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
@@ -16,10 +16,8 @@ const supabase = createClient(
 
 export const maxDuration = 60
 
-// Tier 1 유료 전환: 60초 timeout 안에 안전한 상한
+// 한 번 발송에서 처리할 영상 상한 (60초 budget 보호)
 const MAX_VIDEOS_PER_RUN = 20
-// 한 묶음에 동시에 처리할 영상 수 (Tier 1 분당 150건 한도 내에서 안전)
-const CONCURRENCY = 5
 
 export async function POST(req: Request) {
   let body: any
@@ -107,228 +105,169 @@ async function runDigest(
       return { status: 200, body: { message: '채널 없음' } }
     }
 
-    const digestItems = []
-    const failedItems = []
-    const keywords: string[] = settings.breaking_keywords ?? ['속보']
-
-    // 수동 발송("지금 실행하기")은 사용자가 일부러 누른 거니 중복 체크 스킵 — 항상 다시 처리/발송
-    // 자동 발송(cron)은 같은 영상 중복 발송 방지를 위해 기존 처리분 제외
+    const userName = profile?.name ?? '사용자'
     const isManual = trigger === 'manual'
     // 수동 발송은 통계용으로만 기록 (멱등성과 무관, best-effort)
     if (isManual) void logManualSend(userId)
-    let processedVideoIds = new Set<string>()
-    if (!isManual) {
-      const { data: existingDigests } = await supabase
-        .from('digests')
-        .select('video_id')
-        .eq('user_id', userId)
-      processedVideoIds = new Set((existingDigests ?? []).map(d => d.video_id))
-    }
 
-    // 1단계: 모든 채널의 영상을 수집
-    type Channel = (typeof channels)[number]
-    type Video = Awaited<ReturnType<typeof getYesterdayVideos>>[number]
-    type VideoTask = { channel: Channel; video: Video }
-    const videoTasks: VideoTask[] = []
-    const seenInThisRun = new Set<string>() // 같은 채널/실행 내 중복 방지
-    let rawVideoCount = 0 // 쇼츠제외 후, 어제 올라온 영상 총개수 (빈 다이제스트 판정용)
-    let dedupSkipped = 0 // dedup(이미 처리/중복)으로 제외된 개수
+    // 사용자 속보 키워드 (사용자별 판정용)
+    const keywords: string[] = settings.breaking_keywords ?? []
 
-    // 어제 범위가 정상인지 즉시 확인 가능하게 1회 로깅
-    const dbgRange = yesterdayRangeUtc('Asia/Seoul')
-    console.log(`📅 어제범위 UTC: ${dbgRange.start.toISOString()} ~ ${dbgRange.end.toISOString()}`)
-    console.log(`📅 KST환산: ${formatDateKst(dbgRange.start)} ~ ${formatDateKst(dbgRange.end)}`)
-
-    for (const channel of channels) {
-      let channelId = channel.channel_id
+    // 채널 메타 맵 (channel_id → alias/emoji/category). channel_id 없으면 1회 보정.
+    const channelMeta = new Map<string, { alias: string; emoji: string; category: string }>()
+    for (const ch of channels) {
+      let channelId = ch.channel_id
       if (!channelId) {
-        channelId = await getChannelId(channel.url, userId)
+        channelId = await getChannelId(ch.url, userId)
         if (channelId) {
-          await supabase
-            .from('channels')
-            .update({ channel_id: channelId })
-            .eq('id', channel.id)
+          await supabase.from('channels').update({ channel_id: channelId }).eq('id', ch.id)
         }
       }
       if (!channelId) continue
-
-      const videos = await getYesterdayVideos(channelId, userId)
-      rawVideoCount += videos.length
-      for (const video of videos) {
-        if (seenInThisRun.has(video.videoId)) { dedupSkipped++; continue }
-        // manual=true이면 processedVideoIds는 비어있으므로 항상 통과 (재처리)
-        if (processedVideoIds.has(video.videoId)) { dedupSkipped++; continue }
-        seenInThisRun.add(video.videoId)
-        videoTasks.push({ channel, video })
-        if (videoTasks.length >= MAX_VIDEOS_PER_RUN) break
-      }
-      if (videoTasks.length >= MAX_VIDEOS_PER_RUN) {
-        console.log(`⚠️ 최대 처리 한도 ${MAX_VIDEOS_PER_RUN}개 도달, 나머지는 다음 실행으로 이월`)
-        break
+      if (!channelMeta.has(channelId)) {
+        channelMeta.set(channelId, {
+          alias: ch.alias,
+          emoji: ch.emoji,
+          category: (ch as any).categories?.name ?? '미분류',
+        })
       }
     }
+    const channelIds = [...channelMeta.keys()]
 
+    // 어제 범위 (KST) — 진단 로그
+    const { start, end } = yesterdayRangeUtc('Asia/Seoul')
+    console.log(`📅 어제범위 UTC: ${start.toISOString()} ~ ${end.toISOString()}`)
+    console.log(`📅 KST환산: ${formatDateKst(start)} ~ ${formatDateKst(end)}`)
+
+    // 공유 풀에서 어제 영상 조회 (쇼츠 제외) → 상한 컷
+    const poolVideos = (await getVideosFromPool(channelIds, start, end)).slice(0, MAX_VIDEOS_PER_RUN)
+    const rawVideoCount = poolVideos.length
+    const videoIds = poolVideos.map(v => v.video_id)
+
+    // 요약 조인 (공유 캐시)
+    let summaries = await getSummariesFromPool(videoIds)
+
+    // 폴백 C: 요약 없는 영상 즉시 요약 후 재조회 (누락 0 보장)
+    const missingIds = videoIds.filter(id => !summaries.has(id))
+    let summarizedNow = 0
+    if (missingIds.length > 0) {
+      console.log(`⚡ 즉시 요약 필요(폴백 C): ${missingIds.length}개`)
+      summarizedNow = await summarizeNow(missingIds)
+      summaries = await getSummariesFromPool(videoIds)
+    }
     console.log(
-      `🎬 ${isManual ? '수동' : '자동'} 발송: 처리 대상 영상 ${videoTasks.length}개 (동시 처리: ${CONCURRENCY}개씩)`
-    )
-    // 0개의 출처 구분용: API/쇼츠 단계는 youtube.ts 로그, dedup/최종은 여기서
-    console.log(
-      `📊 어제(쇼츠제외) ${rawVideoCount}개 → dedup제외 ${dedupSkipped}개 → 최종 처리대상 ${videoTasks.length}개`
+      `📊 풀 영상 ${rawVideoCount}개 | 캐시히트 ${rawVideoCount - missingIds.length}개 | 즉시요약 ${summarizedNow}개 (${isManual ? '수동' : '자동'})`
     )
 
-    // 처리할 영상이 없는 경우 (어제 새 영상 0개 or 이미 처리된 영상뿐)
-    if (videoTasks.length === 0) {
-      // 어제 새 영상이 전혀 없던 날만 "영상 없음" 안내 (cron + notify_when_empty 한정)
-      if (trigger === 'cron' && rawVideoCount === 0 && settings.notify_when_empty !== false) {
+    // 영상 0개 처리
+    if (rawVideoCount === 0) {
+      if (trigger === 'cron' && settings.notify_when_empty !== false) {
         try {
-          await sendEmptyDigestEmail(settings.email, profile?.name ?? '사용자', userLocale, userId)
+          await sendEmptyDigestEmail(settings.email, userName, userLocale, userId)
         } catch (e) {
           console.error(`[digest] 빈 다이제스트 메일 발송 실패 userId=${userId}:`, e)
         }
       }
-      // 0개여도 정각 발송은 "오늘 처리함"으로 마감 (재시도 방지)
       if (trigger === 'cron') await markScheduledSent(userId)
-      // 수동 발송은 빈 메일 대신 화면(응답)으로 즉시 안내 (방법 B)
       const message = userLocale === 'en'
         ? 'No new videos were uploaded yesterday.'
         : '어제 올라온 새 영상이 없어요.'
       return {
         status: 200,
-        body: { success: true, sent: 0, succeeded: 0, processed: 0, failed: 0, total: 0, empty: rawVideoCount === 0, message },
+        body: { success: true, sent: 0, succeeded: 0, processed: 0, failed: 0, total: 0, empty: true, message },
       }
     }
 
-    // 단일 영상 처리 함수
-    const processVideo = async (task: VideoTask) => {
-      const vStart = Date.now()
-      const { channel, video } = task
-      const tStart = Date.now()
-      const { transcript, description } = await getTranscript(video.videoId, userId)
-      const tElapsed = Date.now() - tStart
-      const sStart = Date.now()
-      const summary = await summarizeVideo(userId, video.title, transcript, description)
-      const sElapsed = Date.now() - sStart
-      const isBreaking = keywords.some(kw => video.title.includes(kw))
-      const categoryName = (channel as any).categories?.name ?? '미분류'
-
-      const digestItem = {
-        channel: channel.alias,
-        category: categoryName,
-        emoji: channel.emoji,
-        video,
-        summary,
+    // 다이제스트 아이템 구성 (공유 요약 + 사용자별 속보 판정)
+    const digestItems = []
+    const failedItems = []
+    for (const v of poolVideos) {
+      const meta = channelMeta.get(v.channel_id) ?? { alias: '채널', emoji: '📺', category: '미분류' }
+      const s = summaries.get(v.video_id)
+      const isBreaking = matchesKeyword(v.title, keywords)
+      const url = `https://youtube.com/watch?v=${v.video_id}`
+      const item = {
+        channel: meta.alias,
+        category: meta.category,
+        emoji: meta.emoji,
+        video: {
+          videoId: v.video_id,
+          title: v.title,
+          publishedAt: v.published_at,
+          channelTitle: meta.alias,
+          url,
+        },
+        summary: {
+          summary: s?.summary ?? '요약을 준비 중이에요.',
+          keyPoints: s?.key_points ?? [],
+          timeline: s?.timeline ?? [],
+          summaryBasis: s?.model ? `공유 요약 (${s.model})` : '공유 요약',
+        },
         isBreaking,
       }
-
-      const dbStart = Date.now()
-      // (user_id, video_id) UNIQUE 위에서 upsert: 수동 재발송 시 행을 새로 만들지 않고
-      // 기존 행의 요약/타임라인을 새 결과로 갱신. cron 재시도에도 안전한 멱등 처리.
-      await supabase.from('digests').upsert(
-        {
-          user_id: userId,
-          channel_alias: channel.alias,
-          channel_emoji: channel.emoji,
-          category_name: categoryName,
-          video_id: video.videoId,
-          video_title: video.title,
-          video_url: video.url,
-          published_at: video.publishedAt,
-          summary: summary.summary,
-          key_points: summary.keyPoints,
-          timeline: summary.timeline,
-          is_breaking: isBreaking,
-          is_read: false,
-          summary_basis: summary.summaryBasis,
-        },
-        { onConflict: 'user_id,video_id' }
-      )
-      const dbElapsed = Date.now() - dbStart
-
-      let breakingElapsed = 0
-      if (settings.breaking_alert && isBreaking) {
-        const bStart = Date.now()
-        await sendBreakingAlert(
-          settings.email,
-          profile?.name ?? '사용자',
-          digestItem,
-          userLocale,
-          userId
-        )
-        breakingElapsed = Date.now() - bStart
-      }
-
-      console.log(
-        `🎞 [video ${video.videoId}] total=${Date.now() - vStart}ms ` +
-          `transcript=${tElapsed}ms gemini=${sElapsed}ms db=${dbElapsed}ms` +
-          (breakingElapsed ? ` breaking=${breakingElapsed}ms` : '')
-      )
-
-      return digestItem
-    }
-
-    // 2단계: CONCURRENCY 묶음으로 병렬 처리 (Promise.allSettled로 부분 실패 허용)
-    for (let i = 0; i < videoTasks.length; i += CONCURRENCY) {
-      const batch = videoTasks.slice(i, i + CONCURRENCY)
-      const batchNum = Math.floor(i / CONCURRENCY) + 1
-      const totalBatches = Math.ceil(videoTasks.length / CONCURRENCY)
-      const batchStart = Date.now()
-      console.log(`▶ 묶음 ${batchNum}/${totalBatches} 시작 (영상 ${batch.length}개)`)
-      const batchResults = await Promise.allSettled(batch.map(processVideo))
-      console.log(`◀ 묶음 ${batchNum}/${totalBatches} 완료 (${Date.now() - batchStart}ms)`)
-      for (let j = 0; j < batchResults.length; j++) {
-        const result = batchResults[j]
-        const task = batch[j]
-        if (result.status === 'fulfilled') {
-          const item = result.value
-          digestItems.push(item)
-          if (item.summary.errorInfo) {
-            failedItems.push({
-              channel: item.channel,
-              category: item.category,
-              emoji: item.emoji,
-              videoTitle: item.video.title,
-              videoUrl: item.video.url,
-              errorInfo: item.summary.errorInfo,
-              attempts: item.summary.attempts,
-            })
-          }
-        } else {
-          console.error(`❌ 영상 처리 실패 (${task.video.videoId}):`, result.reason)
-          failedItems.push({
-            channel: task.channel.alias,
-            category: (task.channel as any).categories?.name ?? '미분류',
-            emoji: task.channel.emoji,
-            videoTitle: task.video.title,
-            videoUrl: task.video.url,
-            errorInfo: result.reason instanceof Error ? result.reason.message : String(result.reason),
-          })
-        }
+      digestItems.push(item)
+      if (!s) {
+        failedItems.push({
+          channel: meta.alias,
+          category: meta.category,
+          emoji: meta.emoji,
+          videoTitle: v.title,
+          videoUrl: url,
+          errorInfo: '요약 없음 (풀 미스 + 즉시요약 실패)',
+        })
       }
     }
 
     // 다이제스트 이메일 발송
     if (digestItems.length > 0) {
-      await sendDigestEmail(
-        settings.email,
-        profile?.name ?? '사용자',
-        digestItems,
-        userLocale,
-        userId
+      await sendDigestEmail(settings.email, userName, digestItems, userLocale, userId)
+    }
+
+    // 속보 표시 영상은 속보 메일도 (Pro & breaking_alert 켜짐) — 사용자별 키워드 기준.
+    // breaking 라우트와 (user_id, video_id) 멱등성을 공유해 중복 발송 방지.
+    if (settings.breaking_alert && isPro) {
+      for (const item of digestItems) {
+        if (!item.isBreaking) continue
+        const canSend = await tryStartBreaking(userId, item.video.videoId)
+        if (!canSend) continue
+        try {
+          await sendBreakingAlert(settings.email, userName, item, userLocale, userId)
+          await markBreakingSent(userId, item.video.videoId)
+        } catch (e) {
+          await markBreakingFailed(userId, item.video.videoId, String(e))
+          console.error(`[digest] 속보 메일 실패 (${item.video.videoId}):`, e)
+        }
+      }
+    }
+
+    // 히스토리/읽음 표시용 digests 사용자별 기록 (upsert, 멱등)
+    for (const item of digestItems) {
+      await supabase.from('digests').upsert(
+        {
+          user_id: userId,
+          channel_alias: item.channel,
+          channel_emoji: item.emoji,
+          category_name: item.category,
+          video_id: item.video.videoId,
+          video_title: item.video.title,
+          video_url: item.video.url,
+          published_at: item.video.publishedAt,
+          summary: item.summary.summary,
+          key_points: item.summary.keyPoints,
+          timeline: item.summary.timeline,
+          is_breaking: item.isBreaking,
+          is_read: false,
+          summary_basis: item.summary.summaryBasis,
+        },
+        { onConflict: 'user_id,video_id' }
       )
     }
 
-    // 오류 항목 번들 메일 발송 — 실패해도 디지스트 응답엔 영향 없게
+    // 오류 항목 번들 메일 (요약 누락 등) — 실패해도 응답엔 영향 없게
     if (failedItems.length > 0) {
       console.log(`[digest] 관리자 오류 메일 발송 시도: userId=${userId}, failedCount=${failedItems.length}`)
       try {
-        await sendAdminBulkErrorEmail(
-          profile?.name ?? '사용자',
-          settings.email,
-          userId,
-          failedItems,
-          trigger
-        )
-        console.log(`[digest] 관리자 오류 메일 발송 완료: userId=${userId}`)
+        await sendAdminBulkErrorEmail(userName, settings.email, userId, failedItems, trigger)
       } catch (adminMailError) {
         console.error(`[digest] 관리자 오류 메일 발송 실패: userId=${userId}`, adminMailError)
       }
@@ -338,10 +277,9 @@ async function runDigest(
     await supabase.rpc('delete_old_digests')
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-    const successCount = digestItems.filter(i => !i.summary.errorInfo).length
-    const failedCount = failedItems.length
+    const successCount = digestItems.length - failedItems.length
     console.log(
-      `📊 처리 완료: 성공 ${successCount}개, 실패 ${failedCount}개, 소요시간 ${elapsed}초 (userId=${userId})`
+      `📊 처리 완료(공유풀): 성공 ${successCount}개, 실패 ${failedItems.length}개, 소요 ${elapsed}초 (userId=${userId})`
     )
 
     // 정각 발송 완료 기록 (멱등성: 같은 날 재실행 방지)
@@ -354,8 +292,10 @@ async function runDigest(
         sent: digestItems.length,
         succeeded: successCount,
         processed: successCount, // 클라이언트 호환용 별칭
-        failed: failedCount,
-        total: videoTasks.length,
+        failed: failedItems.length,
+        total: rawVideoCount,
+        cacheHits: rawVideoCount - missingIds.length,
+        summarizedNow,
         elapsedSeconds: Number(elapsed),
       },
     }

@@ -81,6 +81,65 @@ export async function markScheduledFailed(userId: string, error: string): Promis
     .eq('send_date', today)
 }
 
+// ── 속보 발송 멱등성 (user_id, video_id) ─────────────────────
+// 정각과 동일한 3단계 상태 + 5분 타임아웃 패턴. send_log type='breaking'.
+export async function tryStartBreaking(userId: string, videoId: string): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from('send_log')
+    .select('id, status, started_at')
+    .eq('user_id', userId)
+    .eq('type', 'breaking')
+    .eq('video_id', videoId)
+    .maybeSingle()
+
+  if (existing) {
+    if (existing.status === 'sent') return false
+    if (existing.status === 'sending') {
+      const elapsed = Date.now() - new Date(existing.started_at).getTime()
+      if (elapsed < STALE_MINUTES * 60 * 1000) return false
+      await supabase
+        .from('send_log')
+        .update({ status: 'sending', started_at: nowUtc().toISOString() })
+        .eq('id', existing.id)
+      return true
+    }
+    // failed → 재시도
+    await supabase
+      .from('send_log')
+      .update({ status: 'sending', started_at: nowUtc().toISOString(), error_message: null })
+      .eq('id', existing.id)
+    return true
+  }
+
+  // partial unique index (user_id, video_id) WHERE type='breaking'가 동시성 방어
+  const { error } = await supabase.from('send_log').insert({
+    user_id: userId,
+    type: 'breaking',
+    video_id: videoId,
+    status: 'sending',
+  })
+  if (error) return false
+  return true
+}
+
+export async function markBreakingSent(userId: string, videoId: string): Promise<void> {
+  await supabase
+    .from('send_log')
+    .update({ status: 'sent', completed_at: nowUtc().toISOString() })
+    .eq('user_id', userId)
+    .eq('type', 'breaking')
+    .eq('video_id', videoId)
+}
+
+export async function markBreakingFailed(userId: string, videoId: string, error: string): Promise<void> {
+  await supabase
+    .from('send_log')
+    .update({ status: 'failed', error_message: error.slice(0, 500), completed_at: nowUtc().toISOString() })
+    .eq('user_id', userId)
+    .eq('type', 'breaking')
+    .eq('video_id', videoId)
+}
+
 // 수동("지금 실행하기") 발송 기록 — 통계용, 멱등성과 무관(unique 제약 없음).
 // 실패해도 발송 흐름을 막지 않도록 best-effort.
 export async function logManualSend(userId: string): Promise<void> {

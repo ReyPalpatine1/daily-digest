@@ -261,6 +261,27 @@ async function processInBatches<T>(items: T[], size: number, fn: (item: T) => Pr
   }
 }
 
+// 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
+async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
+  const { transcript, description } = await getTranscript(video.video_id) // userId 없음 (공유)
+  const result = await summarizeVideo(null, video.title, transcript, video.description ?? description)
+  const { error } = await supabase.from('video_summaries').upsert(
+    {
+      video_id: video.video_id,
+      summary: result.summary,
+      key_points: result.keyPoints, // JSONB (배열 그대로)
+      timeline: result.timeline, // JSONB
+      model: result.model ?? null,
+    },
+    { onConflict: 'video_id' }
+  )
+  if (error) {
+    console.error(`❌ video_summaries 적재 실패 (${video.video_id}): ${error.message}`)
+    return false
+  }
+  return true
+}
+
 // 미요약 영상 요약 → video_summaries 적재 (영상당 1번, 전역 공유). 요약한 개수 반환.
 export async function summarizePendingVideos(): Promise<number> {
   const pending = await getVideosWithoutSummary()
@@ -269,23 +290,103 @@ export async function summarizePendingVideos(): Promise<number> {
 
   let done = 0
   await processInBatches(pending, SUMMARY_CONCURRENCY, async (video) => {
-    const { transcript, description } = await getTranscript(video.video_id) // userId 없음 (공유)
-    const result = await summarizeVideo(null, video.title, transcript, video.description ?? description)
-    const { error } = await supabase.from('video_summaries').upsert(
-      {
-        video_id: video.video_id,
-        summary: result.summary,
-        key_points: result.keyPoints, // JSONB (배열 그대로)
-        timeline: result.timeline, // JSONB
-        model: result.model ?? null,
-      },
-      { onConflict: 'video_id' }
-    )
-    if (error) console.error(`❌ video_summaries 적재 실패 (${video.video_id}): ${error.message}`)
-    else done++
+    if (await summarizeAndStore(video)) done++
   })
   console.log(`🤖 요약 완료: ${done}개`)
   return done
+}
+
+// ── 4c 발송용: 공유 풀 조회 ───────────────────────────────────
+export type PoolVideo = {
+  video_id: string
+  channel_id: string
+  title: string
+  published_at: string
+  duration_seconds: number | null
+  is_short: boolean
+  description: string | null
+}
+
+export type PoolSummary = {
+  video_id: string
+  summary: string | null
+  key_points: string[] | null
+  timeline: { time: string; content: string }[] | null
+  model: string | null
+}
+
+// 채널들의 특정 기간(UTC) 영상 (쇼츠 제외, 공유 풀)
+export async function getVideosFromPool(channelIds: string[], start: Date, end: Date): Promise<PoolVideo[]> {
+  if (!channelIds.length) return []
+  const { data } = await supabase
+    .from('videos')
+    .select('video_id, channel_id, title, published_at, duration_seconds, is_short, description')
+    .in('channel_id', channelIds)
+    .gte('published_at', start.toISOString())
+    .lt('published_at', end.toISOString())
+    .eq('is_short', false)
+    .order('published_at', { ascending: false })
+  return (data ?? []) as PoolVideo[]
+}
+
+// 채널들의 최근(sinceUtc 이후) 영상 — 속보 감지용 (쇼츠 제외)
+export async function getRecentPoolVideos(channelIds: string[], sinceUtc: Date): Promise<PoolVideo[]> {
+  if (!channelIds.length) return []
+  const { data } = await supabase
+    .from('videos')
+    .select('video_id, channel_id, title, published_at, duration_seconds, is_short, description')
+    .in('channel_id', channelIds)
+    .gte('published_at', sinceUtc.toISOString())
+    .eq('is_short', false)
+    .order('published_at', { ascending: false })
+    .limit(200)
+  return (data ?? []) as PoolVideo[]
+}
+
+// 영상 요약 일괄 조회 (Map)
+export async function getSummariesFromPool(videoIds: string[]): Promise<Map<string, PoolSummary>> {
+  const map = new Map<string, PoolSummary>()
+  if (!videoIds.length) return map
+  const { data } = await supabase
+    .from('video_summaries')
+    .select('video_id, summary, key_points, timeline, model')
+    .in('video_id', videoIds)
+  for (const s of (data ?? []) as PoolSummary[]) map.set(s.video_id, s)
+  return map
+}
+
+// 단일 영상 요약 조회 (속보 폴백용)
+export async function getSummary(videoId: string): Promise<PoolSummary | null> {
+  const { data } = await supabase
+    .from('video_summaries')
+    .select('video_id, summary, key_points, timeline, model')
+    .eq('video_id', videoId)
+    .maybeSingle()
+  return (data as PoolSummary) ?? null
+}
+
+// 폴백 C: 풀에 요약이 없는 영상을 즉시 요약 (videos에 있는 영상 대상). 요약한 개수 반환.
+export async function summarizeNow(videoIds: string[]): Promise<number> {
+  if (!videoIds.length) return 0
+  const { data } = await supabase
+    .from('videos')
+    .select('video_id, title, description')
+    .in('video_id', videoIds)
+  const targets = (data ?? []) as PendingVideo[]
+  if (!targets.length) return 0
+
+  let done = 0
+  await processInBatches(targets, SUMMARY_CONCURRENCY, async (video) => {
+    if (await summarizeAndStore(video)) done++
+  })
+  return done
+}
+
+// 사용자별 속보 키워드 매칭 (공유 풀엔 is_breaking 없음 → 발송 시 각자 판정)
+export function matchesKeyword(title: string, keywords: string[] | null | undefined): boolean {
+  if (!keywords || keywords.length === 0) return false
+  const lower = title.toLowerCase()
+  return keywords.some(kw => kw && lower.includes(kw.trim().toLowerCase()))
 }
 
 // ── 오케스트레이터 ────────────────────────────────────────────
