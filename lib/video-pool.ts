@@ -1,25 +1,32 @@
-// 4a단계: 채널 공유 구조용 헬퍼 (설계/진단 단계).
+// 4b단계: 채널 공유 "수집" 로직 (사용자 무관, 영상당 1번 요약 캐시).
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버에서만 import.
-// ⚠️ 아직 발송 흐름에 연결되지 않음. 4b(수집)에서 사용 예정.
+// ⚠️ 아직 발송 흐름에 연결되지 않음 (4c에서 전환). 기존 digests 발송은 그대로 동작.
 import { createClient } from '@supabase/supabase-js'
+import { nowUtc } from './time'
+import { getTranscript, summarizeVideo } from './gemini'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
+
+// 채널당 playlistItems 페이지 상한 (쿼터/시간 보호)
+const MAX_PAGES = 5
+// 한 번 수집 실행에서 요약할 영상 상한 (60초 budget 보호)
+const SUMMARY_LIMIT = 20
+// 요약 동시 처리 수
+const SUMMARY_CONCURRENCY = 5
+
 export type UniqueChannel = {
   channelId: string
   uploadsPlaylistId: string | null
 }
 
-// 활성 사용자들이 구독한 "고유 채널" 목록 (중복 제거).
-// 같은 채널을 N명이 구독해도 1번만 조회하기 위한 수집 대상 산출용.
-//   - 활성 사용자(settings.active=true)의
-//   - 활성 채널(is_active != false)이면서 channel_id가 채워진 것만
-//   - channel_id 기준 DISTINCT
+// ── 고유 채널 목록 ─────────────────────────────────────────────
+// 활성 사용자들이 구독한 "고유 채널" (channel_id 기준 DISTINCT).
 export async function getUniqueChannels(): Promise<UniqueChannel[]> {
-  // 1) 활성 사용자 id
   const { data: activeSettings } = await supabase
     .from('settings')
     .select('user_id')
@@ -28,13 +35,11 @@ export async function getUniqueChannels(): Promise<UniqueChannel[]> {
   const activeUserIds = (activeSettings ?? []).map(s => s.user_id)
   if (!activeUserIds.length) return []
 
-  // 2) 활성 사용자들의 활성 채널 (channel_id 보유)
   const { data: channels } = await supabase
     .from('channels')
     .select('channel_id, uploads_playlist_id, is_active')
     .in('user_id', activeUserIds)
 
-  // 3) channel_id 기준 DISTINCT (uploads_playlist_id는 있는 값 우선 보존)
   const byChannel = new Map<string, UniqueChannel>()
   for (const c of channels ?? []) {
     const channelId = (c as any).channel_id as string | null
@@ -42,12 +47,266 @@ export async function getUniqueChannels(): Promise<UniqueChannel[]> {
     if ((c as any).is_active === false) continue
     const uploadsPlaylistId = ((c as any).uploads_playlist_id as string | null) ?? null
     const existing = byChannel.get(channelId)
-    if (!existing) {
-      byChannel.set(channelId, { channelId, uploadsPlaylistId })
-    } else if (!existing.uploadsPlaylistId && uploadsPlaylistId) {
-      existing.uploadsPlaylistId = uploadsPlaylistId
+    if (!existing) byChannel.set(channelId, { channelId, uploadsPlaylistId })
+    else if (!existing.uploadsPlaylistId && uploadsPlaylistId) existing.uploadsPlaylistId = uploadsPlaylistId
+  }
+  return [...byChannel.values()]
+}
+
+// ── YouTube 헬퍼 ──────────────────────────────────────────────
+// ISO8601 (PT1M30S) → 초
+function parseDurationToSeconds(duration: string): number {
+  const m = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!m) return 0
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
+}
+
+// 쇼츠 판별 (길이 ≤ 60초 또는 제목에 #shorts)
+export function isShort(durationSeconds?: number, title?: string): boolean {
+  if (durationSeconds != null && durationSeconds > 0 && durationSeconds <= 60) return true
+  if (title && /#shorts/i.test(title)) return true
+  return false
+}
+
+// 채널의 업로드 재생목록 ID (channels.list contentDetails, 1 unit)
+async function getUploadsPlaylistId(channelId: string): Promise<string | null> {
+  const res = await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${YOUTUBE_API_KEY}`
+  )
+  const data = await res.json()
+  if (!res.ok || data.error) {
+    console.error(`❌ channels.list 오류 (channel=${channelId}): ${data.error?.message ?? res.status}`)
+    return null
+  }
+  return data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads ?? null
+}
+
+type PlaylistVideo = { videoId: string; title: string; publishedAt: string }
+
+// playlistItems 한 페이지 (1 unit)
+async function fetchPlaylistItems(
+  playlistId: string,
+  pageToken?: string
+): Promise<{ items: PlaylistVideo[]; nextPageToken?: string; error?: boolean }> {
+  const url =
+    `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails` +
+    `&playlistId=${playlistId}&maxResults=50&key=${YOUTUBE_API_KEY}` +
+    (pageToken ? `&pageToken=${pageToken}` : '')
+  const res = await fetch(url)
+  const data = await res.json()
+  if (!res.ok || data.error) {
+    console.error(`❌ playlistItems 오류 (playlist=${playlistId}): ${data.error?.message ?? res.status}`)
+    return { items: [], error: true }
+  }
+  const items: PlaylistVideo[] = (data.items ?? []).map((it: any) => ({
+    videoId: it.contentDetails?.videoId,
+    title: it.snippet?.title ?? '',
+    // 업로드 시각: contentDetails.videoPublishedAt 우선 (UTC ISO)
+    publishedAt: it.contentDetails?.videoPublishedAt ?? it.snippet?.publishedAt,
+  })).filter((v: PlaylistVideo) => Boolean(v.videoId) && Boolean(v.publishedAt))
+  return { items, nextPageToken: data.nextPageToken }
+}
+
+type VideoDetail = { durationSeconds: number; description: string; title: string }
+
+// 영상 상세 배치 (videos.list contentDetails+snippet, 50개당 1 unit)
+async function getVideoDetailsBatch(videoIds: string[]): Promise<Map<string, VideoDetail>> {
+  const out = new Map<string, VideoDetail>()
+  for (let i = 0; i < videoIds.length; i += 50) {
+    const batch = videoIds.slice(i, i + 50)
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${batch.join(',')}&key=${YOUTUBE_API_KEY}`
+    )
+    const data = await res.json()
+    if (!res.ok || data.error) {
+      console.error(`❌ videos.list 오류: ${data.error?.message ?? res.status}`)
+      continue
+    }
+    for (const v of data.items ?? []) {
+      out.set(v.id, {
+        durationSeconds: parseDurationToSeconds(v.contentDetails?.duration ?? ''),
+        description: (v.snippet?.description ?? '').slice(0, 2000),
+        title: v.snippet?.title ?? '',
+      })
+    }
+  }
+  return out
+}
+
+// ── 채널 영상 수집 ────────────────────────────────────────────
+type ChannelState = {
+  uploads_playlist_id: string | null
+  last_video_published_at: string | null
+}
+
+async function getChannelState(channelId: string): Promise<ChannelState | null> {
+  const { data } = await supabase
+    .from('channel_fetch_state')
+    .select('uploads_playlist_id, last_video_published_at')
+    .eq('channel_id', channelId)
+    .maybeSingle()
+  return (data as ChannelState) ?? null
+}
+
+// 한 채널의 새 영상을 videos 테이블에 적재. 새로 적재한 개수 반환.
+async function collectChannelVideos(channel: UniqueChannel): Promise<number> {
+  const state = await getChannelState(channel.channelId)
+
+  // uploads 재생목록 ID (캐시 우선)
+  let playlistId = state?.uploads_playlist_id ?? channel.uploadsPlaylistId ?? null
+  if (!playlistId) {
+    playlistId = await getUploadsPlaylistId(channel.channelId)
+    if (playlistId) {
+      // channels 행에도 캐시 (해당 채널 구독 행 전부)
+      await supabase.from('channels').update({ uploads_playlist_id: playlistId }).eq('channel_id', channel.channelId)
+    }
+  }
+  if (!playlistId) {
+    console.log(`📡 ${channel.channelId}: uploads 재생목록 없음 → 스킵`)
+    return 0
+  }
+
+  const lastSeen = state?.last_video_published_at ? new Date(state.last_video_published_at) : null
+
+  // 새 영상 수집 (last_video_published_at 이후만)
+  const newVideos: PlaylistVideo[] = []
+  let pageToken: string | undefined
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await fetchPlaylistItems(playlistId, pageToken)
+    if (res.error) break
+
+    let reachedOld = false
+    for (const item of res.items) {
+      const published = new Date(item.publishedAt)
+      if (lastSeen && published <= lastSeen) { reachedOld = true; break }
+      newVideos.push(item)
+    }
+    if (reachedOld || !res.nextPageToken) break
+    pageToken = res.nextPageToken
+  }
+
+  if (newVideos.length === 0) {
+    // 그래도 조회 시각은 갱신
+    await upsertChannelState(channel.channelId, playlistId, lastSeen?.toISOString() ?? null)
+    console.log(`📡 ${channel.channelId}: 새 영상 0개`)
+    return 0
+  }
+
+  // 상세(길이/설명) 배치 조회 → 쇼츠 판별 + videos upsert
+  const details = await getVideoDetailsBatch(newVideos.map(v => v.videoId))
+  const rows = newVideos.map(v => {
+    const d = details.get(v.videoId)
+    return {
+      video_id: v.videoId,
+      channel_id: channel.channelId,
+      title: v.title || d?.title || '',
+      published_at: v.publishedAt, // UTC 그대로
+      duration_seconds: d?.durationSeconds ?? null,
+      is_short: isShort(d?.durationSeconds, v.title || d?.title),
+      description: d?.description ?? null,
+      fetched_at: nowUtc().toISOString(),
+    }
+  })
+  // video_id PRIMARY KEY → upsert로 중복 자동 방지
+  await supabase.from('videos').upsert(rows, { onConflict: 'video_id' })
+
+  // 가장 최신 영상의 publishedAt으로 상태 갱신 (newVideos[0]이 최신)
+  const newest = newVideos.reduce((a, b) => (new Date(a.publishedAt) >= new Date(b.publishedAt) ? a : b))
+  await upsertChannelState(channel.channelId, playlistId, newest.publishedAt)
+
+  console.log(`📡 ${channel.channelId}: 새 영상 ${rows.length}개 적재`)
+  return rows.length
+}
+
+async function upsertChannelState(channelId: string, playlistId: string | null, lastVideoPublishedAt: string | null) {
+  await supabase.from('channel_fetch_state').upsert(
+    {
+      channel_id: channelId,
+      uploads_playlist_id: playlistId,
+      last_fetched_at: nowUtc().toISOString(),
+      last_video_published_at: lastVideoPublishedAt,
+    },
+    { onConflict: 'channel_id' }
+  )
+}
+
+// ── 공유 요약 (영상당 1번) ────────────────────────────────────
+type PendingVideo = { video_id: string; title: string; description: string | null }
+
+// 아직 요약이 없는 (쇼츠 아닌) 영상 목록
+async function getVideosWithoutSummary(): Promise<PendingVideo[]> {
+  const { data: vids } = await supabase
+    .from('videos')
+    .select('video_id, title, description')
+    .eq('is_short', false)
+    .order('published_at', { ascending: false })
+    .limit(200)
+
+  const candidates = (vids ?? []) as PendingVideo[]
+  if (!candidates.length) return []
+
+  const { data: existing } = await supabase
+    .from('video_summaries')
+    .select('video_id')
+    .in('video_id', candidates.map(v => v.video_id))
+
+  const have = new Set((existing ?? []).map(e => (e as any).video_id))
+  return candidates.filter(v => !have.has(v.video_id)).slice(0, SUMMARY_LIMIT)
+}
+
+// 동시성 제한 배치 처리
+async function processInBatches<T>(items: T[], size: number, fn: (item: T) => Promise<void>): Promise<void> {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.allSettled(items.slice(i, i + size).map(fn))
+  }
+}
+
+// 미요약 영상 요약 → video_summaries 적재 (영상당 1번, 전역 공유). 요약한 개수 반환.
+export async function summarizePendingVideos(): Promise<number> {
+  const pending = await getVideosWithoutSummary()
+  console.log(`🤖 요약 대기: ${pending.length}개`)
+  if (!pending.length) return 0
+
+  let done = 0
+  await processInBatches(pending, SUMMARY_CONCURRENCY, async (video) => {
+    const { transcript, description } = await getTranscript(video.video_id) // userId 없음 (공유)
+    const result = await summarizeVideo(null, video.title, transcript, video.description ?? description)
+    const { error } = await supabase.from('video_summaries').upsert(
+      {
+        video_id: video.video_id,
+        summary: result.summary,
+        key_points: result.keyPoints, // JSONB (배열 그대로)
+        timeline: result.timeline, // JSONB
+        model: result.model ?? null,
+      },
+      { onConflict: 'video_id' }
+    )
+    if (error) console.error(`❌ video_summaries 적재 실패 (${video.video_id}): ${error.message}`)
+    else done++
+  })
+  console.log(`🤖 요약 완료: ${done}개`)
+  return done
+}
+
+// ── 오케스트레이터 ────────────────────────────────────────────
+export async function runCollection(): Promise<{
+  channels: number
+  collected: number
+  summarized: number
+}> {
+  const channels = await getUniqueChannels()
+  console.log(`📡 수집 대상 고유 채널: ${channels.length}개`)
+
+  let collected = 0
+  for (const channel of channels) {
+    try {
+      collected += await collectChannelVideos(channel)
+    } catch (e) {
+      console.error(`❌ 채널 수집 실패 (${channel.channelId}):`, e)
     }
   }
 
-  return [...byChannel.values()]
+  const summarized = await summarizePendingVideos()
+  console.log(`✅ 수집 요약 완료: 채널 ${channels.length} / 신규영상 ${collected} / 요약 ${summarized}`)
+  return { channels: channels.length, collected, summarized }
 }

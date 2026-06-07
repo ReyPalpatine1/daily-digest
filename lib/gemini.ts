@@ -1,6 +1,7 @@
 import { logApiUsage } from '@/lib/api-usage'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
+const GEMINI_MODEL = 'gemini-flash-latest'
 
 // 외부 API 무한 대기 방지
 const SUPADATA_TIMEOUT_MS = 15000
@@ -16,12 +17,13 @@ export type SummaryResult = {
   keyPoints: string[]
   timeline: { time: string; content: string }[]
   summaryBasis: string // 요약 기반 표시
+  model?: string // 요약에 사용한 모델명
   errorInfo?: string
   attempts?: number
 }
 
 export async function summarizeVideo(
-  userId: string,
+  userId: string | null,
   title: string,
   transcript: string,
   description?: string
@@ -65,7 +67,7 @@ ${content || '(자막 및 설명 없음)'}
 
       const callStart = Date.now()
       const res = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -138,9 +140,12 @@ ${content || '(자막 및 설명 없음)'}
       const inputTokens = usage.promptTokenCount ?? 0
       const outputTokens = usage.candidatesTokenCount ?? 0
       // fire-and-forget: 사용량 기록 실패가 핵심 경로를 막지 않도록
-      logApiUsage(userId, 'gemini', inputTokens, outputTokens).catch(e =>
-        console.error('[gemini] logApiUsage 실패:', e)
-      )
+      // userId가 없으면(공유 수집 등) 특정 사용자 귀속이 없으므로 기록 생략
+      if (userId) {
+        logApiUsage(userId, 'gemini', inputTokens, outputTokens).catch(e =>
+          console.error('[gemini] logApiUsage 실패:', e)
+        )
+      }
       
       // JSON 파싱 시도
       let parsed
@@ -154,13 +159,14 @@ ${content || '(자막 및 설명 없음)'}
           keyPoints: ['요약 생성 실패'],
           timeline: [],
           summaryBasis: '요약 실패',
+          model: GEMINI_MODEL,
           errorInfo: `JSON 파싱 오류: ${parseError}`,
           attempts: attempt,
         }
       }
 
       console.log(`⏱ [summarizeVideo total] ${Date.now() - fnStart}ms (basis=${summaryBasis})`)
-      return { ...parsed, summaryBasis, attempts: attempt }
+      return { ...parsed, summaryBasis, model: GEMINI_MODEL, attempts: attempt }
     } catch (e) {
       const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
       const isRetryable = errorInfo.includes('503') || errorInfo.includes('429')
@@ -171,6 +177,7 @@ ${content || '(자막 및 설명 없음)'}
           keyPoints: [],
           timeline: [],
           summaryBasis: '요약 실패',
+          model: GEMINI_MODEL,
           errorInfo,
           attempts: attempt,
         }
