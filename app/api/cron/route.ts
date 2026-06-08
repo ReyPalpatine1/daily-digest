@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { nowUtc, toZoned, dateKey, isSendTimeSlot } from '@/lib/time'
+import { nowUtc, toZoned, dateKey, isSendTimePassed, isTooLateToSend } from '@/lib/time'
 import { tryStartScheduled } from '@/lib/send-guard'
 
 const supabase = createClient(
@@ -9,6 +9,10 @@ const supabase = createClient(
 )
 
 export const maxDuration = 60
+
+// 발송시간 경과 후 이 시간(시)을 넘기면 오늘은 발송하지 않는다 (아침분이 저녁에 가는 것 방지).
+// cron이 1~5시간 밀려도 발송되도록 충분히 크게, 단 "엉뚱한 시간대 발송"은 막을 만큼 작게.
+const MAX_LATE_HOURS = 6
 
 export async function GET(req: Request) {
   try {
@@ -63,16 +67,22 @@ export async function GET(req: Request) {
         continue
       }
 
-      // 1) cron 15분 주기 → send_time이 현재 슬롯(예: 07:00~07:14)에 맞는지 판정
-      const isMatch = isSendTimeSlot(sendTime, 'Asia/Seoul', 15, now)
-      if (!isMatch) {
-        skipReasons[s.user_id] = `slot mismatch (now ${currentHour}:${currentMinute}, send ${sendTime})`
+      // 1) 좁은 슬롯 매칭 대신 "발송시간 경과 + 멱등성"으로 판정.
+      //    GitHub Actions cron이 밀려 15분 슬롯을 놓쳐도, 그날 처음 도는 cron에서 발송된다.
+      if (!isSendTimePassed(sendTime, 'Asia/Seoul', now)) {
+        skipReasons[s.user_id] = `not yet (now ${currentHour}:${currentMinute}, send ${sendTime})`
+        continue
+      }
+      // 너무 늦은 발송 방지: 발송시간 + MAX_LATE_HOURS 초과면 오늘은 skip → 다음날 정상 발송.
+      if (isTooLateToSend(sendTime, MAX_LATE_HOURS * 60, 'Asia/Seoul', now)) {
+        skipReasons[s.user_id] = `too late (now ${currentHour}:${currentMinute}, send ${sendTime}, >${MAX_LATE_HOURS}h)`
         continue
       }
 
       // 2) 발송 시작 시도 — send_log 멱등성 + 동시성 방어 (이미 보냈거나 처리 중이면 false)
+      //    하루 1회 보장은 여기서 담당 → cron이 11:06이든 11:40이든 그날 한 번만 발송.
       const canSend = await tryStartScheduled(s.user_id)
-      console.log(`정각발송 user=${s.user_id} send_time=${sendTime} 슬롯매칭=${isMatch} canSend=${canSend}`)
+      console.log(`정각발송 user=${s.user_id} send_time=${sendTime} 경과=true canSend=${canSend}`)
       if (!canSend) {
         skipReasons[s.user_id] = 'already sent/sending today (send_log)'
         continue

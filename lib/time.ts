@@ -121,6 +121,45 @@ export function isSendTimeSlot(
   return nowMinutes >= sendMinutes && nowMinutes < sendMinutes + slotMinutes
 }
 
+// 현재 시각(사용자 타임존)이 send_time을 "지났는지" (당일 기준).
+// 좁은 슬롯 매칭(isSendTimeSlot) 대신 이 "경과 + 멱등성" 방식을 쓰면,
+// GitHub Actions cron이 1~5시간 밀려 15분 슬롯을 놓쳐도 그날 처음 도는
+// cron에서 발송된다. 하루 1회 보장은 호출부의 tryStartScheduled(send_log)가 담당.
+// 예) send "11:00" → KST 11:00 이후 어떤 시각에도 true.
+export function isSendTimePassed(
+  sendTime: string,
+  timeZone = KST,
+  baseUtc: Date = new Date()
+): boolean {
+  if (!/^\d{2}:\d{2}$/.test(sendTime.trim())) return false
+  const [sendH, sendM] = sendTime.trim().split(':').map(Number)
+  const sendMinutes = sendH * 60 + sendM
+
+  const z = toZoned(baseUtc, timeZone)
+  const nowMinutes = z.hour * 60 + z.minute
+
+  return nowMinutes >= sendMinutes
+}
+
+// send_time을 지난 지 maxLateMinutes를 "초과"했는지 (당일 기준).
+// 아침 발송분이 cron 폭주로 저녁에 가는 것을 막는 안전장치. true면 너무 늦어 skip.
+// (isSendTimePassed가 이미 true인 상황에서만 의미가 있다 — 둘 다 당일 KST 분 단위 비교)
+export function isTooLateToSend(
+  sendTime: string,
+  maxLateMinutes: number,
+  timeZone = KST,
+  baseUtc: Date = new Date()
+): boolean {
+  if (!/^\d{2}:\d{2}$/.test(sendTime.trim())) return false
+  const [sendH, sendM] = sendTime.trim().split(':').map(Number)
+  const sendMinutes = sendH * 60 + sendM
+
+  const z = toZoned(baseUtc, timeZone)
+  const nowMinutes = z.hour * 60 + z.minute
+
+  return nowMinutes - sendMinutes > maxLateMinutes
+}
+
 // 표시용: UTC → KST 날짜 문자열 (예: "2026년 6월 7일" / "June 7, 2026")
 export function formatDateKst(utc: Date, locale = 'ko'): string {
   return new Intl.DateTimeFormat(locale === 'ko' ? 'ko-KR' : 'en-US', {
