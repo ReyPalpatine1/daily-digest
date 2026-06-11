@@ -79,7 +79,7 @@ export async function sendDigestEmail(
       from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'digest.subject', { date }),
-      html: buildDigestHtml(items, userName, lc),
+      html: buildDigestHtml(items, userName, lc, to),
     })
     await logEmailResult(userId, to, 'digest', true)
   } catch (e) {
@@ -141,7 +141,7 @@ export async function sendBreakingAlert(
       from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'breaking.subject', { title: item.video.title }),
-      html: buildBreakingHtml(item, userName, lc),
+      html: buildBreakingHtml(item, userName, lc, to),
     })
     await logEmailResult(userId, to, 'breaking', true)
   } catch (e) {

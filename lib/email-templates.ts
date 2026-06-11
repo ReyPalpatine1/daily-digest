@@ -92,13 +92,13 @@ function shell(title: string, locale: EmailLocale, inner: string, footer: string
 
 function footerBlock(locale: EmailLocale, email?: string): string {
   return `
-    <div style="text-align:center;padding:24px 0 8px;color:#A1A1AA;font-size:11px;line-height:1.7;">
-      <div>${et(locale, 'digest.poweredBy')}</div>
-      <div style="margin-top:6px;">
-        <a href="${APP_URL}/dashboard" style="color:#525252;text-decoration:none;">${et(locale, 'digest.managePreferences')}</a>
+    <div style="text-align:center;padding:20px 0 8px;border-top:1px solid #E5E5E5;margin-top:24px;">
+      <div style="font-size:13px;font-weight:600;color:#0A0A0A;letter-spacing:-0.01em;">Daily Digest</div>
+      <div style="font-size:11px;color:#A1A1AA;margin-top:4px;">${et(locale, 'digest.tagline')}</div>
+      <div style="margin-top:14px;font-size:11px;">
+        <a href="${APP_URL}/dashboard" style="color:#525252;text-decoration:underline;">${et(locale, 'digest.manageLink')}</a>
       </div>
-      ${email ? `<div style="margin-top:6px;">${escapeHtml(et(locale, 'digest.sentTo', { email }))}</div>` : ''}
-      <div style="margin-top:6px;">${et(locale, 'digest.footer')}</div>
+      ${email ? `<div style="font-size:11px;color:#A1A1AA;margin-top:14px;">${escapeHtml(et(locale, 'digest.sentTo', { email }))}</div>` : ''}
     </div>`
 }
 
@@ -144,7 +144,8 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
 export function buildDigestHtml(
   items: EmailDigestItem[],
   userName: string,
-  locale: EmailLocale = 'ko'
+  locale: EmailLocale = 'ko',
+  email?: string
 ): string {
   const date = formatDate(new Date(), locale)
   const header = `
@@ -163,13 +164,14 @@ export function buildDigestHtml(
   const body = items.length > 0
     ? items.map(it => digestCard(it, locale)).join('')
     : `<div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;color:#A1A1AA;font-size:13px;">${et(locale, 'digest.noVideos')}</div>`
-  return shell(et(locale, 'digest.subject', { date }), locale, header + body, footerBlock(locale, userName))
+  return shell(et(locale, 'digest.subject', { date }), locale, header + body, footerBlock(locale, email))
 }
 
 export function buildBreakingHtml(
   item: EmailDigestItem,
   userName: string,
-  locale: EmailLocale = 'ko'
+  locale: EmailLocale = 'ko',
+  email?: string
 ): string {
   const header = `
     <div style="background:#FFFFFF;border-radius:10px;padding:20px 24px;border:1px solid #DC2626;border-left:4px solid #DC2626;margin-bottom:16px;">
@@ -182,7 +184,7 @@ export function buildBreakingHtml(
     et(locale, 'breaking.subject', { title: item.video.title }),
     locale,
     header + digestCard(item, locale),
-    footerBlock(locale, userName),
+    footerBlock(locale, email),
   )
 }
 
