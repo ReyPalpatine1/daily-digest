@@ -290,6 +290,13 @@ function asArray<T = any>(value: any): T[] {
 async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
   const { transcript, description } = await getTranscript(video.video_id) // userId 없음 (공유)
   const result = await summarizeVideo(null, video.title, transcript, video.description ?? description)
+  // 일시적 실패(429/자막 실패 등)는 가짜 성공 객체로 돌아온다. 이걸 저장하면
+  // 실패 문구가 공유 풀에 영구 캐시되어 모든 사용자가 영원히 실패본을 받는다.
+  // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨.
+  if (result.errorInfo || result.summaryBasis === '요약 실패') {
+    console.error(`❌ 요약 실패 → 저장 생략, 재시도 대기 (${video.video_id}): ${result.errorInfo ?? result.summaryBasis}`)
+    return false
+  }
   const { error } = await supabase.from('video_summaries').upsert(
     {
       video_id: video.video_id,

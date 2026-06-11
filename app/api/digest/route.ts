@@ -242,7 +242,12 @@ async function runDigest(
 
     // 히스토리/읽음 표시용 digests 사용자별 기록 (upsert, 멱등)
     for (const item of digestItems) {
-      await supabase.from('digests').upsert(
+      // digests.key_points는 text[] 컬럼인데 공유 풀(video_summaries.key_points)은 JSONB라
+      // 객체 요소가 섞일 수 있다 → 모든 요소를 문자열로 정규화 (insert 실패 방지).
+      const keyPoints = (item.summary.keyPoints ?? []).map((p: any) =>
+        typeof p === 'string' ? p : (p?.point ?? p?.text ?? JSON.stringify(p))
+      )
+      const { error } = await supabase.from('digests').upsert(
         {
           user_id: userId,
           channel_alias: item.channel,
@@ -253,7 +258,7 @@ async function runDigest(
           video_url: item.video.url,
           published_at: item.video.publishedAt,
           summary: item.summary.summary,
-          key_points: item.summary.keyPoints,
+          key_points: keyPoints,
           timeline: item.summary.timeline,
           is_breaking: item.isBreaking,
           is_read: false,
@@ -261,6 +266,9 @@ async function runDigest(
         },
         { onConflict: 'user_id,video_id' }
       )
+      if (error) {
+        console.error(`[digest] digests upsert 실패 (${item.video.videoId}): ${error.message}`)
+      }
     }
 
     // 오류 항목 번들 메일 (요약 누락 등) — 실패해도 응답엔 영향 없게
