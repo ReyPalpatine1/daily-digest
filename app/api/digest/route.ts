@@ -199,8 +199,9 @@ async function runDigest(
         },
         summary: {
           summary: s?.summary ?? '요약을 준비 중이에요.',
-          keyPoints: s?.key_points ?? [],
-          timeline: s?.timeline ?? [],
+          // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
+          keyPoints: Array.isArray(s?.key_points) ? s.key_points : [],
+          timeline: Array.isArray(s?.timeline) ? s.timeline : [],
           summaryBasis: s?.model ? `공유 요약 (${s.model})` : '공유 요약',
         },
         isBreaking,
@@ -242,32 +243,38 @@ async function runDigest(
 
     // 히스토리/읽음 표시용 digests 사용자별 기록 (upsert, 멱등)
     for (const item of digestItems) {
-      // digests.key_points는 text[] 컬럼인데 공유 풀(video_summaries.key_points)은 JSONB라
-      // 객체 요소가 섞일 수 있다 → 모든 요소를 문자열로 정규화 (insert 실패 방지).
-      const keyPoints = (item.summary.keyPoints ?? []).map((p: any) =>
-        typeof p === 'string' ? p : (p?.point ?? p?.text ?? JSON.stringify(p))
-      )
-      const { error } = await supabase.from('digests').upsert(
-        {
-          user_id: userId,
-          channel_alias: item.channel,
-          channel_emoji: item.emoji,
-          category_name: item.category,
-          video_id: item.video.videoId,
-          video_title: item.video.title,
-          video_url: item.video.url,
-          published_at: item.video.publishedAt,
-          summary: item.summary.summary,
-          key_points: keyPoints,
-          timeline: item.summary.timeline,
-          is_breaking: item.isBreaking,
-          is_read: false,
-          summary_basis: item.summary.summaryBasis,
-        },
-        { onConflict: 'user_id,video_id' }
-      )
-      if (error) {
-        console.error(`[digest] digests upsert 실패 (${item.video.videoId}): ${error.message}`)
+      // 한 항목의 예외(데이터 이상 등)가 루프 전체와 이후 로직(delete_old_digests 등)을
+      // 중단시키지 않도록 항목 단위로 격리.
+      try {
+        // digests.key_points는 text[] 컬럼인데 공유 풀(video_summaries.key_points)은 JSONB라
+        // 객체 요소가 섞일 수 있다 → 모든 요소를 문자열로 정규화 (insert 실패 방지).
+        const keyPoints = (Array.isArray(item.summary.keyPoints) ? item.summary.keyPoints : []).map((p: any) =>
+          typeof p === 'string' ? p : (p?.point ?? p?.text ?? JSON.stringify(p))
+        )
+        const { error } = await supabase.from('digests').upsert(
+          {
+            user_id: userId,
+            channel_alias: item.channel,
+            channel_emoji: item.emoji,
+            category_name: item.category,
+            video_id: item.video.videoId,
+            video_title: item.video.title,
+            video_url: item.video.url,
+            published_at: item.video.publishedAt,
+            summary: item.summary.summary,
+            key_points: keyPoints,
+            timeline: item.summary.timeline,
+            is_breaking: item.isBreaking,
+            is_read: false,
+            summary_basis: item.summary.summaryBasis,
+          },
+          { onConflict: 'user_id,video_id' }
+        )
+        if (error) {
+          console.error(`[digest] digests upsert 실패 (${item.video.videoId}): ${error.message}`)
+        }
+      } catch (e) {
+        console.error(`[digest] digests 기록 예외 (${item.video.videoId}):`, e)
       }
     }
 

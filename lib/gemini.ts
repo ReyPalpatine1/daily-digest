@@ -124,7 +124,8 @@ async function callGeminiModel(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.3 },
+            // responseMimeType로 유효한 JSON만 반환하도록 강제 (따옴표 없는 값 등 깨진 JSON 방지)
+            generationConfig: { temperature: 0.3, responseMimeType: 'application/json' },
           }),
         },
         GEMINI_TIMEOUT_MS

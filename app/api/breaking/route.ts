@@ -182,8 +182,9 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
           video: { videoId: video.video_id, title: video.title, publishedAt: video.published_at, channelTitle: meta.alias, url },
           summary: {
             summary: s?.summary ?? '요약을 준비 중이에요.',
-            keyPoints: s?.key_points ?? [],
-            timeline: s?.timeline ?? [],
+            // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
+            keyPoints: Array.isArray(s?.key_points) ? s.key_points : [],
+            timeline: Array.isArray(s?.timeline) ? s.timeline : [],
             summaryBasis: s?.model ? `공유 요약 (${s.model})` : '공유 요약',
           },
           isBreaking: true,
