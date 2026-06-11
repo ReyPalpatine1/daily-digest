@@ -289,7 +289,9 @@ function asArray<T = any>(value: any): T[] {
 // 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
 async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
   const { transcript, description } = await getTranscript(video.video_id) // userId 없음 (공유)
-  const result = await summarizeVideo(null, video.title, transcript, video.description ?? description)
+  // video.description이 빈 문자열('')이면 ??가 통과시켜 getTranscript가 가져온 설명을 못 씀 → trim 검사
+  const desc = video.description?.trim() ? video.description : description
+  const result = await summarizeVideo(null, video.title, transcript, desc)
   // 일시적 실패(429/자막 실패 등)는 가짜 성공 객체로 돌아온다. 이걸 저장하면
   // 실패 문구가 공유 풀에 영구 캐시되어 모든 사용자가 영원히 실패본을 받는다.
   // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨.

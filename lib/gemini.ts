@@ -1,6 +1,7 @@
 import { logApiUsage } from '@/lib/api-usage'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 // -latest alias는 실험 모델(프로덕션 부적합, 엄격한 rate limit, 가용성 미보장)이라
 // 503이 잦다 → 안정(GA) 모델 고정 + 503 시 폴백 모델로 1회 재시도.
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
@@ -269,31 +270,58 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
     console.log(`❌ Supadata 에러/timeout: ${videoId} (${Date.now() - supadataStart}ms) — ${msg}`)
   }
 
-  // 영상 설명 추출 시도 (timeout 적용)
+  // 영상 설명 추출 — 1차: 공식 YouTube Data API (HTML 스크래핑은 차단/동의페이지로 100% 실패 중)
   const descStart = Date.now()
   try {
     const res = await fetchWithTimeout(
-      `https://www.youtube.com/watch?v=${videoId}`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept-Language': 'ko-KR,ko;q=0.9',
-        },
-      },
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`,
+      {},
       YOUTUBE_HTML_TIMEOUT_MS
     )
-    const html = await res.text()
-    const descMatch = html.match(/"shortDescription":"(.*?)"(?:,"isCrawlable")/)
-    if (descMatch) {
-      description = descMatch[1]
-        .replace(/\\n/g, '\n')
-        .replace(/\\"/g, '"')
-        .slice(0, 2000)
+    const data = await res.json()
+    if (!res.ok || data.error) {
+      console.log(`❌ YouTube API 설명 조회 실패: ${videoId} (status=${res.status}) — ${data.error?.message ?? ''}`)
+    } else {
+      description = (data.items?.[0]?.snippet?.description ?? '').slice(0, 2000)
     }
-    console.log(`⏱ [yt html] ${videoId} (${Date.now() - descStart}ms, descLen=${description.length})`)
+    console.log(`⏱ [yt api] ${videoId} (${Date.now() - descStart}ms, descLen=${description.length})`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.log(`❌ 설명 추출 실패/timeout: ${videoId} (${Date.now() - descStart}ms) — ${msg}`)
+    console.log(`❌ YouTube API 설명 조회 에러/timeout: ${videoId} (${Date.now() - descStart}ms) — ${msg}`)
+  }
+
+  // 2차 (API 폴백 실패 시에만): HTML 스크래핑 (정규식 강화)
+  if (!description) {
+    const htmlStart = Date.now()
+    try {
+      const res = await fetchWithTimeout(
+        `https://www.youtube.com/watch?v=${videoId}`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept-Language': 'ko-KR,ko;q=0.9',
+          },
+        },
+        YOUTUBE_HTML_TIMEOUT_MS
+      )
+      const html = await res.text()
+      // isCrawlable 순서 의존 제거: 이스케이프를 고려한 문자열 리터럴 매칭
+      const descMatch = html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)
+      if (descMatch) {
+        description = descMatch[1]
+          .replace(/\\n/g, '\n')
+          .replace(/\\"/g, '"')
+          .slice(0, 2000)
+      } else {
+        // shortDescription이 없으면 <meta name="description"> 도 시도
+        const metaMatch = html.match(/<meta name="description" content="([^"]*)"/)
+        if (metaMatch) description = metaMatch[1].slice(0, 2000)
+      }
+      console.log(`⏱ [yt html] ${videoId} (${Date.now() - htmlStart}ms, htmlLen=${html.length}, descLen=${description.length})`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.log(`❌ 설명 추출 실패/timeout: ${videoId} (${Date.now() - htmlStart}ms) — ${msg}`)
+    }
   }
 
   console.log(`⏱ [getTranscript total] ${videoId} ${Date.now() - fnStart}ms (transcriptLen=${transcript.length})`)
