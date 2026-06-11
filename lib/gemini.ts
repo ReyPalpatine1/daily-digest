@@ -26,6 +26,29 @@ export type SummaryResult = {
   attempts?: number
 }
 
+// 깨진 JSON 복구용: 첫 '{'부터 중괄호 깊이를 세어 깊이가 0이 되는 지점까지 잘라낸다.
+// 문자열 리터럴 내부의 중괄호와 이스케이프된 따옴표는 무시 (예: 끝에 '}'가 덧붙은 응답).
+function extractBalancedJson(text: string): string | null {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === '\\') { escaped = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) return text.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
 export async function summarizeVideo(
   userId: string | null,
   title: string,
@@ -203,19 +226,29 @@ async function callGeminiModel(
       try {
         parsed = JSON.parse(clean)
       } catch (parseError) {
-        console.log('❌ JSON 파싱 실패, 기본값 반환:', parseError)
-        // 파싱 실패시 기본 요약 반환 (종결: 폴백해도 결과 동일)
-        return {
-          kind: 'done',
-          result: {
-            summary: `영상 요약을 생성할 수 없습니다: ${title}`,
-            keyPoints: ['요약 생성 실패'],
-            timeline: [],
-            summaryBasis: '요약 실패',
-            model,
-            errorInfo: `JSON 파싱 오류: ${parseError}`,
-            attempts: attempt,
-          },
+        // 복구 1회 시도: 균형 잡힌 첫 객체만 잘라내 재파싱 (예: 끝에 '}'가 덧붙은 경우)
+        const recovered = extractBalancedJson(clean)
+        if (recovered) {
+          try {
+            parsed = JSON.parse(recovered)
+            console.log(`⚠️ JSON 복구 파싱 성공 (원본 ${clean.length}자 → 복구 ${recovered.length}자)`)
+          } catch { /* 복구도 실패 → 아래 실패 처리 */ }
+        }
+        if (parsed === undefined) {
+          console.log('❌ JSON 파싱 실패, 기본값 반환:', parseError)
+          // 파싱 실패시 기본 요약 반환 (종결: 폴백해도 결과 동일)
+          return {
+            kind: 'done',
+            result: {
+              summary: `영상 요약을 생성할 수 없습니다: ${title}`,
+              keyPoints: ['요약 생성 실패'],
+              timeline: [],
+              summaryBasis: '요약 실패',
+              model,
+              errorInfo: `JSON 파싱 오류: ${parseError}`,
+              attempts: attempt,
+            },
+          }
         }
       }
 
