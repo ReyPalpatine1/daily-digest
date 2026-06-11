@@ -245,8 +245,10 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
   // Supadata API로 자막 추출 (timeout 적용)
   const supadataStart = Date.now()
   try {
+    // lang 없이 1회만 호출 (기본 언어 자막 사용). 실패(206 등)해도 1크레딧이 차감되므로
+    // 과거의 ko→기본언어 2단계 호출(자막 없는 영상마다 2크레딧 소모)을 제거.
     const res = await fetchWithTimeout(
-      `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&lang=ko&text=true`,
+      `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true`,
       { headers: { 'x-api-key': process.env.SUPADATA_API_KEY! } },
       SUPADATA_TIMEOUT_MS
     )
@@ -259,23 +261,8 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
       transcript = data.content ?? ''
       console.log(`✅ Supadata 자막 추출 성공: ${videoId} (${Date.now() - supadataStart}ms)`)
     } else {
-      // 한국어 없으면 기본 언어로 재시도
-      const fbStart = Date.now()
-      const fallback = await fetchWithTimeout(
-        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true`,
-        { headers: { 'x-api-key': process.env.SUPADATA_API_KEY! } },
-        SUPADATA_TIMEOUT_MS
-      )
-      if (userId) {
-        logApiUsage(userId, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
-      }
-      if (fallback.ok) {
-        const data = await fallback.json()
-        transcript = data.content ?? ''
-        console.log(`✅ Supadata 기본 자막 추출 성공: ${videoId} (${Date.now() - fbStart}ms)`)
-      } else {
-        console.log(`❌ Supadata 자막 추출 실패: ${videoId} (${Date.now() - supadataStart}ms)`)
-      }
+      // 실패 시 추가 호출 없이 바로 설명/제목 폴백으로 진행 (status 코드로 크레딧 소모 추적)
+      console.log(`❌ Supadata 자막 없음: ${videoId} (status=${res.status}, ${Date.now() - supadataStart}ms)`)
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
