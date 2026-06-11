@@ -271,10 +271,11 @@ async function callGeminiModel(
   return { kind: 'unavailable503', result: failureResult(model, '알 수 없는 오류', maxRetries) }
 }
 
-export async function getTranscript(videoId: string, userId?: string): Promise<{ transcript: string; description: string }> {
+export async function getTranscript(videoId: string, userId?: string): Promise<{ transcript: string; description: string; unavailable: boolean }> {
   const fnStart = Date.now()
   let transcript = ''
   let description = ''
+  let unavailable = false // 비공개/삭제 영상 (YouTube API items 비어있음)
 
   // Supadata API로 자막 추출 (timeout 적용)
   const supadataStart = Date.now()
@@ -314,8 +315,12 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
     const data = await res.json()
     if (!res.ok || data.error) {
       console.log(`❌ YouTube API 설명 조회 실패: ${videoId} (status=${res.status}) — ${data.error?.message ?? ''}`)
+    } else if (!data.items?.length) {
+      // API는 정상 응답했지만 items가 비어있음 → 비공개/삭제된 영상
+      unavailable = true
+      console.log(`🗑 YouTube API: 비공개/삭제 영상 감지 (items 없음): ${videoId}`)
     } else {
-      description = (data.items?.[0]?.snippet?.description ?? '').slice(0, 2000)
+      description = (data.items[0]?.snippet?.description ?? '').slice(0, 2000)
     }
     console.log(`⏱ [yt api] ${videoId} (${Date.now() - descStart}ms, descLen=${description.length})`)
   } catch (e) {
@@ -323,8 +328,8 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
     console.log(`❌ YouTube API 설명 조회 에러/timeout: ${videoId} (${Date.now() - descStart}ms) — ${msg}`)
   }
 
-  // 2차 (API 폴백 실패 시에만): HTML 스크래핑 (정규식 강화)
-  if (!description) {
+  // 2차 (API 폴백 실패 시에만): HTML 스크래핑 (정규식 강화). 비공개/삭제 확정 시엔 생략.
+  if (!description && !unavailable) {
     const htmlStart = Date.now()
     try {
       const res = await fetchWithTimeout(
@@ -358,5 +363,5 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
   }
 
   console.log(`⏱ [getTranscript total] ${videoId} ${Date.now() - fnStart}ms (transcriptLen=${transcript.length})`)
-  return { transcript, description }
+  return { transcript, description, unavailable }
 }

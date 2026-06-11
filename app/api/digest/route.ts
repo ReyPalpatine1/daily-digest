@@ -5,7 +5,8 @@ import { yesterdayRangeUtc, formatDateKst } from '@/lib/time'
 import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, sendEmptyDigestEmail, DigestTrigger } from '@/lib/mailer'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
-import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword } from '@/lib/video-pool'
+import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
+import { et } from '@/lib/i18n/email-translations'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
@@ -198,7 +199,10 @@ async function runDigest(
           url,
         },
         summary: {
-          summary: s?.summary ?? '요약을 준비 중이에요.',
+          // 요약 없음: 재시도 상한 도달 시 영구 실패 문구, 그 외엔 "준비 중"
+          summary: s?.summary ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS
+            ? et(userLocale, 'digest.summaryUnavailable')
+            : '요약을 준비 중이에요.'),
           // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
           keyPoints: Array.isArray(s?.key_points) ? s.key_points : [],
           timeline: Array.isArray(s?.timeline) ? s.timeline : [],

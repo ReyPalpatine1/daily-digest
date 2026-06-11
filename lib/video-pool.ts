@@ -22,6 +22,9 @@ const SUMMARY_LOOKBACK_DAYS = 2
 const SUMMARY_LIMIT = 5
 // 요약 동시 처리 수
 const SUMMARY_CONCURRENCY = 5
+// 요약 재시도 상한. 비공개/삭제 등 영구 실패 영상이 15분 cron마다 무한 재시도되며
+// Supadata 크레딧(실패도 1크레딧)·Gemini 호출을 낭비하는 것을 막는다.
+export const MAX_SUMMARY_ATTEMPTS = 3
 
 // 60초 함수 budget 보호용 시간 컷오프 (ms, 실행 시작 기준)
 const COLLECT_CUTOFF_MS = 35_000 // 이후엔 새 채널 수집 중단 (다음 주기로 이월)
@@ -239,7 +242,7 @@ async function upsertChannelState(channelId: string, playlistId: string | null, 
 }
 
 // ── 공유 요약 (영상당 1번) ────────────────────────────────────
-type PendingVideo = { video_id: string; title: string; description: string | null }
+type PendingVideo = { video_id: string; title: string; description: string | null; summary_attempts?: number | null }
 
 // 아직 요약이 없는 (쇼츠 아닌, 최근 N일) 영상 목록.
 // ⚠️ 과거 영상은 발송에 안 쓰이므로 요약하지 않는다 (Gemini 비용 절감).
@@ -247,9 +250,10 @@ async function getVideosWithoutSummary(): Promise<PendingVideo[]> {
   const cutoff = new Date(Date.now() - SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
   const { data: vids } = await supabase
     .from('videos')
-    .select('video_id, title, description')
+    .select('video_id, title, description, summary_attempts')
     .eq('is_short', false)
     .gte('published_at', cutoff.toISOString())
+    .lt('summary_attempts', MAX_SUMMARY_ATTEMPTS) // 재시도 상한 초과는 영구 제외
     .order('published_at', { ascending: false })
     .limit(200)
 
@@ -286,17 +290,32 @@ function asArray<T = any>(value: any): T[] {
   return []
 }
 
+// 요약 실패 시 재시도 카운트 +1 (실패해도 흐름을 막지 않게 best-effort).
+async function bumpSummaryAttempts(video: PendingVideo): Promise<void> {
+  const next = (video.summary_attempts ?? 0) + 1
+  const { error } = await supabase.from('videos').update({ summary_attempts: next }).eq('video_id', video.video_id)
+  if (error) console.error(`❌ summary_attempts 증가 실패 (${video.video_id}): ${error.message}`)
+}
+
 // 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
 async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
-  const { transcript, description } = await getTranscript(video.video_id) // userId 없음 (공유)
+  const { transcript, description, unavailable } = await getTranscript(video.video_id) // userId 없음 (공유)
+  // 비공개/삭제 영상: Gemini 호출 없이 풀에서 제거 (발송 대상에서도 빠짐)
+  if (unavailable) {
+    const { error } = await supabase.from('videos').delete().eq('video_id', video.video_id)
+    if (error) console.error(`❌ 비공개/삭제 영상 제거 실패 (${video.video_id}): ${error.message}`)
+    console.log(`🗑 비공개/삭제 영상 제거: ${video.video_id}`)
+    return false
+  }
   // video.description이 빈 문자열('')이면 ??가 통과시켜 getTranscript가 가져온 설명을 못 씀 → trim 검사
   const desc = video.description?.trim() ? video.description : description
   const result = await summarizeVideo(null, video.title, transcript, desc)
   // 일시적 실패(429/자막 실패 등)는 가짜 성공 객체로 돌아온다. 이걸 저장하면
   // 실패 문구가 공유 풀에 영구 캐시되어 모든 사용자가 영원히 실패본을 받는다.
-  // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨.
+  // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨 (단 상한까지만).
   if (result.errorInfo || result.summaryBasis === '요약 실패') {
     console.error(`❌ 요약 실패 → 저장 생략, 재시도 대기 (${video.video_id}): ${result.errorInfo ?? result.summaryBasis}`)
+    await bumpSummaryAttempts(video)
     return false
   }
   const { error } = await supabase.from('video_summaries').upsert(
@@ -311,6 +330,7 @@ async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
   )
   if (error) {
     console.error(`❌ video_summaries 적재 실패 (${video.video_id}): ${error.message}`)
+    await bumpSummaryAttempts(video)
     return false
   }
   return true
@@ -345,6 +365,7 @@ export type PoolVideo = {
   duration_seconds: number | null
   is_short: boolean
   description: string | null
+  summary_attempts?: number | null
 }
 
 export type PoolSummary = {
@@ -360,7 +381,7 @@ export async function getVideosFromPool(channelIds: string[], start: Date, end: 
   if (!channelIds.length) return []
   const { data } = await supabase
     .from('videos')
-    .select('video_id, channel_id, title, published_at, duration_seconds, is_short, description')
+    .select('video_id, channel_id, title, published_at, duration_seconds, is_short, description, summary_attempts')
     .in('channel_id', channelIds)
     .gte('published_at', start.toISOString())
     .lt('published_at', end.toISOString())
@@ -410,8 +431,9 @@ export async function summarizeNow(videoIds: string[]): Promise<number> {
   if (!videoIds.length) return 0
   const { data } = await supabase
     .from('videos')
-    .select('video_id, title, description')
+    .select('video_id, title, description, summary_attempts')
     .in('video_id', videoIds)
+    .lt('summary_attempts', MAX_SUMMARY_ATTEMPTS) // 재시도 상한 초과는 즉시요약 대상에서도 제외
   const targets = (data ?? []) as PendingVideo[]
   if (!targets.length) return 0
 

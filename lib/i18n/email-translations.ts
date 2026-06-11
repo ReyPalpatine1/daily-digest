@@ -20,6 +20,7 @@ export const emailTranslations = {
       footer: '이 이메일은 Daily Digest에서 발송되었습니다',
       sentTo: '{email} 님에게 발송',
       uploadedAt: '업로드',
+      summaryUnavailable: '요약을 제공할 수 없는 영상이에요',
     },
     breaking: {
       subject: '[속보] {title}',
@@ -62,6 +63,7 @@ export const emailTranslations = {
       footer: 'This email was sent by Daily Digest',
       sentTo: 'Sent to {email}',
       uploadedAt: 'Uploaded',
+      summaryUnavailable: 'Summary unavailable for this video',
     },
     breaking: {
       subject: '[Breaking] {title}',
