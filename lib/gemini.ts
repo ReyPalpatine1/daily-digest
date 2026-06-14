@@ -60,31 +60,40 @@ export async function summarizeVideo(
   // 요약 기반 콘텐츠 구성 (모델과 무관 → 1회만 계산)
   let content = ''
   let summaryBasis = ''
+  let lengthGuide = ''
   if (transcript && transcript.length > 50) {
     content = `자막:\n${transcript.slice(0, 8000)}`
     summaryBasis = '자동 생성 자막 기반 요약'
+    lengthGuide = "summary는 5~7문장으로 충실하게. keyPoints는 5개, 각 항목은 '핵심 내용 — 한 문장 부연' 형태. 영상에 시간 구간 정보가 있으면 timeline을 4~6개 채울 것."
   } else if (description && description.length > 20) {
     content = `영상 설명:\n${description.slice(0, 2000)}`
     summaryBasis = '영상 설명 기반 요약'
+    lengthGuide = "summary는 3~4문장. keyPoints는 3~4개, '핵심 내용 — 부연' 형태. timeline은 빈 배열 []."
   } else {
     content = ''
     summaryBasis = '제목 기반 요약'
+    lengthGuide = "summary는 2문장 이내로 간결하게. keyPoints는 2~3개, 부연 없이 제목에서 합리적으로 추론 가능한 범위만. timeline은 빈 배열 []."
   }
 
   const prompt = `다음은 유튜브 영상의 정보입니다.
 
 제목: ${title}
-
 ${content || '(자막 및 설명 없음)'}
 
-아래 JSON 형식으로만 응답해주세요. 다른 텍스트 없이 완전한 JSON만 반환하세요:
+[요약 지침]
+- 위 제공된 정보(제목/자막/설명)에 실제로 담긴 내용만 사용하세요.
+- 제공되지 않은 수치, 통계, 인용, 사실을 절대 지어내지 마세요. 정보가 부족하면 무리해서 길게 쓰지 말고 아는 만큼만 쓰세요.
+- 구체적으로: 자막/설명에 등장하는 고유명사, 수치, 핵심 주장을 가능한 한 살려서 요약하세요.
+- ${lengthGuide}
+
+아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 완전한 JSON만 반환하세요:
 {
-  "summary": "영상 전체 내용을 3~5문장으로 요약",
-  "keyPoints": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"],
-  "timeline": [{"time": "0:00", "content": "구간 내용 요약"}]
+  "summary": "...",
+  "keyPoints": ["...", "..."],
+  "timeline": [{"time": "0:00", "content": "..."}]
 }
 
-참고: 자막이 없으면 timeline은 빈 배열 []로 하세요. 응답은 유효한 JSON이어야 합니다.`
+응답은 반드시 유효한 JSON이어야 합니다.`
 
   // 시도 순서: 기본 모델(재시도 2회) → 503 지속이면 폴백 모델 1회.
   const plan: { model: string; maxRetries: number }[] = [
@@ -149,7 +158,7 @@ async function callGeminiModel(
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             // responseMimeType로 유효한 JSON만 반환하도록 강제 (따옴표 없는 값 등 깨진 JSON 방지)
-            generationConfig: { temperature: 0.3, responseMimeType: 'application/json' },
+            generationConfig: { temperature: 0.3, maxOutputTokens: 1500, responseMimeType: 'application/json' },
           }),
         },
         GEMINI_TIMEOUT_MS
