@@ -21,6 +21,9 @@ export const emailTranslations = {
       sentTo: '{email} 님에게 발송된 메일입니다',
       uploadedAt: '업로드',
       summaryUnavailable: '요약을 제공할 수 없는 영상이에요',
+      basisTranscript: '자막을 기반으로 분석한 요약입니다',
+      basisDescription: '영상 설명을 기반으로 분석한 요약입니다',
+      basisTitle: '제목을 기반으로 한 간략 요약입니다',
     },
     breaking: {
       subject: '[속보] {title}',
@@ -64,6 +67,9 @@ export const emailTranslations = {
       sentTo: 'Sent to {email}',
       uploadedAt: 'Uploaded',
       summaryUnavailable: 'Summary unavailable for this video',
+      basisTranscript: 'Summary based on the video transcript',
+      basisDescription: 'Summary based on the video description',
+      basisTitle: 'Brief summary based on the title only',
     },
     breaking: {
       subject: '[Breaking] {title}',

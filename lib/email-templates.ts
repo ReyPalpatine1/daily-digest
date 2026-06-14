@@ -102,9 +102,19 @@ function footerBlock(locale: EmailLocale, email?: string): string {
     </div>`
 }
 
+// summaryBasis(한국어 라벨)를 분석 소스 표기 번역 키로 매핑. 매칭 안 되면 null(표기 생략).
+function basisTranslationKey(summaryBasis?: string): string | null {
+  if (!summaryBasis) return null
+  if (summaryBasis.includes('자막')) return 'digest.basisTranscript'
+  if (summaryBasis.includes('설명')) return 'digest.basisDescription'
+  if (summaryBasis.includes('제목')) return 'digest.basisTitle'
+  return null
+}
+
 function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
   const kp = safeArray<string>(item.summary.keyPoints)
   const tl = safeArray<{ time: string; content: string }>(item.summary.timeline)
+  const basisKey = basisTranslationKey(item.summary.summaryBasis)
   return `
     <div style="background:#FFFFFF;border-radius:10px;padding:20px 24px;border:1px solid #E5E5E5;margin-bottom:12px;">
       ${item.summary.errorInfo ? '' : ''}
@@ -138,6 +148,8 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       <a href="${escapeHtml(item.video.url)}" style="display:inline-block;padding:7px 14px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
         ${et(locale, 'digest.watchVideo')}
       </a>
+      ${basisKey ? `
+        <div style="font-size:11px;color:#A1A1AA;margin-top:14px;">${escapeHtml(et(locale, basisKey))}</div>` : ''}
     </div>`
 }
 
