@@ -665,7 +665,7 @@ export default function Dashboard() {
         {/* 사용자 헤더 */}
         <button
           style={{ ...dropdownItemStyle, padding: '10px 12px' }}
-          onClick={() => { console.log('[phase2] open profile modal'); closeMenu() }}>
+          onClick={() => { closeMenu(); router.push('/profile') }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {userName}
@@ -679,7 +679,7 @@ export default function Dashboard() {
 
         <div style={dropdownDivider} />
 
-        <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] navigate /help'); closeMenu() }}>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
           <span style={{ fontSize: 14 }}>❓</span> {t('settings.help')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>
