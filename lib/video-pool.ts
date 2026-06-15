@@ -325,6 +325,7 @@ async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
       key_points: asArray(result.keyPoints), // JSONB 배열로 정규화
       timeline: asArray(result.timeline), // JSONB 배열로 정규화
       model: result.model ?? null,
+      summary_basis: result.summaryBasis ?? null, // 분석 근거(자막/설명/제목) 표기용
     },
     { onConflict: 'video_id' }
   )
@@ -374,6 +375,7 @@ export type PoolSummary = {
   key_points: string[] | null
   timeline: { time: string; content: string }[] | null
   model: string | null
+  summary_basis: string | null
 }
 
 // 채널들의 특정 기간(UTC) 영상 (쇼츠 제외, 공유 풀)
@@ -410,7 +412,7 @@ export async function getSummariesFromPool(videoIds: string[]): Promise<Map<stri
   if (!videoIds.length) return map
   const { data } = await supabase
     .from('video_summaries')
-    .select('video_id, summary, key_points, timeline, model')
+    .select('video_id, summary, key_points, timeline, model, summary_basis')
     .in('video_id', videoIds)
   for (const s of (data ?? []) as PoolSummary[]) map.set(s.video_id, s)
   return map
@@ -420,7 +422,7 @@ export async function getSummariesFromPool(videoIds: string[]): Promise<Map<stri
 export async function getSummary(videoId: string): Promise<PoolSummary | null> {
   const { data } = await supabase
     .from('video_summaries')
-    .select('video_id, summary, key_points, timeline, model')
+    .select('video_id, summary, key_points, timeline, model, summary_basis')
     .eq('video_id', videoId)
     .maybeSingle()
   return (data as PoolSummary) ?? null

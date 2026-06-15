@@ -185,7 +185,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
             // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
             keyPoints: Array.isArray(s?.key_points) ? s.key_points : [],
             timeline: Array.isArray(s?.timeline) ? s.timeline : [],
-            summaryBasis: s?.model ? `공유 요약 (${s.model})` : '공유 요약',
+            summaryBasis: s?.summary_basis ?? '요약',
           },
           isBreaking: true,
         }
