@@ -659,47 +659,30 @@ export default function Dashboard() {
 
   // 설정 메뉴 항목 렌더 (드롭다운 / 모바일 시트 공용)
   function renderSettingsItems(closeMenu: () => void) {
+    const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '사용자'
     return (
       <>
-        <div style={dropdownSectionTitle}>{t('settings.account')}</div>
-        <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open profile modal'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>👤</span> {t('settings.profile')}
-        </button>
-        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/subscription') }}>
-          <span style={{ fontSize: 14 }}>💼</span> {t('settings.subscription')}
-        </button>
-        <button style={dropdownItemStyle} onClick={() => { closeMenu(); logout() }}>
-          <span style={{ fontSize: 14 }}>🚪</span> {t('settings.logout')}
-        </button>
-
-        <div style={dropdownDivider} />
-
-        <div style={dropdownSectionTitle}>{t('settings.preferences')}</div>
-        <div style={{ ...dropdownItemStyle, cursor: 'default' }}>
-          <span style={{ fontSize: 14 }}>🌐</span>
-          <span style={{ flex: 1 }}>{t('settings.language')}</span>
-          <Segmented options={['KO', 'EN']} value={locale === 'ko' ? 'KO' : 'EN'}
-            onChange={(v) => changeLocale(v === 'KO' ? 'ko' : 'en')} />
-        </div>
-        <div style={{ ...dropdownItemStyle, cursor: 'default' }}>
-          <span style={{ fontSize: 14 }}>{theme === 'dark' ? '🌙' : '☀️'}</span>
-          <span style={{ flex: 1 }}>{theme === 'dark' ? t('settings.darkMode') : t('settings.lightMode')}</span>
-          <Switch on={theme === 'dark'} onChange={toggleTheme} />
-        </div>
-        <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open notification channel modal'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>🔔</span> {t('settings.notifications')}
-        </button>
-        <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] open notification time modal'); closeMenu() }}>
-          <span style={{ fontSize: 14 }}>⏰</span> {t('settings.notifTime')}
+        {/* 사용자 헤더 */}
+        <button
+          style={{ ...dropdownItemStyle, padding: '10px 12px' }}
+          onClick={() => { console.log('[phase2] open profile modal'); closeMenu() }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {userName}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.email}
+            </span>
+          </div>
+          <span style={planBadgeStyle(plan)}>{plan}</span>
         </button>
 
         <div style={dropdownDivider} />
 
-        <div style={dropdownSectionTitle}>{t('settings.support')}</div>
         <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] navigate /help'); closeMenu() }}>
           <span style={{ fontSize: 14 }}>❓</span> {t('settings.help')}
         </button>
-        <button style={dropdownItemStyle} onClick={() => { console.log('[phase2] navigate /terms'); closeMenu() }}>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>
           <span style={{ fontSize: 14 }}>📄</span> {t('settings.terms')}
         </button>
 
@@ -735,6 +718,12 @@ export default function Dashboard() {
             </div>
           </>
         )}
+
+        <div style={dropdownDivider} />
+
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); logout() }}>
+          <span style={{ fontSize: 14 }}>🚪</span> {t('settings.logout')}
+        </button>
       </>
     )
   }
