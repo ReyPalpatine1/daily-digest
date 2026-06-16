@@ -6,6 +6,8 @@ import type { User } from '@supabase/supabase-js'
 import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { AppHeader } from '@/components/AppHeader'
+import { UpgradeButton } from '@/components/UpgradeButton'
 
 type Tab = 'account' | 'subscription' | 'help'
 
@@ -157,16 +159,7 @@ export default function ProfilePage() {
       minHeight: '100vh', background: 'var(--bg-primary)',
       color: 'var(--text-primary)', fontFamily: 'var(--font-sans)',
     }}>
-      <header style={{
-        height: 56, borderBottom: '0.5px solid var(--border)', background: 'var(--bg-card)',
-        display: 'flex', alignItems: 'center', padding: '0 20px',
-        position: 'sticky', top: 0, zIndex: 10,
-      }}>
-        <button onClick={() => router.push('/dashboard')}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 13, fontFamily: 'inherit' }}>
-          {t('subscribe.back')}
-        </button>
-      </header>
+      <AppHeader showBack />
 
       <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 20px 56px' }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 18px', letterSpacing: -0.4 }}>
@@ -262,14 +255,10 @@ export default function ProfilePage() {
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>
                       {t('subscription.freeUpgradePrompt')}
                     </div>
-                    <button onClick={comingSoon}
-                      style={{
-                        padding: '9px 14px', borderRadius: 8, border: 'none',
-                        background: 'var(--accent)', color: 'var(--bg-card)',
-                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                      }}>
-                      {t('subscription.startProCta')}
-                    </button>
+                    <UpgradeButton
+                      label={t('subscription.startProCta')}
+                      style={{ padding: '9px 14px', borderRadius: 8, fontSize: 13 }} />
+
                   </div>
                 </>
               )}

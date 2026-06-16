@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
+import { AppHeader } from '@/components/AppHeader'
+import { UpgradeButton } from '@/components/UpgradeButton'
 
 const PRICE_MONTHLY = 4900
 const PRICE_YEARLY = 39000
@@ -62,20 +64,7 @@ export default function PricingPage() {
       fontFamily: 'var(--font-sans)',
     }}>
       {/* 상단바 */}
-      <header style={{
-        height: 56, borderBottom: '0.5px solid var(--border)',
-        background: 'var(--bg-card)',
-        display: 'flex', alignItems: 'center', padding: '0 20px',
-        position: 'sticky', top: 0, zIndex: 10,
-      }}>
-        <button onClick={() => router.push('/dashboard')}
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--text-secondary)', fontSize: 13, fontFamily: 'inherit',
-          }}>
-          {t('subscribe.back')}
-        </button>
-      </header>
+      <AppHeader showBack />
 
       <main style={{ maxWidth: 880, margin: '0 auto', padding: '40px 20px 64px' }}>
         {/* 헤더 */}
@@ -168,9 +157,10 @@ export default function PricingPage() {
             {isPro ? (
               <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
             ) : (
-              <button style={primaryBtn} onClick={() => router.push(`/subscribe?plan=${billing}`)}>
-                {pricing.startTrial}
-              </button>
+              <UpgradeButton
+                label={pricing.startTrial}
+                onClick={() => router.push(`/subscribe?plan=${billing}`)}
+                style={{ ...primaryBtn }} />
             )}
           </div>
         </div>
