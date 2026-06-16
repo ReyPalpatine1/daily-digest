@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
+import { supabase, checkIsPro } from '@/lib/supabase'
+import type { Profile } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
 
@@ -16,10 +18,37 @@ export default function PricingPage() {
   const { t, locale } = useTranslation()
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
   const [isPro, setIsPro] = useState(false)
+  const [ready, setReady] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
+  // 실제 DB 플랜으로 Pro 판정 (profile 페이지와 동일 규칙).
+  // 로드 전엔 ready=false로 버튼 판정 보류 → 깜빡임 방지.
   useEffect(() => {
-    try { setIsPro(localStorage.getItem('demo_pro') === 'true') } catch {}
+    let cancelled = false
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (cancelled) return
+      if (!data.user) { setReady(true); return } // 비로그인 → FREE 취급
+
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
+        .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+      const admin = adminEmails.includes((data.user.email ?? '').toLowerCase())
+      let adminPreviewPro = false
+      if (admin) {
+        try { adminPreviewPro = localStorage.getItem('admin_plan_mode') === 'pro' } catch {}
+      }
+
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single()
+      if (cancelled) return
+
+      const realIsPro = checkIsPro(profileRow as Profile | null, admin)
+      setIsPro(admin ? adminPreviewPro : realIsPro)
+      setReady(true)
+    })
+    return () => { cancelled = true }
   }, [])
 
   const won = (n: number) => `₩${n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US')}`
@@ -119,7 +148,7 @@ export default function PricingPage() {
               {pricing.freeExcluded.map(f => featureRow(f, false))}
             </div>
             <button style={disabledBtn} disabled>
-              {isPro ? pricing.basePlan : pricing.currentInUse}
+              {!ready ? '⋯' : isPro ? pricing.basePlan : pricing.currentInUse}
             </button>
           </div>
 
@@ -154,7 +183,9 @@ export default function PricingPage() {
             <div style={{ marginBottom: 18 }}>
               {pricing.proFeatures.map(f => featureRow(f, true))}
             </div>
-            {isPro ? (
+            {!ready ? (
+              <button style={disabledBtn} disabled>⋯</button>
+            ) : isPro ? (
               <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
             ) : (
               <UpgradeButton
