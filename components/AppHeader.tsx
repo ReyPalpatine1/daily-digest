@@ -233,22 +233,6 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
         padding: '0 20px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {showBack && (
-            <button
-              onClick={() => router.back()}
-              aria-label={t('subscribe.back')}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: 'transparent', border: 'none',
-                color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 18,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'inherit',
-              }}>
-              ←
-            </button>
-          )}
           <button
             onClick={() => router.push('/dashboard')}
             style={{
@@ -263,6 +247,18 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* 뒤로가기 (우측 툴바 맨 왼쪽) */}
+          {showBack && (
+            <button
+              onClick={() => router.back()}
+              aria-label={t('subscribe.back')}
+              title={t('subscribe.back')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              style={{ ...toolbarIconBtn, fontSize: 18 }}>
+              ←
+            </button>
+          )}
           {/* 빠른 언어 토글 */}
           <button
             onClick={() => changeLocale(locale === 'ko' ? 'en' : 'ko')}

@@ -210,15 +210,22 @@ export default function AdminPage() {
         borderBottom: `0.5px solid ${ADMIN_BAR_SUBTLE}`,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <div style={{
-            width: 24, height: 24, borderRadius: 7,
-            background: '#FAFAFA', color: '#0A0A0A',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 700, flexShrink: 0,
-          }}>D</div>
-          <span style={{ fontSize: 15, fontWeight: 600, color: ADMIN_BAR_FG, letterSpacing: -0.2 }}>
-            Daily Digest
-          </span>
+          <div
+            onClick={() => router.push('/dashboard')}
+            role="button"
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
+            <div style={{
+              width: 24, height: 24, borderRadius: 7,
+              background: '#FAFAFA', color: '#0A0A0A',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, flexShrink: 0,
+            }}>D</div>
+            <span style={{ fontSize: 15, fontWeight: 600, color: ADMIN_BAR_FG, letterSpacing: -0.2 }}>
+              Daily Digest
+            </span>
+          </div>
           <span style={{
             background: 'var(--danger)', color: '#fff',
             fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
