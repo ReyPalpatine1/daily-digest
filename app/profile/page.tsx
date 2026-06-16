@@ -72,20 +72,6 @@ export default function ProfilePage() {
   }
 
   // === 공용 스타일 ===
-  const planBadgeStyle = (p: 'FREE' | 'PRO'): React.CSSProperties =>
-    p === 'PRO'
-      ? {
-          background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
-          color: '#FFFFFF',
-          fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
-          padding: '2px 7px', borderRadius: 4,
-        }
-      : {
-          background: 'var(--bg-subtle)',
-          color: 'var(--text-tertiary)',
-          fontSize: 10, fontWeight: 600, letterSpacing: 0.4,
-          padding: '2px 7px', borderRadius: 4,
-        }
   const card$: React.CSSProperties = {
     background: 'var(--bg-card)', border: '0.5px solid var(--border)',
     borderRadius: 12, padding: 18, boxSizing: 'border-box',
@@ -142,10 +128,7 @@ export default function ProfilePage() {
               gap: 12, flexWrap: 'wrap',
             }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanPro')}</span>
-                  <span style={planBadgeStyle(plan)}>{plan}</span>
-                </div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanPro')}</div>
                 <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
                   {t('profile.expiresAt')}: <strong style={{ color: 'var(--text-primary)' }}>{expiresLabel}</strong>
                 </div>
@@ -159,10 +142,7 @@ export default function ProfilePage() {
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               gap: 12, flexWrap: 'wrap',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanFree')}</span>
-                <span style={planBadgeStyle(plan)}>{plan}</span>
-              </div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanFree')}</div>
               <UpgradeButton />
             </div>
           )}
