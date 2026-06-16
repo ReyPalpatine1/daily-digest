@@ -72,6 +72,23 @@ export default function ProfilePage() {
   }
 
   // === 공용 스타일 ===
+  // 플랜명 강조 뱃지 (플랜 카드 핵심 표시) — 앱 공통 색 체계 유지
+  const planBadgeStyle = (p: 'FREE' | 'PRO'): React.CSSProperties =>
+    p === 'PRO'
+      ? {
+          display: 'inline-block',
+          background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
+          color: '#FFFFFF',
+          fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+          padding: '4px 11px', borderRadius: 6,
+        }
+      : {
+          display: 'inline-block',
+          background: 'var(--bg-subtle)',
+          color: 'var(--text-secondary)',
+          fontSize: 13, fontWeight: 700, letterSpacing: 0.5,
+          padding: '4px 11px', borderRadius: 6,
+        }
   const card$: React.CSSProperties = {
     background: 'var(--bg-card)', border: '0.5px solid var(--border)',
     borderRadius: 12, padding: 18, boxSizing: 'border-box',
@@ -122,30 +139,26 @@ export default function ProfilePage() {
         {/* ============ 플랜 ============ */}
         <div style={card$}>
           <div style={sectionTitle}>{t('profile.planSection')}</div>
-          {plan === 'PRO' ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              gap: 12, flexWrap: 'wrap',
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanPro')}</div>
-                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                  {t('profile.expiresAt')}: <strong style={{ color: 'var(--text-primary)' }}>{expiresLabel}</strong>
-                </div>
-              </div>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 12, flexWrap: 'wrap',
+          }}>
+            <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+              <span style={planBadgeStyle(plan)}>{plan}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+                {plan === 'PRO'
+                  ? `${t('profile.expiresAt')}: ${expiresLabel}`
+                  : t('profile.freeUpsell')}
+              </span>
+            </div>
+            {plan === 'PRO' ? (
               <button style={btnSecondary} onClick={comingSoon}>
                 {t('profile.manageSubscription')}
               </button>
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              gap: 12, flexWrap: 'wrap',
-            }}>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanFree')}</div>
+            ) : (
               <UpgradeButton />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </main>
 
