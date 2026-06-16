@@ -131,12 +131,6 @@ export default function ProfilePage() {
           {accountRow(t('profile.name'), userName)}
           {accountRow(t('profile.email'), user?.email ?? '—')}
           {joinedAt && accountRow(t('profile.joinedAt'), joinedAt)}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0 1px' }}>
-            <span style={{ fontSize: 13, color: 'var(--text-tertiary)', minWidth: 72 }}>{t('profile.planLabel')}</span>
-            <span style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-              <span style={planBadgeStyle(plan)}>{plan}</span>
-            </span>
-          </div>
         </div>
 
         {/* ============ 플랜 ============ */}
@@ -148,7 +142,10 @@ export default function ProfilePage() {
               gap: 12, flexWrap: 'wrap',
             }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanPro')}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanPro')}</span>
+                  <span style={planBadgeStyle(plan)}>{plan}</span>
+                </div>
                 <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
                   {t('profile.expiresAt')}: <strong style={{ color: 'var(--text-primary)' }}>{expiresLabel}</strong>
                 </div>
@@ -162,7 +159,10 @@ export default function ProfilePage() {
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               gap: 12, flexWrap: 'wrap',
             }}>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanFree')}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16, fontWeight: 600 }}>{t('profile.currentPlanFree')}</span>
+                <span style={planBadgeStyle(plan)}>{plan}</span>
+              </div>
               <UpgradeButton />
             </div>
           )}
