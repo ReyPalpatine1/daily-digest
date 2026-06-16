@@ -495,13 +495,6 @@ export default function Dashboard() {
     try { localStorage.setItem('theme', next) } catch {}
   }
 
-  // 로고 클릭: 대시보드로 이동 + 데이터 새로고침 (이미 대시보드여도 새로고침 효과)
-  function goToDashboardHome() {
-    router.push('/dashboard')
-    if (user) loadData(user.id)
-    else router.refresh()
-  }
-
   function switchPlanMode(mode: 'free' | 'pro') {
     setAdminPlanMode(mode)
     try { localStorage.setItem('admin_plan_mode', mode) } catch {}
@@ -758,7 +751,7 @@ export default function Dashboard() {
         {isMobile ? (
           <>
             <div
-              onClick={goToDashboardHome}
+              onClick={() => setActiveTab('channels')}
               role="button"
               onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
               onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
@@ -806,7 +799,7 @@ export default function Dashboard() {
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
               <div
-                onClick={goToDashboardHome}
+                onClick={() => setActiveTab('channels')}
                 role="button"
                 onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
                 onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
