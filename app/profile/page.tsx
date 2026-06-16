@@ -138,18 +138,14 @@ export default function ProfilePage() {
 
         {/* ============ 플랜 ============ */}
         <div style={card$}>
-          <div style={sectionTitle}>{t('profile.planSection')}</div>
+          {/* 윗줄: 좌측 (플랜 라벨 + 뱃지) ↔ 우측 (버튼) */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: 12, flexWrap: 'wrap',
           }}>
-            <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ ...sectionTitle, marginBottom: 0, marginRight: 8 }}>{t('profile.planSection')}</span>
               <span style={planBadgeStyle(plan)}>{plan}</span>
-              <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
-                {plan === 'PRO'
-                  ? `${t('profile.expiresAt')}: ${expiresLabel}`
-                  : t('profile.freeUpsell')}
-              </span>
             </div>
             {plan === 'PRO' ? (
               <button style={btnSecondary} onClick={comingSoon}>
@@ -158,6 +154,14 @@ export default function ProfilePage() {
             ) : (
               <UpgradeButton />
             )}
+          </div>
+          {/* 아랫줄: 멘트 */}
+          <div style={{ marginTop: 10 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+              {plan === 'PRO'
+                ? `${t('profile.expiresAt')}: ${expiresLabel}`
+                : t('profile.freeUpsell')}
+            </span>
           </div>
         </div>
       </main>
