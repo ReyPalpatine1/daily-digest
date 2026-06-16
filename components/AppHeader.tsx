@@ -233,18 +233,6 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
         padding: '0 20px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* 뒤로가기 (로고 바로 왼쪽) */}
-          {showBack && (
-            <button
-              onClick={() => router.back()}
-              aria-label={t('subscribe.back')}
-              title={t('subscribe.back')}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              style={{ ...toolbarIconBtn, fontSize: 18 }}>
-              ←
-            </button>
-          )}
           <button
             onClick={() => router.push('/dashboard')}
             style={{
@@ -256,6 +244,18 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
             <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
           </button>
           <span style={planBadgeStyle(plan)}>{plan}</span>
+          {/* 뒤로가기 (로고 그룹 오른쪽 끝) */}
+          {showBack && (
+            <button
+              onClick={() => router.back()}
+              aria-label={t('subscribe.back')}
+              title={t('subscribe.back')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              style={{ ...toolbarIconBtn, fontSize: 18 }}>
+              ←
+            </button>
+          )}
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
