@@ -13,7 +13,7 @@ const ONETIME_PLANS = [
   { id: '1year', key: 'onetime12', amount: 39000, discount: 33 },
 ]
 
-export default function SubscriptionPage() {
+function SubscriptionInner() {
   const router = useRouter()
   const { t, locale } = useTranslation()
   const [ready, setReady] = useState(false)
@@ -328,4 +328,12 @@ export default function SubscriptionPage() {
       )}
     </div>
   )
+}
+
+export default function SubscriptionPage() {
+  const router = useRouter()
+  // 옛 구독 관리 페이지(/subscription)는 비활성 — 구독 관리는 /profile로 일원화.
+  // SubscriptionInner 코드는 보존하되 렌더하지 않고 /profile로 리다이렉트.
+  useEffect(() => { router.replace('/profile') }, [router])
+  return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />
 }

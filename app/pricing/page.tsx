@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
 import { supabase, checkIsPro } from '@/lib/supabase'
@@ -14,12 +13,12 @@ const PRICE_YEARLY = 39000
 const YEARLY_DISCOUNT = Math.floor((1 - PRICE_YEARLY / (PRICE_MONTHLY * 12)) * 100)
 
 export default function PricingPage() {
-  const router = useRouter()
   const { t, locale } = useTranslation()
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
   const [isPro, setIsPro] = useState(false)
   const [ready, setReady] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [toast, setToast] = useState('')
 
   // 실제 DB 플랜으로 Pro 판정 (profile 페이지와 동일 규칙).
   // 로드 전엔 ready=false로 버튼 판정 보류 → 깜빡임 방지.
@@ -50,6 +49,12 @@ export default function PricingPage() {
     })
     return () => { cancelled = true }
   }, [])
+
+  // 실결제 미구현 — 모든 결제 진입은 안내만 (profile 페이지와 동일 패턴)
+  function comingSoon() {
+    setToast(t('profile.paymentComingSoon'))
+    setTimeout(() => setToast(''), 2500)
+  }
 
   const won = (n: number) => `₩${n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US')}`
   const pricing = translations[locale].pricing
@@ -190,7 +195,7 @@ export default function PricingPage() {
             ) : (
               <UpgradeButton
                 label={pricing.startTrial}
-                onClick={() => router.push(`/subscribe?plan=${billing}`)}
+                onClick={comingSoon}
                 style={{ ...primaryBtn }} />
             )}
           </div>
@@ -198,7 +203,7 @@ export default function PricingPage() {
 
         {/* 일회성 결제 안내 */}
         <button
-          onClick={() => router.push('/subscribe?type=onetime&plan=1month')}
+          onClick={comingSoon}
           style={{
             ...card, width: '100%', textAlign: 'left', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 14, marginBottom: 40,
@@ -250,6 +255,18 @@ export default function PricingPage() {
           </div>
         </div>
       </main>
+
+      {/* === 토스트 === */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
+          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+          boxShadow: 'var(--shadow-lg)',
+        }}>
+          {toast}
+        </div>
+      )}
     </div>
   )
 }

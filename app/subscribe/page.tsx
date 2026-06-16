@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
@@ -169,9 +169,9 @@ function SubscribeInner() {
 }
 
 export default function SubscribePage() {
-  return (
-    <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />}>
-      <SubscribeInner />
-    </Suspense>
-  )
+  const router = useRouter()
+  // 옛 결제폼(/subscribe)은 비활성 — 결제 진입은 /pricing으로 일원화.
+  // SubscribeInner 코드는 보존하되 렌더하지 않고 /pricing으로 리다이렉트.
+  useEffect(() => { router.replace('/pricing') }, [router])
+  return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />
 }
