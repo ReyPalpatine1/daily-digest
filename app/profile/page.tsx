@@ -157,7 +157,7 @@ export default function ProfilePage() {
           </div>
           {/* 아랫줄: 멘트 */}
           <div style={{ marginTop: 10 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
               {plan === 'PRO'
                 ? `${t('profile.expiresAt')}: ${expiresLabel}`
                 : t('profile.freeUpsell')}
