@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { PlanBadge, getPlanBadge } from '@/components/PlanBadge'
+import { AdminHeader } from '@/components/AdminHeader'
 
 type AdminStats = {
   generatedAt: string
@@ -44,23 +45,17 @@ export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [loadedAt, setLoadedAt] = useState<number | null>(null)
-  const [, forceTick] = useState(0)
 
   const loadStats = useCallback(async () => {
-    setRefreshing(true)
     try {
       const res = await fetch('/api/admin/usage')
       if (res.ok) {
         const data = await res.json()
         setStats(data)
-        setLoadedAt(Date.now())
       }
     } catch (e) {
       console.error('[admin] loadStats failed:', e)
     } finally {
-      setRefreshing(false)
       setLoading(false)
     }
   }, [])
@@ -84,20 +79,11 @@ export default function AdminPage() {
     return () => { cancelled = true }
   }, [router, loadStats])
 
-  // "N분 전 업데이트" 라벨 갱신용 1분 틱
-  useEffect(() => {
-    const id = setInterval(() => forceTick(v => v + 1), 60_000)
-    return () => clearInterval(id)
-  }, [])
-
   const nf = new Intl.NumberFormat(locale === 'ko' ? 'ko-KR' : 'en-US')
   const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
 
-  // ---- 고정 색상 (관리자 상단바는 테마와 무관하게 항상 검정) ----
+  // 로딩 스켈레톤의 상단바 자리 색 (실제 헤더는 AdminHeader가 렌더)
   const ADMIN_BAR_BG = '#0A0A0A'
-  const ADMIN_BAR_FG = '#FAFAFA'
-  const ADMIN_BAR_MUTED = '#71717A'
-  const ADMIN_BAR_SUBTLE = '#1F1F1F'
 
   const cardStyle: React.CSSProperties = {
     background: 'var(--bg-card)',
@@ -115,12 +101,6 @@ export default function AdminPage() {
       </div>
     </div>
   )
-
-  function relativeUpdated(): string {
-    if (!loadedAt) return ''
-    const min = Math.floor((Date.now() - loadedAt) / 60_000)
-    return min < 1 ? t('admin.updatedNow') : t('admin.updatedMinutes', { n: min })
-  }
 
   // ===== 로딩 스켈레톤 =====
   if (loading || !isAdmin) {
@@ -191,101 +171,10 @@ export default function AdminPage() {
         : t('admin.cronError')
 
   const max7d = Math.max(1, ...s.last7Days.map(d => d.gemini + d.youtube + d.supadata))
-  const navItems: { key: string; label: string; active: boolean; href?: string }[] = [
-    { key: 'dashboard', label: t('admin.menuDashboard'), active: true },
-    { key: 'users', label: t('admin.menuUsers'), active: false, href: '/admin/users' },
-    { key: 'content', label: t('admin.menuContent'), active: false },
-    { key: 'system', label: t('admin.menuSystem'), active: false },
-    { key: 'email', label: '📧 Email', active: false, href: '/admin/email-preview' },
-  ]
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
-      {/* ===== 관리자 상단바 (항상 검정 고정) ===== */}
-      <header style={{
-        position: 'sticky', top: 0, zIndex: 50,
-        height: 56, background: ADMIN_BAR_BG,
-        display: 'flex', alignItems: 'center', gap: 16,
-        padding: '0 20px',
-        borderBottom: `0.5px solid ${ADMIN_BAR_SUBTLE}`,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <div
-            onClick={() => router.push('/dashboard')}
-            role="button"
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-            style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: 7,
-              background: '#FAFAFA', color: '#0A0A0A',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 700, flexShrink: 0,
-            }}>D</div>
-            <span style={{ fontSize: 15, fontWeight: 600, color: ADMIN_BAR_FG, letterSpacing: -0.2 }}>
-              Daily Digest
-            </span>
-          </div>
-          <span style={{
-            background: 'var(--danger)', color: '#fff',
-            fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
-            padding: '2px 7px', borderRadius: 4,
-          }}>ADMIN</span>
-        </div>
-
-        {/* 메뉴 */}
-        <nav style={{ display: 'flex', gap: 2 }}>
-          {navItems.map(item => (
-            <button key={item.key}
-              onClick={() => { if (item.href) router.push(item.href) }}
-              style={{
-                padding: '6px 12px', borderRadius: 7, border: 'none',
-                background: item.active ? ADMIN_BAR_SUBTLE : 'transparent',
-                color: item.active ? ADMIN_BAR_FG : ADMIN_BAR_MUTED,
-                fontWeight: item.active ? 500 : 400,
-                fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* 새로고침 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: ADMIN_BAR_MUTED }}>{relativeUpdated()}</span>
-            <button onClick={loadStats} disabled={refreshing}
-              style={{
-                padding: '5px 10px', borderRadius: 6,
-                background: ADMIN_BAR_SUBTLE, border: 'none',
-                color: ADMIN_BAR_FG, fontSize: 11, fontWeight: 500,
-                cursor: refreshing ? 'wait' : 'pointer', fontFamily: 'inherit',
-                opacity: refreshing ? 0.6 : 1,
-              }}>
-              🔄 {t('admin.refresh')}
-            </button>
-          </div>
-          {/* 모드 토글 */}
-          <div style={{ display: 'inline-flex', background: ADMIN_BAR_SUBTLE, borderRadius: 7, padding: 2 }}>
-            <button onClick={() => router.push('/dashboard')}
-              style={{
-                padding: '4px 10px', borderRadius: 5, border: 'none',
-                background: 'transparent', color: ADMIN_BAR_MUTED,
-                fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-              {t('admin.userMode')}
-            </button>
-            <button
-              style={{
-                padding: '4px 10px', borderRadius: 5, border: 'none',
-                background: '#FAFAFA', color: '#0A0A0A',
-                fontSize: 11, fontWeight: 500, cursor: 'default', fontFamily: 'inherit',
-              }}>
-              {t('admin.adminMode')}
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminHeader activeKey="dashboard" />
 
       {/* ===== 본문 ===== */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>

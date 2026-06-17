@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { AdminHeader } from '@/components/AdminHeader'
 import {
   buildDigestHtml,
   buildBreakingHtml,
@@ -49,11 +50,6 @@ export default function EmailPreviewPage() {
         : type === 'welcome' ? buildWelcomeHtml(emailLocale)
           : buildErrorPreviewHtml(emailLocale)
 
-  const ADMIN_BAR_BG = '#0A0A0A'
-  const ADMIN_BAR_FG = '#FAFAFA'
-  const ADMIN_BAR_SUBTLE = '#1F1F1F'
-  const ADMIN_BAR_MUTED = '#71717A'
-
   const types: { key: EmailType; label: string }[] = [
     { key: 'digest', label: t('nav.history') },
     { key: 'breaking', label: t('history.breakingBadge') },
@@ -71,22 +67,7 @@ export default function EmailPreviewPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
-      {/* 관리자 상단바 (검정 고정) */}
-      <header style={{
-        height: 56, background: ADMIN_BAR_BG,
-        display: 'flex', alignItems: 'center', gap: 14, padding: '0 20px',
-        borderBottom: `0.5px solid ${ADMIN_BAR_SUBTLE}`,
-      }}>
-        <button onClick={() => router.push('/admin')}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: ADMIN_BAR_MUTED, fontSize: 13, fontFamily: 'inherit' }}>
-          {t('subscribe.back')}
-        </button>
-        <span style={{ fontSize: 14, fontWeight: 600, color: ADMIN_BAR_FG }}>이메일 템플릿 미리보기</span>
-        <span style={{
-          background: 'var(--danger)', color: '#fff', fontSize: 10, fontWeight: 700,
-          padding: '2px 7px', borderRadius: 4, letterSpacing: 0.5,
-        }}>ADMIN</span>
-      </header>
+      <AdminHeader activeKey="email" />
 
       <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
         {/* 컨트롤 */}
