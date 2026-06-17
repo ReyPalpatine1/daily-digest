@@ -1,4 +1,4 @@
-import { logApiUsage } from '@/lib/api-usage'
+import { logApiUsage, SYSTEM_USER_ID } from '@/lib/api-usage'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
@@ -223,12 +223,10 @@ async function callGeminiModel(
       const inputTokens = usage.promptTokenCount ?? 0
       const outputTokens = usage.candidatesTokenCount ?? 0
       // fire-and-forget: 사용량 기록 실패가 핵심 경로를 막지 않도록
-      // userId가 없으면(공유 수집 등) 특정 사용자 귀속이 없으므로 기록 생략
-      if (userId) {
-        logApiUsage(userId, 'gemini', inputTokens, outputTokens).catch(e =>
-          console.error('[gemini] logApiUsage 실패:', e)
-        )
-      }
+      // userId가 없으면(공유 수집 등) 시스템 계정으로 귀속해 항상 기록
+      logApiUsage(userId ?? SYSTEM_USER_ID, 'gemini', inputTokens, outputTokens).catch(e =>
+        console.error('[gemini] logApiUsage 실패:', e)
+      )
 
       // JSON 파싱 시도
       let parsed
@@ -296,9 +294,8 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
       { headers: { 'x-api-key': process.env.SUPADATA_API_KEY! } },
       SUPADATA_TIMEOUT_MS
     )
-    if (userId) {
-      logApiUsage(userId, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
-    }
+    // userId가 없으면(공유 수집 등) 시스템 계정으로 귀속해 항상 기록
+    logApiUsage(userId ?? SYSTEM_USER_ID, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
 
     if (res.ok) {
       const data = await res.json()

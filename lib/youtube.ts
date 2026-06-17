@@ -1,4 +1,4 @@
-import { logApiUsage } from './api-usage'
+import { logApiUsage, SYSTEM_USER_ID } from './api-usage'
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 
@@ -20,7 +20,8 @@ export async function getChannelId(channelUrl: string, userId?: string): Promise
     const res = await fetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${handle}&key=${YOUTUBE_API_KEY}`
     )
-    if (userId) await logApiUsage(userId, 'youtube')
+    // userId가 없으면(공유 수집 등) 시스템 계정으로 귀속해 항상 기록
+    await logApiUsage(userId ?? SYSTEM_USER_ID, 'youtube')
     const data = await res.json()
     return data.items?.[0]?.snippet?.channelId ?? null
   } catch {

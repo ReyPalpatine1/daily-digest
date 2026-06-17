@@ -6,6 +6,10 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey)
 
 export type ApiService = 'gemini' | 'youtube' | 'supadata'
 
+// 공유 풀 수집/요약처럼 특정 사용자가 없는 시스템 작업의 사용량 귀속용 계정.
+// api_usage.user_id는 uuid NOT NULL(profiles FK 없음)이라 zero-uuid를 그대로 사용.
+export const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000'
+
 function todayKstDate(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul',
