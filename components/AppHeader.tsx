@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import UserPlanBadge from '@/components/UserPlanBadge'
 
 // 공통 상단바 — 대시보드 헤더와 동일한 모양/동작을 하위 페이지(profile/pricing)에서 재사용.
 // 대시보드 전용 네비(채널/발송설정/열람기록)는 포함하지 않는다 (A안: 하위 페이지엔 네비 없음).
@@ -98,20 +99,6 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
     color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 14,
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   }
-  const planBadgeStyle = (p: 'FREE' | 'PRO'): React.CSSProperties =>
-    p === 'PRO'
-      ? {
-          background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
-          color: '#FFFFFF',
-          fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
-          padding: '2px 7px', borderRadius: 4,
-        }
-      : {
-          background: 'var(--bg-subtle)',
-          color: 'var(--text-tertiary)',
-          fontSize: 10, fontWeight: 600, letterSpacing: 0.4,
-          padding: '2px 7px', borderRadius: 4,
-        }
   const dropdownStyle: React.CSSProperties = {
     position: 'fixed',
     top: 60,
@@ -165,7 +152,7 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
               {user?.email}
             </span>
           </div>
-          <span style={planBadgeStyle(plan)}>{plan}</span>
+          <UserPlanBadge plan={plan} size="sm" />
         </button>
 
         <div style={dropdownDivider} />
@@ -243,7 +230,7 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
             <div style={logoBox}>D</div>
             <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
           </button>
-          <span style={planBadgeStyle(plan)}>{plan}</span>
+          <UserPlanBadge plan={plan} size="sm" />
           {/* 뒤로가기 (로고 그룹 오른쪽 끝) */}
           {showBack && (
             <button

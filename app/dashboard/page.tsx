@@ -6,6 +6,7 @@ import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
 import { normalizeChannelUrl } from '@/lib/channel-url'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import UserPlanBadge from '@/components/UserPlanBadge'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -568,20 +569,6 @@ export default function Dashboard() {
     padding: '1px 6px', borderRadius: 999,
     lineHeight: 1.4,
   }
-  const planBadgeStyle = (p: 'FREE' | 'PRO'): React.CSSProperties =>
-    p === 'PRO'
-      ? {
-          background: 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
-          color: '#FFFFFF',
-          fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
-          padding: '2px 7px', borderRadius: 4,
-        }
-      : {
-          background: 'var(--bg-subtle)',
-          color: 'var(--text-tertiary)',
-          fontSize: 10, fontWeight: 600, letterSpacing: 0.4,
-          padding: '2px 7px', borderRadius: 4,
-        }
   const dropdownStyle: React.CSSProperties = {
     position: 'absolute',
     top: 60,
@@ -674,7 +661,7 @@ export default function Dashboard() {
               {user?.email}
             </span>
           </div>
-          <span style={planBadgeStyle(plan)}>{plan}</span>
+          <UserPlanBadge plan={plan} size="sm" />
         </button>
 
         <div style={dropdownDivider} />
@@ -758,7 +745,7 @@ export default function Dashboard() {
               style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
               <div style={logoBox}>D</div>
               <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
-              <span style={planBadgeStyle(plan)}>{plan}</span>
+              <UserPlanBadge plan={plan} size="sm" />
             </div>
             <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
               <button
@@ -806,7 +793,7 @@ export default function Dashboard() {
                 style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
                 <div style={logoBox}>D</div>
                 <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
-                <span style={planBadgeStyle(plan)}>{plan}</span>
+                <UserPlanBadge plan={plan} size="sm" />
               </div>
               <nav style={{ display: 'flex', gap: 2 }}>
                 {tabs.map(tab => (
@@ -989,7 +976,7 @@ export default function Dashboard() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <div style={logoBox}>D</div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>Daily Digest</div>
-                <span style={planBadgeStyle(plan)}>{plan}</span>
+                <UserPlanBadge plan={plan} size="sm" />
               </div>
               <button onClick={() => setSidebarOpen(false)}
                 aria-label={t('nav.closeMenu')}
