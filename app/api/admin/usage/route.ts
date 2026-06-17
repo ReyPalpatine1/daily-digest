@@ -99,12 +99,8 @@ export async function GET() {
   }
 
   const [apiUsageRes, profilesRes, dauRes, mauRes, latestDigestRes, topChannelsRes] = await Promise.all([
-    // === API 사용량 (이번 달 전체 한 번에 조회) ===
-    serviceClient
-      .from('api_usage')
-      .select('service, date, api_calls, input_tokens, output_tokens')
-      .gte('date', monthStart)
-      .order('date', { ascending: true }),
+    // === API 사용량 (오늘+최근7일만 DB 집계 RPC) ===
+    serviceClient.rpc('admin_usage_summary', { today_date: today, week_start: sevenDaysAgo }),
     fetchProfiles(),
     serviceClient.rpc('admin_active_users', { since: todayKstMidnightUtc }),
     serviceClient.rpc('admin_active_users', { since: monthStartKstUtc }),
@@ -114,7 +110,7 @@ export async function GET() {
 
   const dbResponseMs = Date.now() - dbStart
 
-  const rows = apiUsageRes.data
+  const rows = apiUsageRes.error ? [] : (apiUsageRes.data ?? [])
   const { profileRows, hasCreatedAt } = profilesRes
 
   const todayApi = {
@@ -130,24 +126,22 @@ export async function GET() {
   }
 
   for (const row of rows ?? []) {
-    const service = (row.service ?? 'gemini') as Service
-    const calls = row.api_calls ?? 0
-    if (row.date === today) {
+    const service = ((row as any).service ?? 'gemini') as Service
+    const calls = Number((row as any).calls) || 0
+    if ((row as any).date === today) {
       if (service === 'gemini') {
         todayApi.gemini.count += calls
-        todayApi.gemini.input += row.input_tokens ?? 0
-        todayApi.gemini.output += row.output_tokens ?? 0
+        todayApi.gemini.input += Number((row as any).input_tokens) || 0
+        todayApi.gemini.output += Number((row as any).output_tokens) || 0
       } else if (service === 'youtube') {
         todayApi.youtube.count += calls
       } else if (service === 'supadata') {
         todayApi.supadata.count += calls
       }
     }
-    if (row.date >= sevenDaysAgo) {
-      const entry = last7DaysMap.get(row.date)
-      if (entry && (service === 'gemini' || service === 'youtube' || service === 'supadata')) {
-        entry[service] += calls
-      }
+    const entry = last7DaysMap.get((row as any).date)
+    if (entry && (service === 'gemini' || service === 'youtube' || service === 'supadata')) {
+      entry[service] += calls
     }
   }
 
