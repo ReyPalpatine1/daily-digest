@@ -48,53 +48,54 @@ export async function GET() {
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
 
   // === 프로필 조회 (신규 컬럼이 없을 수 있어 방어적으로) ===
-  let rows: any[] = []
+  // 프로필 조회와 집계 RPC 3개는 서로 의존이 없어 병렬 실행.
   const fullCols = 'id, email, name, plan, plan_expires_at, vip_granted_by, vip_granted_at, created_at, admin_note, last_active_at'
-  const res = await serviceClient
-    .from('profiles')
-    .select(fullCols)
-    .order('created_at', { ascending: false })
-  if (res.error) {
-    // admin_note / last_active_at / created_at 컬럼이 아직 없는 환경 폴백
-    const fallback = await serviceClient
+  const fetchProfiles = async (): Promise<any[]> => {
+    const res = await serviceClient
       .from('profiles')
-      .select('id, email, name, plan, plan_expires_at, vip_granted_by, vip_granted_at')
-    rows = fallback.data ?? []
-  } else {
-    rows = res.data ?? []
+      .select(fullCols)
+      .order('created_at', { ascending: false })
+    if (res.error) {
+      // admin_note / last_active_at / created_at 컬럼이 아직 없는 환경 폴백
+      const fallback = await serviceClient
+        .from('profiles')
+        .select('id, email, name, plan, plan_expires_at, vip_granted_by, vip_granted_at')
+      return fallback.data ?? []
+    }
+    return res.data ?? []
   }
 
-  // === 채널/다이제스트 수 집계 (사용자별) ===
-  // 사용자가 적어 실시간 집계. 많아지면 캐싱/RPC로 전환.
+  const [rows, channelStats, digestStats, emailStats] = await Promise.all([
+    fetchProfiles(),
+    serviceClient.rpc('admin_channel_counts'),
+    serviceClient.rpc('admin_digest_counts'),
+    serviceClient.rpc('admin_email_stats'),
+  ])
+
+  // === 채널/다이제스트 수 집계 (사용자별) — DB 집계 RPC ===
+  // rpc가 에러거나 함수가 없으면 해당 집계는 0으로 처리(페이지는 죽지 않게).
+  // bigint는 문자열로 올 수 있어 Number()로 변환.
   const channelCount = new Map<string, number>()
-  const digestCount = new Map<string, number>()
-
-  const { data: channelRows } = await serviceClient.from('channels').select('user_id')
-  for (const c of channelRows ?? []) {
+  for (const c of (channelStats.error ? [] : channelStats.data) ?? []) {
     const uid = (c as any).user_id
-    if (uid) channelCount.set(uid, (channelCount.get(uid) ?? 0) + 1)
+    if (uid) channelCount.set(uid, Number((c as any).cnt) || 0)
   }
 
-  const { data: digestRows } = await serviceClient.from('digests').select('user_id')
-  for (const dRow of digestRows ?? []) {
+  const digestCount = new Map<string, number>()
+  for (const dRow of (digestStats.error ? [] : digestStats.data) ?? []) {
     const uid = (dRow as any).user_id
-    if (uid) digestCount.set(uid, (digestCount.get(uid) ?? 0) + 1)
+    if (uid) digestCount.set(uid, Number((dRow as any).cnt) || 0)
   }
 
-  // === 이메일 발송 성공률 집계 (email_logs 기준, user_id별) ===
-  // email_logs 테이블이 없거나 비어 있으면 데이터 없음 → UI에서 "—"
+  // === 이메일 발송 성공률 집계 (email_logs 기준, user_id별) — DB 집계 RPC ===
+  // 함수가 없거나 비어 있으면 데이터 없음 → UI에서 "—"
   const emailTotal = new Map<string, number>()
   const emailSuccess = new Map<string, number>()
-  const { data: emailRows } = await serviceClient
-    .from('email_logs')
-    .select('user_id, status')
-  for (const row of emailRows ?? []) {
+  for (const row of (emailStats.error ? [] : emailStats.data) ?? []) {
     const uid = (row as any).user_id
     if (!uid) continue
-    emailTotal.set(uid, (emailTotal.get(uid) ?? 0) + 1)
-    if ((row as any).status === 'success') {
-      emailSuccess.set(uid, (emailSuccess.get(uid) ?? 0) + 1)
-    }
+    emailTotal.set(uid, Number((row as any).total) || 0)
+    emailSuccess.set(uid, Number((row as any).success) || 0)
   }
 
   const users = rows.map(p => {
