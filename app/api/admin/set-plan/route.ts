@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { enforceChannelLimit, activateAllChannels } from '@/lib/plan-sync'
+import { invalidateUsersCache } from '../users/route'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -103,6 +104,9 @@ export async function POST(request: Request) {
   } else {
     await activateAllChannels(targetUserId)   // VIP 지정 → 전체 활성
   }
+
+  // 플랜 변경 즉시 통계에 반영되도록 users 캐시 무효화
+  invalidateUsersCache()
 
   return NextResponse.json({ success: true, targetUserId, plan, email: target.email })
 }

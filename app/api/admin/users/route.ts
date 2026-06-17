@@ -10,6 +10,15 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
 
 const DAY_MS = 86_400_000
 
+// 관리자 통계는 실시간일 필요 없음 → 60초 메모리 캐시(인증 통과 후 집계 결과에만 적용)
+let cache: { at: number; payload: any } | null = null
+const CACHE_TTL_MS = 60_000
+
+// set-plan 등 변경 직후 즉시 반영되도록 캐시를 비우는 훅
+export function invalidateUsersCache() {
+  cache = null
+}
+
 // 두 시각 사이의 경과일(올림 아님, 최소 1) — "N일째" 계산용
 function daysSince(iso: string | null): number {
   if (!iso) return 0
@@ -43,6 +52,11 @@ export async function GET() {
   }
   if (!adminEmails.includes(user.email.toLowerCase())) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // 인증 통과 후, 신선한 캐시가 있으면 즉시 응답
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
+    return NextResponse.json(cache.payload)
   }
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
@@ -146,5 +160,7 @@ export async function GET() {
   }
 
   // counts 는 기존 호환을 위해 동일 객체 유지
-  return NextResponse.json({ users, summary, counts: summary })
+  const payload = { users, summary, counts: summary }
+  cache = { at: Date.now(), payload }
+  return NextResponse.json(payload)
 }

@@ -10,6 +10,10 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
 
 type Service = 'gemini' | 'youtube' | 'supadata'
 
+// 관리자 통계는 실시간일 필요 없음 → 60초 메모리 캐시(인증 통과 후 집계 결과에만 적용)
+let cache: { at: number; payload: any } | null = null
+const CACHE_TTL_MS = 60_000
+
 function kstParts(date: Date) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul',
@@ -69,6 +73,11 @@ export async function GET() {
   }
   if (!adminEmails.includes(user.email.toLowerCase())) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // 인증 통과 후, 신선한 캐시가 있으면 즉시 응답
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
+    return NextResponse.json(cache.payload)
   }
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
@@ -193,7 +202,7 @@ export async function GET() {
     subscribers: Number(c.subscribers) || 0,
   }))
 
-  return NextResponse.json({
+  const payload = {
     generatedAt: new Date().toISOString(),
     users: {
       total: totalUsers,
@@ -229,5 +238,7 @@ export async function GET() {
     recentUsers,
     topChannels,
     last7Days: Array.from(last7DaysMap.values()),
-  })
+  }
+  cache = { at: Date.now(), payload }
+  return NextResponse.json(payload)
 }
