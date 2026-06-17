@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { invalidateUsersCache } from '../route'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -61,6 +62,9 @@ export async function POST(request: Request) {
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
+
+  // 메모 변경 즉시 통계에 반영되도록 users 캐시 무효화
+  invalidateUsersCache()
 
   return NextResponse.json({ success: true, userId, note })
 }
