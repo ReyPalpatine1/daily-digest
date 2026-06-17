@@ -83,14 +83,39 @@ export async function GET() {
   // --- DB 응답 시간 측정용 ---
   const dbStart = Date.now()
 
-  // === API 사용량 (이번 달 전체 한 번에 조회) ===
-  const { data: rows } = await serviceClient
-    .from('api_usage')
-    .select('service, date, api_calls, input_tokens, output_tokens')
-    .gte('date', monthStart)
-    .order('date', { ascending: true })
+  // === 서로 독립인 쿼리/집계 RPC를 병렬 실행 ===
+  // api_usage 조회, profiles 조회, DAU/MAU/최신 digest/인기 채널 RPC
+  // profiles 에 created_at / plan 컬럼이 없을 수 있어 방어적으로 조회
+  const fetchProfiles = async (): Promise<{ profileRows: any[]; hasCreatedAt: boolean }> => {
+    const res = await serviceClient
+      .from('profiles')
+      .select('id, email, created_at, plan')
+      .order('created_at', { ascending: false })
+    if (res.error) {
+      const fallback = await serviceClient.from('profiles').select('id, email')
+      return { profileRows: fallback.data ?? [], hasCreatedAt: false }
+    }
+    return { profileRows: res.data ?? [], hasCreatedAt: true }
+  }
+
+  const [apiUsageRes, profilesRes, dauRes, mauRes, latestDigestRes, topChannelsRes] = await Promise.all([
+    // === API 사용량 (이번 달 전체 한 번에 조회) ===
+    serviceClient
+      .from('api_usage')
+      .select('service, date, api_calls, input_tokens, output_tokens')
+      .gte('date', monthStart)
+      .order('date', { ascending: true }),
+    fetchProfiles(),
+    serviceClient.rpc('admin_active_users', { since: todayKstMidnightUtc }),
+    serviceClient.rpc('admin_active_users', { since: monthStartKstUtc }),
+    serviceClient.rpc('admin_latest_digest'),
+    serviceClient.rpc('admin_top_channels'),
+  ])
 
   const dbResponseMs = Date.now() - dbStart
+
+  const rows = apiUsageRes.data
+  const { profileRows, hasCreatedAt } = profilesRes
 
   const todayApi = {
     gemini: { count: 0, input: 0, output: 0 },
@@ -127,23 +152,6 @@ export async function GET() {
   }
 
   // === 사용자 통계 ===
-  // profiles 에 created_at / plan 컬럼이 없을 수 있어 방어적으로 조회
-  let profileRows: any[] = []
-  let hasCreatedAt = true
-  {
-    const res = await serviceClient
-      .from('profiles')
-      .select('id, email, created_at, plan')
-      .order('created_at', { ascending: false })
-    if (res.error) {
-      hasCreatedAt = false
-      const fallback = await serviceClient.from('profiles').select('id, email')
-      profileRows = fallback.data ?? []
-    } else {
-      profileRows = res.data ?? []
-    }
-  }
-
   const totalUsers = profileRows.length
   // 결제 Pro와 VIP(무료) 분리 — 수익/전환율은 결제 Pro만 집계
   const proUsers = profileRows.filter(p => p.plan === 'pro' || p.plan === 'PRO').length
@@ -161,26 +169,12 @@ export async function GET() {
     }
   }
 
-  // 활동 사용자 (digests 기준)
-  const { data: todayDigests } = await serviceClient
-    .from('digests')
-    .select('user_id')
-    .gte('created_at', todayKstMidnightUtc)
-  const { data: monthDigests } = await serviceClient
-    .from('digests')
-    .select('user_id, created_at')
-    .gte('created_at', monthStartKstUtc)
-
-  const dau = new Set((todayDigests ?? []).map((d: any) => d.user_id)).size
-  const mau = new Set((monthDigests ?? []).map((d: any) => d.user_id)).size
+  // 활동 사용자 (digests 기준) — DB 집계 RPC(고유 사용자 수)
+  const dau = dauRes.error ? 0 : Number(dauRes.data) || 0
+  const mau = mauRes.error ? 0 : Number(mauRes.data) || 0
 
   // === 시스템 상태 ===
-  const { data: latestDigest } = await serviceClient
-    .from('digests')
-    .select('created_at')
-    .order('created_at', { ascending: false })
-    .limit(1)
-  const cronLastRun = latestDigest?.[0]?.created_at ?? null
+  const cronLastRun = latestDigestRes.error ? null : (latestDigestRes.data ?? null)
   let cronStatus: 'healthy' | 'warning' | 'error' = 'error'
   if (cronLastRun) {
     const ageHours = (Date.now() - new Date(cronLastRun).getTime()) / 3_600_000
@@ -198,31 +192,12 @@ export async function GET() {
     }
   })
 
-  // === 인기 콘텐츠 (구독자 많은 채널) ===
-  const { data: channelRows } = await serviceClient
-    .from('channels')
-    .select('alias, url, categories(name)')
-
-  const channelMap = new Map<string, { name: string; category: string | null; subscribers: number }>()
-  for (const ch of channelRows ?? []) {
-    const key = (ch.url ?? ch.alias ?? '').trim() || ch.alias
-    if (!key) continue
-    const existing = channelMap.get(key)
-    const categoryName = (ch as any).categories?.name ?? null
-    if (existing) {
-      existing.subscribers++
-      if (!existing.category && categoryName) existing.category = categoryName
-    } else {
-      channelMap.set(key, {
-        name: ch.alias ?? key,
-        category: categoryName,
-        subscribers: 1,
-      })
-    }
-  }
-  const topChannels = Array.from(channelMap.values())
-    .sort((a, b) => b.subscribers - a.subscribers)
-    .slice(0, 10)
+  // === 인기 콘텐츠 (구독자 많은 채널) — DB 집계 RPC ===
+  const topChannels = (topChannelsRes.error ? [] : topChannelsRes.data ?? []).map((c: any) => ({
+    name: c.name,
+    category: c.category ?? null,
+    subscribers: Number(c.subscribers) || 0,
+  }))
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
