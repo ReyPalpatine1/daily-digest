@@ -9,5 +9,21 @@
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
-	}
+	},
+	// OpenNext R2 증분 캐시 (ISR/데이터 캐시 저장소)
+	// binding 이름은 R2 캐시 오버라이드가 기대하는 표준 이름이어야 함.
+	"r2_buckets": [
+		{
+			"binding": "NEXT_INC_CACHE_R2_BUCKET",
+			"bucket_name": "daily-digest-cache"
+		}
+	],
+	// ISR 온디맨드 재검증(revalidate)에 필요한 self-reference 서비스 바인딩.
+	// service 값은 위 worker name과 동일해야 함.
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "daily-digest"
+		}
+	]
 }
