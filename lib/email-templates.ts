@@ -161,6 +161,7 @@ export function buildDigestHtml(
 ): string {
   const date = formatDate(new Date(), locale)
   const header = `
+    <a href="${APP_URL}/dashboard" style="text-decoration:none;color:inherit;display:block;">
     <div style="background:#FFFFFF;border-radius:10px;padding:20px 24px;border:1px solid #E5E5E5;margin-bottom:16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
@@ -171,8 +172,14 @@ export function buildDigestHtml(
         </tr>
       </table>
       <div style="font-size:18px;font-weight:600;color:#0A0A0A;margin-top:10px;">${et(locale, 'digest.greeting')}</div>
-      <div style="font-size:13px;color:#71717A;margin-top:4px;">${escapeHtml(et(locale, 'digest.summary', { count: items.length }))}</div>
-    </div>`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">
+        <tr>
+          <td style="font-size:13px;color:#71717A;">${escapeHtml(et(locale, 'digest.summary', { count: items.length }))}</td>
+          <td style="font-size:12px;color:#3f3f46;font-weight:500;text-align:right;white-space:nowrap;">${escapeHtml(et(locale, 'digest.openApp'))} &rarr;</td>
+        </tr>
+      </table>
+    </div>
+    </a>`
   const body = items.length > 0
     ? items.map(it => digestCard(it, locale)).join('')
     : `<div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;color:#A1A1AA;font-size:13px;">${et(locale, 'digest.noVideos')}</div>`

@@ -138,6 +138,7 @@ export const translations = {
       watchVideo: '▶ 영상 보기',
       freeRetentionNotice: '7일 이전 기록은 PRO에서 볼 수 있어요',
       freeRetentionCta: '업그레이드 →',
+      scrollTop: '맨 위로',
     },
     settings: {
       account: '계정',
@@ -559,6 +560,7 @@ export const translations = {
       watchVideo: '▶ Watch Video',
       freeRetentionNotice: 'Records older than 7 days are available on PRO',
       freeRetentionCta: 'Upgrade →',
+      scrollTop: 'Back to top',
     },
     settings: {
       account: 'Account',

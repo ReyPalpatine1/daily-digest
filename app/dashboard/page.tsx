@@ -7,6 +7,7 @@ import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabas
 import { normalizeChannelUrl } from '@/lib/channel-url'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
+import { UpgradeButton } from '@/components/UpgradeButton'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -51,6 +52,8 @@ export default function Dashboard() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [digests, setDigests] = useState<Digest[]>([])
   const [activeTab, setActiveTab] = useState<'channels' | 'schedule' | 'history'>('channels')
+  // 열람 기록 "맨 위로" 버튼: 일정량 스크롤 시 노출
+  const [showScrollTop, setShowScrollTop] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [showAddChannel, setShowAddChannel] = useState(false)
@@ -179,6 +182,14 @@ export default function Dashboard() {
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // "맨 위로" 버튼: 400px 이상 스크롤 시 노출
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   useEffect(() => {
@@ -2276,20 +2287,32 @@ export default function Dashboard() {
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     {t('history.freeRetentionNotice')}
                   </span>
-                  <a href="/pricing"
-                    onClick={e => { e.preventDefault(); router.push('/pricing') }}
-                    style={{
-                      fontSize: 13, fontWeight: 600, color: 'var(--accent)',
-                      textDecoration: 'none', cursor: 'pointer',
-                    }}>
-                    {t('history.freeRetentionCta')}
-                  </a>
+                  <UpgradeButton label={t('nav.proUpgrade')} />
                 </div>
               )}
             </div>
           )
         })()}
       </main>
+
+      {/* 열람 기록 "맨 위로" 버튼 (히스토리 탭 + 일정량 스크롤 시) */}
+      {activeTab === 'history' && showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label={t('history.scrollTop')}
+          title={t('history.scrollTop')}
+          style={{
+            position: 'fixed', right: 20, bottom: 20, zIndex: 60,
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+            color: 'var(--text-tertiary)', fontSize: 16,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontFamily: 'inherit',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+          }}>
+          ↑
+        </button>
+      )}
     </div>
   )
 }
