@@ -175,7 +175,7 @@ export function buildDigestHtml(
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">
         <tr>
           <td style="font-size:13px;color:#71717A;">${escapeHtml(et(locale, 'digest.summary', { count: items.length }))}</td>
-          <td style="font-size:12px;color:#3f3f46;font-weight:500;text-align:right;white-space:nowrap;">${escapeHtml(et(locale, 'digest.openApp'))} &rarr;</td>
+          <td style="font-size:12px;color:#3f3f46;font-weight:500;text-align:right;white-space:nowrap;">${escapeHtml(et(locale, 'digest.openApp'))}</td>
         </tr>
       </table>
     </div>
