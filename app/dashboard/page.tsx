@@ -504,7 +504,17 @@ export default function Dashboard() {
 
   const filteredChannels = filterCat ? channels.filter(c => c.category_id === filterCat) : channels
   const getCatById = (id: string | null) => categories.find(c => c.id === id)
+  // FREE는 화면에 최근 7일만 표시(저장은 30일 유지 → 재구독 시 자동 복원).
+  // plan 미로드 시점(profile null·비관리자)에는 전체표시로 두어 PRO 깜빡임 방지.
+  const planLoaded = isAdmin || profile !== null
+  const applyFreeRetention = planLoaded && !isPro
+  const FREE_HISTORY_DAYS = 7
+  const historyRetentionCutoff = Date.now() - FREE_HISTORY_DAYS * 86_400_000
+  const beyondFreeRetention = (d: typeof digests[number]) =>
+    !!d.created_at && new Date(d.created_at).getTime() < historyRetentionCutoff
+
   const filteredDigests = digests.filter(d => {
+    if (applyFreeRetention && beyondFreeRetention(d)) return false
     if (historyFilter === 'breaking' && !d.is_breaking) return false
     if (historySearch && !d.video_title.toLowerCase().includes(historySearch.toLowerCase()) && !d.summary?.toLowerCase().includes(historySearch.toLowerCase())) return false
     if (historyDate && !d.created_at.startsWith(historyDate)) return false
@@ -512,6 +522,11 @@ export default function Dashboard() {
     if (historyCategory && d.category_name !== historyCategory) return false
     return true
   })
+
+  // FREE에서 7일 제한으로 숨겨진 기록 수 (0이면 안내 숨김)
+  const hiddenByRetentionCount = applyFreeRetention
+    ? digests.filter(beyondFreeRetention).length
+    : 0
 
   const uniqueChannels = [...new Set(digests.map(d => d.channel_alias))].sort()
   const uniqueCategories = [...new Set(digests.map(d => d.category_name))].filter(Boolean).sort()
@@ -2246,6 +2261,29 @@ export default function Dashboard() {
                       </div>
                     )
                   })}
+                </div>
+              )}
+
+              {/* FREE 7일 제한 안내 (숨겨진 기록이 있을 때만) */}
+              {hiddenByRetentionCount > 0 && (
+                <div style={{
+                  marginTop: 14, padding: '14px 16px',
+                  background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
+                  borderRadius: 10, textAlign: 'center',
+                  display: 'flex', flexWrap: 'wrap', gap: 8,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    {t('history.freeRetentionNotice')}
+                  </span>
+                  <a href="/pricing"
+                    onClick={e => { e.preventDefault(); router.push('/pricing') }}
+                    style={{
+                      fontSize: 13, fontWeight: 600, color: 'var(--accent)',
+                      textDecoration: 'none', cursor: 'pointer',
+                    }}>
+                    {t('history.freeRetentionCta')}
+                  </a>
                 </div>
               )}
             </div>

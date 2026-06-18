@@ -136,6 +136,8 @@ export const translations = {
       keyPoints: '📌 핵심 포인트',
       timeline: '🕐 타임라인',
       watchVideo: '▶ 영상 보기',
+      freeRetentionNotice: '7일 이전 기록은 PRO에서 볼 수 있어요',
+      freeRetentionCta: '업그레이드 →',
     },
     settings: {
       account: '계정',
@@ -555,6 +557,8 @@ export const translations = {
       keyPoints: '📌 Key Points',
       timeline: '🕐 Timeline',
       watchVideo: '▶ Watch Video',
+      freeRetentionNotice: 'Records older than 7 days are available on PRO',
+      freeRetentionCta: 'Upgrade →',
     },
     settings: {
       account: 'Account',
