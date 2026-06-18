@@ -693,17 +693,17 @@ export default function Dashboard() {
         <div style={dropdownDivider} />
 
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
-          <span style={{ fontSize: 14 }}>❓</span> {t('settings.help')}
+          {t('settings.help')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>
-          <span style={{ fontSize: 14 }}>📄</span> {t('settings.terms')}
+          {t('settings.terms')}
         </button>
 
         {isAdmin && (
           <>
             <div style={dropdownDivider} />
             <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/admin') }}>
-              <span style={{ fontSize: 14 }}>🔐</span> {t('admin.adminMode')}
+              {t('admin.adminMode')}
             </button>
           </>
         )}
@@ -726,7 +726,7 @@ export default function Dashboard() {
                   fontFamily: 'inherit',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}>
-                ✨ {t('nav.proUpgrade')}
+                {t('nav.proUpgrade')}
               </button>
             </div>
           </>
@@ -735,7 +735,7 @@ export default function Dashboard() {
         <div style={dropdownDivider} />
 
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); logout() }}>
-          <span style={{ fontSize: 14 }}>🚪</span> {t('settings.logout')}
+          {t('settings.logout')}
         </button>
       </>
     )
