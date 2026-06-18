@@ -6,6 +6,7 @@ import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
 import { normalizeChannelUrl } from '@/lib/channel-url'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { localeOptions } from '@/lib/i18n/translations'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
 
@@ -87,6 +88,8 @@ export default function Dashboard() {
   // --- Phase 2: 새 디자인용 UI 상태 ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 설정 드롭다운 안의 "언어" 하위 메뉴 펼침 상태
+  const [langOpen, setLangOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
   // 실제 구독 상태는 profile.plan(free/pro/vip)에서 판정
@@ -692,6 +695,20 @@ export default function Dashboard() {
 
         <div style={dropdownDivider} />
 
+        {/* 언어 (하위 메뉴) */}
+        <button style={dropdownItemStyle} onClick={() => setLangOpen(o => !o)}>
+          <span style={{ flex: 1 }}>{t('settings.language')}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{langOpen ? '▾' : '▸'}</span>
+        </button>
+        {langOpen && localeOptions.map(opt => (
+          <button key={opt.code}
+            style={{ ...dropdownItemStyle, paddingLeft: 24 }}
+            onClick={() => { setLangOpen(false); closeMenu(); changeLocale(opt.code) }}>
+            <span style={{ flex: 1 }}>{opt.label}</span>
+            {locale === opt.code && <span style={{ color: 'var(--accent)' }}>✓</span>}
+          </button>
+        ))}
+
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
           {t('settings.help')}
         </button>
@@ -774,17 +791,7 @@ export default function Dashboard() {
               <UserPlanBadge plan={plan} size="sm" />
             </div>
             <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-              <button
-                onClick={() => changeLocale(locale === 'ko' ? 'en' : 'ko')}
-                aria-label={t('settings.language')}
-                style={{
-                  width: 36, height: 36, borderRadius: 8,
-                  background: 'transparent', border: 'none',
-                  color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                {locale === 'ko' ? 'KO' : 'EN'}
-              </button>
+              {/* 언어 토글은 설정 드롭다운 안으로 이동 */}
               <button
                 onClick={toggleTheme}
                 aria-label={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
@@ -915,25 +922,7 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
-              {/* 빠른 언어 토글 */}
-              <button
-                onClick={() => changeLocale(locale === 'ko' ? 'en' : 'ko')}
-                aria-label={t('settings.language')}
-                title={t('settings.language')}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                style={{
-                  width: 32, height: 32, borderRadius: 6,
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'inherit',
-                }}>
-                {locale === 'ko' ? 'KO' : 'EN'}
-              </button>
-              {/* 빠른 테마 토글 */}
+              {/* 언어 토글은 설정 드롭다운 안으로 이동 / 빠른 테마 토글 */}
               <button
                 onClick={toggleTheme}
                 aria-label={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}

@@ -50,7 +50,7 @@ export const viewport: Viewport = {
 
 // React 렌더 전에 실행되어 라이트→다크 플래시(FOUC) 방지 + 초기 언어(lang) 설정.
 // 테마: localStorage 우선 → 시스템 선호도 폴백. 언어: localStorage 우선 → 브라우저 언어 폴백.
-const themeBootstrapScript = `(function(){try{var s=localStorage.getItem('theme');var p=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var t=(s==='light'||s==='dark')?s:(p?'dark':'light');document.documentElement.dataset.theme=t;var l=localStorage.getItem('locale');if(l!=='ko'&&l!=='en'){l=(navigator.language||'').toLowerCase().indexOf('ko')===0?'ko':'en';}document.documentElement.lang=l;}catch(e){document.documentElement.dataset.theme='light';}})();`;
+const themeBootstrapScript = `(function(){try{var s=localStorage.getItem('theme');var p=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var t=(s==='light'||s==='dark')?s:(p?'dark':'light');document.documentElement.dataset.theme=t;var l=localStorage.getItem('locale');if(l!=='ko'&&l!=='en'&&l!=='zh'&&l!=='ja'){var bl=(navigator.language||'').toLowerCase();l=bl.indexOf('ko')===0?'ko':bl.indexOf('zh')===0?'zh':bl.indexOf('ja')===0?'ja':'en';}document.documentElement.lang=l;}catch(e){document.documentElement.dataset.theme='light';}})();`;
 
 export default function RootLayout({
   children,

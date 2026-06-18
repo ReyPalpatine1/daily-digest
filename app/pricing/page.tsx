@@ -57,7 +57,8 @@ export default function PricingPage() {
   }
 
   const won = (n: number) => `₩${n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US')}`
-  const pricing = translations[locale].pricing
+  // zh/ja는 아직 번역이 없어 en으로 폴백 (타입은 ko 기준으로 고정)
+  const pricing = (((translations as Record<string, any>)[locale]?.pricing) ?? translations.en.pricing) as typeof translations.ko.pricing
 
   const card: React.CSSProperties = {
     background: 'var(--bg-card)',

@@ -847,5 +847,14 @@ export const translations = {
   },
 }
 
-export type Locale = keyof typeof translations
+// 지원 언어. zh/ja는 아직 번역 데이터가 없어 런타임에서 en으로 폴백된다(다음 단계에서 채움).
+export type Locale = 'ko' | 'en' | 'zh' | 'ja'
 export type TranslationKey = string
+
+// 언어 선택 메뉴용 — 각 언어는 그 언어 표기로 노출(번역하지 않음).
+export const localeOptions: { code: Locale; label: string }[] = [
+  { code: 'ko', label: '한국어' },
+  { code: 'en', label: 'English' },
+  { code: 'zh', label: '中文' },
+  { code: 'ja', label: '日本語' },
+]
