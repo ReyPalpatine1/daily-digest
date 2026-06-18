@@ -56,18 +56,27 @@ type DigestItem = {
 
 // locale 정규화 — 잘못된 값이 들어와도 'ko' 폴백
 function normalizeLocale(locale?: string | null): EmailLocale {
-  return locale === 'en' ? 'en' : 'ko'
+  if (locale === 'en' || locale === 'zh' || locale === 'ja') return locale
+  return 'ko'
+}
+
+// 메일 제목 등 날짜 표기용 로케일 코드
+const dateLocaleByEmailLocale: Record<EmailLocale, string> = {
+  ko: 'ko-KR',
+  en: 'en-US',
+  zh: 'zh-CN',
+  ja: 'ja-JP',
 }
 
 export async function sendDigestEmail(
   to: string,
   userName: string,
   items: DigestItem[],
-  locale: 'ko' | 'en' = 'ko',
+  locale: string | null = 'ko',
   userId: string | null = null
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  const date = new Date().toLocaleDateString(lc === 'ko' ? 'ko-KR' : 'en-US', {
+  const date = new Date().toLocaleDateString(dateLocaleByEmailLocale[lc], {
     timeZone: 'Asia/Seoul',
     year: 'numeric',
     month: 'long',
@@ -92,11 +101,11 @@ export async function sendDigestEmail(
 export async function sendEmptyDigestEmail(
   to: string,
   userName: string,
-  locale: 'ko' | 'en' = 'ko',
+  locale: string | null = 'ko',
   userId: string | null = null
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  const date = new Date().toLocaleDateString(lc === 'ko' ? 'ko-KR' : 'en-US', {
+  const date = new Date().toLocaleDateString(dateLocaleByEmailLocale[lc], {
     timeZone: 'Asia/Seoul',
     year: 'numeric',
     month: 'long',
@@ -132,7 +141,7 @@ export async function sendBreakingAlert(
   to: string,
   userName: string,
   item: DigestItem,
-  locale: 'ko' | 'en' = 'ko',
+  locale: string | null = 'ko',
   userId: string | null = null
 ): Promise<void> {
   const lc = normalizeLocale(locale)
@@ -152,7 +161,7 @@ export async function sendBreakingAlert(
 
 export async function sendWelcomeEmail(
   to: string,
-  locale: 'ko' | 'en' = 'ko'
+  locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   await transporter.sendMail({

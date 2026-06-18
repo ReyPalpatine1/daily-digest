@@ -64,8 +64,8 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       return { status: 200, body: { message: 'breaking alert not enabled or email missing' } }
     }
 
-    // 사용자 이메일 언어 (미설정 시 'ko')
-    const userLocale: 'ko' | 'en' = settings.locale === 'en' ? 'en' : 'ko'
+    // 사용자 이메일 언어 (미설정 시 'ko'). 정규화(ko/en/zh/ja)는 mailer가 담당.
+    const userLocale: string = settings.locale ?? 'ko'
 
     // 만료 체크 + 동기화
     const currentPlan = await syncUserPlan(userId)

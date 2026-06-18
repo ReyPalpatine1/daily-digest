@@ -6,7 +6,7 @@ import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, sendEmptyD
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
-import { et } from '@/lib/i18n/email-translations'
+import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 
@@ -71,8 +71,11 @@ async function runDigest(
       return { status: 400, body: { error: '설정 없음' } }
     }
 
-    // 사용자 이메일 언어 (미설정 시 'ko')
-    const userLocale: 'ko' | 'en' = settings.locale === 'en' ? 'en' : 'ko'
+    // 사용자 이메일 언어 (미설정/미지원 값은 'ko' 폴백)
+    const userLocale: EmailLocale =
+      settings.locale === 'en' || settings.locale === 'zh' || settings.locale === 'ja'
+        ? settings.locale
+        : 'ko'
 
     // 만료 체크 + 동기화 (접속 안 해도 여기서 만료 강등이 잡힘)
     const currentPlan = await syncUserPlan(userId)
