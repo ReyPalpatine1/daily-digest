@@ -70,6 +70,27 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  // 언어 변경을 DB(settings.locale)에 동기화 — 이메일 발송 언어로 사용됨.
+  // (대시보드의 localeSyncReady ref 패턴과 동일하게) 최초 로드 시점의 언어는
+  // 기준값으로만 기록하고 저장하지 않으며, 이후 사용자가 직접 바꿀 때만 저장한다.
+  const localeSyncBaseline = useRef<string | null>(null)
+  useEffect(() => {
+    if (!user) return
+    if (localeSyncBaseline.current === null) {
+      localeSyncBaseline.current = locale
+      return
+    }
+    if (localeSyncBaseline.current === locale) return
+    localeSyncBaseline.current = locale
+    supabase
+      .from('settings')
+      .update({ locale })
+      .eq('user_id', user.id)
+      .then(({ error }) => {
+        if (error) console.warn('[locale] settings.locale DB 저장 실패:', error.message)
+      })
+  }, [locale, user])
+
   // 설정 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     if (!settingsOpen) return
