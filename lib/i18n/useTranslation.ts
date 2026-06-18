@@ -16,6 +16,14 @@ function detectInitialLocale(): Locale {
   return 'en'
 }
 
+// <html lang>용 BCP47 태그. 브라우저의 <input type="date"> 등 네이티브 UI 언어가 이걸 따른다.
+const htmlLangTag: Record<Locale, string> = {
+  ko: 'ko',
+  en: 'en',
+  zh: 'zh-CN',
+  ja: 'ja',
+}
+
 // 한 사전에서 'a.b.c' 키를 따라가 문자열을 찾는다. 없으면 undefined.
 function lookup(dict: any, keys: string[]): string | undefined {
   let value: any = dict
@@ -32,7 +40,7 @@ export function useTranslation() {
   useEffect(() => {
     const detected = detectInitialLocale()
     setLocale(detected)
-    document.documentElement.lang = detected
+    document.documentElement.lang = htmlLangTag[detected]
   }, [])
 
   const t = useCallback(
@@ -55,7 +63,7 @@ export function useTranslation() {
 
   const changeLocale = useCallback((newLocale: Locale) => {
     setLocale(newLocale)
-    document.documentElement.lang = newLocale
+    document.documentElement.lang = htmlLangTag[newLocale]
     try { localStorage.setItem('locale', newLocale) } catch {}
   }, [])
 

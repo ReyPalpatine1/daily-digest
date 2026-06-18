@@ -46,7 +46,7 @@ function timeAgo(iso: string | null | undefined, t: TFn): string {
 export default function Dashboard() {
   const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
-  const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
+  const dateLocale = ({ ko: 'ko-KR', en: 'en-US', zh: 'zh-CN', ja: 'ja-JP' } as Record<string, string>)[locale] ?? 'en-US'
   const [user, setUser] = useState<any>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
