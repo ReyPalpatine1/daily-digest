@@ -6,9 +6,9 @@ import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
 import { normalizeChannelUrl } from '@/lib/channel-url'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { localeOptions } from '@/lib/i18n/translations'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
+import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -88,8 +88,6 @@ export default function Dashboard() {
   // --- Phase 2: 새 디자인용 UI 상태 ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // 설정 드롭다운 안의 "언어" 하위 메뉴 펼침 상태
-  const [langOpen, setLangOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
   // 실제 구독 상태는 profile.plan(free/pro/vip)에서 판정
@@ -695,19 +693,14 @@ export default function Dashboard() {
 
         <div style={dropdownDivider} />
 
-        {/* 언어 (하위 메뉴) */}
-        <button style={dropdownItemStyle} onClick={() => setLangOpen(o => !o)}>
-          <span style={{ flex: 1 }}>{t('settings.language')}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{langOpen ? '▾' : '▸'}</span>
-        </button>
-        {langOpen && localeOptions.map(opt => (
-          <button key={opt.code}
-            style={{ ...dropdownItemStyle, paddingLeft: 24 }}
-            onClick={() => { setLangOpen(false); closeMenu(); changeLocale(opt.code) }}>
-            <span style={{ flex: 1 }}>{opt.label}</span>
-            {locale === opt.code && <span style={{ color: 'var(--accent)' }}>✓</span>}
-          </button>
-        ))}
+        {/* 언어 (하위 메뉴: 데스크탑=플라이아웃 / 모바일=아코디언) */}
+        <LanguageSubmenu
+          locale={locale}
+          label={t('settings.language')}
+          itemStyle={dropdownItemStyle}
+          isMobile={isMobile}
+          onSelect={(l) => { closeMenu(); changeLocale(l) }}
+        />
 
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
           {t('settings.help')}

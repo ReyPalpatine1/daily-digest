@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { localeOptions } from '@/lib/i18n/translations'
 import UserPlanBadge from '@/components/UserPlanBadge'
+import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 
 // 공통 상단바 — 대시보드 헤더와 동일한 모양/동작을 하위 페이지(profile/pricing)에서 재사용.
 // 대시보드 전용 네비(채널/발송설정/열람기록)는 포함하지 않는다 (A안: 하위 페이지엔 네비 없음).
@@ -21,8 +21,8 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
   const [adminPlanMode, setAdminPlanMode] = useState<'free' | 'pro'>('free')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // 설정 드롭다운 안의 "언어" 하위 메뉴 펼침 상태
-  const [langOpen, setLangOpen] = useState(false)
+  // 언어 하위 메뉴: 데스크탑은 옆 플라이아웃, 모바일은 인라인 아코디언으로 분기
+  const [isMobile, setIsMobile] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
 
@@ -61,6 +61,13 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
   useEffect(() => {
     const current = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
     setTheme(current)
+  }, [])
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   // 설정 드롭다운 외부 클릭 시 닫기
@@ -160,19 +167,14 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
 
         <div style={dropdownDivider} />
 
-        {/* 언어 (하위 메뉴) */}
-        <button style={dropdownItemStyle} onClick={() => setLangOpen(o => !o)}>
-          <span style={{ flex: 1 }}>{t('settings.language')}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{langOpen ? '▾' : '▸'}</span>
-        </button>
-        {langOpen && localeOptions.map(opt => (
-          <button key={opt.code}
-            style={{ ...dropdownItemStyle, paddingLeft: 24 }}
-            onClick={() => { setLangOpen(false); closeMenu(); changeLocale(opt.code) }}>
-            <span style={{ flex: 1 }}>{opt.label}</span>
-            {locale === opt.code && <span style={{ color: 'var(--accent)' }}>✓</span>}
-          </button>
-        ))}
+        {/* 언어 (하위 메뉴: 데스크탑=플라이아웃 / 모바일=아코디언) */}
+        <LanguageSubmenu
+          locale={locale}
+          label={t('settings.language')}
+          itemStyle={dropdownItemStyle}
+          isMobile={isMobile}
+          onSelect={(l) => { closeMenu(); changeLocale(l) }}
+        />
 
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
           {t('settings.help')}
