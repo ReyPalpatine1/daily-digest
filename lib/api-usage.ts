@@ -1,8 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey)
+// Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
+// 채워진다. 최상단에서 createClient를 호출하면 키가 undefined가 되어
+// "supabaseKey is required"로 터지므로, 첫 사용 시점에 1회 lazy 생성한다. (Vercel도 동일 동작)
+function makeServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+  )
+}
+type ServiceClient = ReturnType<typeof makeServiceClient>
+let _supabase: ServiceClient | null = null
+function getSupabase(): ServiceClient {
+  if (!_supabase) _supabase = makeServiceClient()
+  return _supabase
+}
+const supabaseAdmin: ServiceClient = new Proxy({} as ServiceClient, {
+  get(_target, prop, receiver) {
+    const client = getSupabase()
+    const value = Reflect.get(client as object, prop, receiver)
+    return typeof value === 'function' ? value.bind(client) : value
+  },
+})
 
 export type ApiService = 'gemini' | 'youtube' | 'supadata'
 
