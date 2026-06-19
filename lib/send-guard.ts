@@ -1,13 +1,30 @@
 // 발송 상태 관리 (멱등성 + 동시성 방어 + 죽은 프로세스 복구).
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버(라우트 핸들러)에서만 import.
 //    (lib/supabase.ts는 브라우저/anon 클라이언트라 send_log 쓰기에 부적합)
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { dateKey, nowUtc } from './time'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+// Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
+// service client를 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
+let _supabase: SupabaseClient | null = null
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!
+    )
+  }
+  return _supabase
+}
+
+// 기존 `supabase.from(...)` 사용처를 그대로 두기 위해 Proxy로 인터페이스 유지.
+const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop, receiver) {
+    const client = getSupabase()
+    const value = Reflect.get(client as object, prop, receiver)
+    return typeof value === 'function' ? value.bind(client) : value
+  },
+})
 
 // sending 상태가 이 시간을 넘기면 죽은 프로세스로 간주하고 재시도
 const STALE_MINUTES = 5

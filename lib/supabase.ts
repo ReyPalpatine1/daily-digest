@@ -1,9 +1,31 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
+// 채워진다. 모듈 최상단에서 createClient를 호출하면 키가 undefined가 되어
+// "supabaseKey is required"로 터지므로, 첫 사용 시점에 1회 lazy 생성한다.
+// (Vercel은 로드 시점에도 채워지므로 동작 동일)
+function makeClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  return createBrowserClient(supabaseUrl, supabaseAnonKey)
+}
+type BrowserClient = ReturnType<typeof makeClient>
 
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
+let _supabase: BrowserClient | null = null
+function getSupabase(): BrowserClient {
+  if (!_supabase) _supabase = makeClient()
+  return _supabase
+}
+
+// 기존 `import { supabase }` 사용처(8곳)를 깨지 않도록 Proxy로 동일한 인터페이스 유지.
+// 실제 클라이언트는 프로퍼티 첫 접근(=함수 호출 시점)에 생성된다.
+export const supabase: BrowserClient = new Proxy({} as BrowserClient, {
+  get(_target, prop, receiver) {
+    const client = getSupabase()
+    const value = Reflect.get(client as object, prop, receiver)
+    return typeof value === 'function' ? value.bind(client) : value
+  },
+})
 
 export type Profile = {
   id: string

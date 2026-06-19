@@ -5,7 +5,7 @@
 	"main": ".open-next/worker.js",
 	"compatibility_date": "2025-12-19",
 	// Node API 사용을 위해 필요
-	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public", "nodejs_compat_populate_process_env"],
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"

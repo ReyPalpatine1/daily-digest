@@ -1,13 +1,30 @@
 // 플랜 강등/승격에 따른 채널 활성화 동기화 (서버 전용)
 // ⚠️ SUPABASE_SERVICE_KEY 를 사용하므로 서버(라우트 핸들러)에서만 import 할 것.
 //    클라이언트 컴포넌트에서 import 금지.
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { nowUtc } from './time'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+// Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
+// service client를 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
+let _supabase: SupabaseClient | null = null
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!
+    )
+  }
+  return _supabase
+}
+
+// 기존 `supabase.from(...)` 사용처를 그대로 두기 위해 Proxy로 인터페이스 유지.
+const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop, receiver) {
+    const client = getSupabase()
+    const value = Reflect.get(client as object, prop, receiver)
+    return typeof value === 'function' ? value.bind(client) : value
+  },
+})
 
 export const FREE_ACTIVE_LIMIT = 5
 

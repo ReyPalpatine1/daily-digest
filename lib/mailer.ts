@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
 import { et, type EmailLocale } from './i18n/email-translations'
@@ -9,19 +9,50 @@ import {
   buildWelcomeHtml,
 } from './email-templates'
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+// Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
+// transporter / service client 둘 다 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
+let _transporter: nodemailer.Transporter | null = null
+function getTransporter(): nodemailer.Transporter {
+  if (!_transporter) {
+    _transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    })
+  }
+  return _transporter
+}
+
+// 기존 `transporter.sendMail(...)` 사용처를 그대로 두기 위해 Proxy로 인터페이스 유지.
+const transporter: nodemailer.Transporter = new Proxy({} as nodemailer.Transporter, {
+  get(_target, prop, receiver) {
+    const t = getTransporter()
+    const value = Reflect.get(t as object, prop, receiver)
+    return typeof value === 'function' ? value.bind(t) : value
   },
 })
 
 // 이메일 발송 로그 기록용 (서버 전용 service client)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+let _supabase: SupabaseClient | null = null
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!
+    )
+  }
+  return _supabase
+}
+
+const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop, receiver) {
+    const client = getSupabase()
+    const value = Reflect.get(client as object, prop, receiver)
+    return typeof value === 'function' ? value.bind(client) : value
+  },
+})
 
 export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome'
 
