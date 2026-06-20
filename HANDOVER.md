@@ -39,7 +39,11 @@
 
 - 프론트: Next.js 16 (App Router, TypeScript, Tailwind) — ※ 이 버전은 기존과 다른 점이 있으니 Claude Code는 node_modules의 next 문서를 참고
 - DB: Supabase (PostgreSQL + Auth + Google OAuth). **pg_cron 활성화됨.**
-- 배포: Vercel (현재 Hobby, 상업화 시 Pro 필요)
+- 배포: **Cloudflare Workers (OpenNext 어댑터)로 이전 중/완료. Vercel은 백업으로 유지.**
+  - Cloudflare 서비스 URL: https://daily-digest.8539519.workers.dev
+  - Vercel(백업): https://daily-digest-one-vert.vercel.app
+  - 빌드: OpenNext(@opennextjs/cloudflare 1.19.11) + Next 16.2.6
+  - GitHub 연결 자동배포(빌드 `npm run cf:build` / 배포 `npm run cf:deploy`)
 - AI 요약: **Gemini API — `gemini-3.1-flash-lite`(기본) + `gemini-2.5-flash`(503 폴백)**. 환경변수 GEMINI_MODEL / GEMINI_FALLBACK_MODEL. (구 `gemini-flash-latest`는 실험 모델이라 503 폭주 → 폐기)
 - 영상 수집: YouTube Data API v3 (playlistItems + videos 배치, search는 쿼터 폭발로 제거)
 - 자막: **Supadata API(1차) + YouTube API 설명(2차 폴백) + 페이지 HTML(3차 폴백)** 다단계. Supadata는 실패(206)·레이트(429)에도 크레딧 차감되므로 호출 1회로 최적화함. 무료 플랜 월 100크레딧으로는 부족 → 유료 전환 검토 필요.
@@ -64,6 +68,32 @@ NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY,
 YOUTUBE_API_KEY, GEMINI_API_KEY, (GEMINI_MODEL, GEMINI_FALLBACK_MODEL),
 GMAIL_USER, GMAIL_APP_PASSWORD, CRON_SECRET, NEXT_PUBLIC_APP_URL,
 ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
+
+## 4.5 Cloudflare 운영 주의사항 (중요 함정들)
+
+### 환경변수 (★꼭 숙지)
+- Cloudflare는 변수가 **빌드 변수**(GitHub 연결 설정)와 **런타임 변수**(설정 → 변수 및 비밀) **두 곳**에 따로 있음. 코드(process.env)가 읽는 건 런타임 변수.
+- **NEXT_PUBLIC_ 변수**는 빌드 때 코드에 박혀서 런타임에도 보이지만, 그 외 변수(SUPABASE_SERVICE_KEY, ADMIN_EMAILS, GEMINI_API_KEY 등)는 **런타임 변수에 반드시 등록**해야 함. 안 하면 process.env에서 빈 값 → 발송/관리자 403 등 오류.
+- **★ keep_vars: wrangler.jsonc에 `"keep_vars": true` 설정함.** 이게 없으면 배포할 때마다 Cloudflare가 일반(비암호화) 변수를 덮어써서 삭제함(공식 동작). Secret(암호화) 변수는 배포에도 안 지워짐. keep_vars로 일반 변수도 보존됨.
+  → 변수가 또 사라지면 keep_vars 설정과 런타임 변수 등록 상태부터 확인.
+
+### 코드 패턴 (Cloudflare 호환)
+- **process.env는 "요청 처리 시점"에 채워짐.** 모듈 최상단(파일 로드 시)에서 process.env를 읽어 클라이언트를 만들면 undefined로 터짐("supabaseKey is required" 등).
+  → Supabase 등 클라이언트는 **lazy 초기화**(첫 사용 시 생성, Proxy 패턴)로 작성. lib/supabase.ts, mailer.ts, plan-sync.ts, send-guard.ts, video-pool.ts, api-usage.ts, 발송/admin API 라우트들이 이 패턴 적용됨.
+  → 새 코드도 모듈 최상단 process.env 읽기 금지. 함수 내부/lazy로.
+- **동적 import 주의**: changeLocale 등에서 `import('@/lib/supabase')` 같은 동적 import는 Cloudflare에서 페이지 로드 실패 유발. static import 사용.
+- compatibility_flags에 `nodejs_compat_populate_process_env` 포함(process.env 채우기).
+
+### 인증/URL
+- 로그인 후 리다이렉트: Supabase Auth → URL Configuration의 Site URL/Redirect URLs에 Cloudflare 주소 등록(/** 와일드카드). 구글 OAuth는 Supabase 콜백 주소만 있으면 됨.
+- NEXT_PUBLIC_APP_URL: Cloudflare는 Cloudflare 주소, Vercel은 Vercel 주소로 각자 설정. email-templates.ts의 APP_URL은 이 환경변수 기반(하드코딩 제거됨).
+
+### cron (정시 발송)
+- 현재 GitHub Actions(.github/workflows/cron.yml, 15분)가 /api/collect, /api/cron 호출. 주소를 Cloudflare로 변경함. **GitHub Actions는 활동 많은 시간대 1~2시간 지연**(무료 cron 한계).
+- 향후: Cloudflare Cron Triggers로 교체하면 정시성 개선(추가비용 없음, 단 Workers Paid $5 필요). Cron Triggers는 무료 플랜엔 없음 → 출시($5) 시점에 교체 검토.
+
+### 백업/복구
+- 안정 상태 git 태그: `stable-next-16.2.4` (Cloudflare 작업 전 백업). 문제 시 `git checkout stable-next-16.2.4`로 복구 가능. Vercel은 계속 살아있어 서비스 안 멈춤.
 
 ## 5. 플랜 / VIP 시스템
 
