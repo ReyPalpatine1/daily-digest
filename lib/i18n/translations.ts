@@ -394,9 +394,6 @@ export const translations = {
     },
     profile: {
       title: '프로필',
-      tabAccount: '내 계정',
-      tabSubscription: '구독',
-      tabHelp: '도움말',
       name: '이름',
       email: '이메일',
       joinedAt: '가입일',
@@ -816,9 +813,6 @@ export const translations = {
     },
     profile: {
       title: 'Profile',
-      tabAccount: 'My Account',
-      tabSubscription: 'Subscription',
-      tabHelp: 'Help',
       name: 'Name',
       email: 'Email',
       joinedAt: 'Joined',
@@ -1234,9 +1228,6 @@ export const translations = {
     },
     profile: {
       title: '个人资料',
-      tabAccount: '我的账户',
-      tabSubscription: '订阅',
-      tabHelp: '帮助',
       name: '姓名',
       email: '邮箱',
       joinedAt: '注册时间',
@@ -1652,9 +1643,6 @@ export const translations = {
     },
     profile: {
       title: 'プロフィール',
-      tabAccount: 'マイアカウント',
-      tabSubscription: 'サブスクリプション',
-      tabHelp: 'ヘルプ',
       name: '名前',
       email: 'メール',
       joinedAt: '登録日',
