@@ -129,7 +129,7 @@ export async function GET(req: Request) {
       console.error(
         `❌ [cron] NEXT_PUBLIC_APP_URL 미설정 → /api/digest 호출 불가. ` +
           `발송 대상 ${digestUsers.length}명이 있으나 전부 실패합니다. ` +
-          `Vercel 환경변수에 NEXT_PUBLIC_APP_URL을 설정하세요.`
+          `환경변수에 NEXT_PUBLIC_APP_URL을 설정하세요.`
       )
     }
 

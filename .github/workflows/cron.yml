@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Call /api/collect
         run: |
-          curl -X GET "https://daily-digest-one-vert.vercel.app/api/collect" \
+          curl -X GET "https://daily-digest.8539519.workers.dev/api/collect" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
             --max-time 90 || echo "collect 호출 실패(무시) — 다음 주기/발송 폴백으로 보강"
@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: Call /api/cron
         run: |
-          curl -X GET "https://daily-digest-one-vert.vercel.app/api/cron" \
+          curl -X GET "https://daily-digest.8539519.workers.dev/api/cron" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
             --fail-with-body

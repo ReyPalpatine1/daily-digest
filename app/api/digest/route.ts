@@ -39,14 +39,6 @@ export const maxDuration = 60
 const MAX_VIDEOS_PER_RUN = 20
 
 export async function POST(req: Request) {
-  // [diag] 임시 진단 로그: 런타임에 env가 실제로 채워지는지 확인 (값이 아닌 존재/길이만).
-  console.log('[diag] env check', {
-    hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
-    hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    urlLen: (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').length,
-    keyLen: (process.env.SUPABASE_SERVICE_KEY ?? '').length,
-  })
   let body: any
   try {
     body = await req.json()
