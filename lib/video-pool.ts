@@ -265,7 +265,7 @@ type PendingVideo = { video_id: string; title: string; description: string | nul
 
 // 아직 요약이 없는 (쇼츠 아닌, 최근 N일) 영상 목록.
 // ⚠️ 과거 영상은 발송에 안 쓰이므로 요약하지 않는다 (Gemini 비용 절감).
-async function getVideosWithoutSummary(locale: Locale = 'ko'): Promise<PendingVideo[]> {
+async function getVideosWithoutSummary(locale: Locale = 'ko', limit: number = SUMMARY_LIMIT): Promise<PendingVideo[]> {
   const cutoff = new Date(Date.now() - SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
   const { data: vids } = await supabase
     .from('videos')
@@ -286,7 +286,7 @@ async function getVideosWithoutSummary(locale: Locale = 'ko'): Promise<PendingVi
     .eq('locale', locale)
 
   const have = new Set((existing ?? []).map(e => (e as any).video_id))
-  return candidates.filter(v => !have.has(v.video_id)).slice(0, SUMMARY_LIMIT)
+  return candidates.filter(v => !have.has(v.video_id)).slice(0, limit)
 }
 
 // 동시성 제한 배치 처리
@@ -361,18 +361,29 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
 // 미요약 영상 요약 → video_summaries 적재 (영상당 1번, 전역 공유). 요약한 개수 반환.
 // deadlineTs(ms): 이 시각을 넘으면 다음 배치를 시작하지 않음 (60초 budget 보호).
 export async function summarizePendingVideos(deadlineTs?: number, locale: Locale = 'ko'): Promise<number> {
-  const pending = await getVideosWithoutSummary(locale)
-  console.log(`🤖 요약 대기: ${pending.length}개 (이번 실행 최대 ${SUMMARY_LIMIT}개)`)
+  // Cloudflare Workers subrequest 한도 보호. 모듈 최상단이 아닌 요청 시점에 읽어야 한다(Cloudflare lazy eval).
+  // 영상 1개 ≈ subrequest 3~4개(자막+설명+Gemini). 무료 한도(50) 기준 보수적으로 기본 10.
+  const maxSummaries = Number(process.env.MAX_SUMMARIES_PER_RUN ?? 10)
+  const pending = await getVideosWithoutSummary(locale, maxSummaries)
+  console.log(`🤖 요약 대기: ${pending.length}개 (이번 실행 최대 ${maxSummaries}개)`)
   if (!pending.length) return 0
 
   let done = 0
+  let attempted = 0
   for (let i = 0; i < pending.length; i += SUMMARY_CONCURRENCY) {
+    if (attempted >= maxSummaries) {
+      console.log(`⏱ subrequest 상한(${maxSummaries}) 도달 → 나머지 ${pending.length - i}개는 다음 주기로 이월`)
+      break
+    }
     if (deadlineTs && Date.now() > deadlineTs) {
       console.log(`⏱ 요약 시간 budget 도달 → 나머지는 다음 주기/발송 폴백으로 이월`)
       break
     }
     const batch = pending.slice(i, i + SUMMARY_CONCURRENCY)
-    await Promise.allSettled(batch.map(async v => { if (await summarizeAndStore(v, locale)) done++ }))
+    await Promise.allSettled(batch.map(async v => {
+      attempted++
+      if (await summarizeAndStore(v, locale)) done++
+    }))
   }
   console.log(`🤖 요약 완료: ${done}개`)
   return done
