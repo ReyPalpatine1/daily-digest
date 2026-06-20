@@ -11,6 +11,7 @@
 - 작업 흐름: **웹챗(설계·논의) → VS Code의 Claude Code(Sonnet)에 붙여넣을 프롬프트를 만들어주면 내가 붙여넣음 → 자동 git push → Vercel 자동 배포.**
 - VS Code Claude Code는 "이 세션 모든 편집 허용" + "git 허용" + "npx tsc 허용"이 켜져 있다. 즉 **tsc 통과/푸시는 Claude Code가 알아서 함. 내가 직접 확인하지 않는다.**
 - 한국어로 답할 것.
+- **작업 환경**: 집=로컬 VS Code, 회사=GitHub Codespaces (둘 다 같은 저장소). 규칙: 떠나기 전 반드시 git push, 시작할 때 git pull. 두 곳 동시 수정 금지. .env.local은 git에 없으므로 Codespaces엔 별도 생성 필요(로컬 미리보기 시). Claude Code로 push만 할 거면 .env.local 없어도 됨.
 
 ### 내가 반복해서 요구한 규칙 (어기지 말 것)
 1. **같은 확인 작업을 여러 번 시키지 말 것.** 검증이 필요하면 한 번에 끝나게 설계하고, 안 되면 GitHub 공개 저장소 코드를 직접 읽어서 원인을 잡을 것. (저장소 Public이므로 clone해서 직접 확인 가능)
