@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { translations, type Locale } from './translations'
+import { supabase } from '@/lib/supabase'
 
 function detectInitialLocale(): Locale {
   if (typeof window === 'undefined') return 'ko'
@@ -69,14 +70,13 @@ export function useTranslation() {
     document.documentElement.lang = htmlLangTag[newLocale]
     try { localStorage.setItem('locale', newLocale) } catch {}
     if (userId) {
-      // 동적 import로 supabase 클라이언트를 가져와 저장. 실패해도 UI 전환은 유지(console.warn만).
-      import('@/lib/supabase').then(({ supabase }) => {
-        supabase
-          .from('settings')
-          .update({ locale: newLocale })
-          .eq('user_id', userId)
-          .then(({ error }) => { if (error) console.warn('[locale] DB 저장 실패:', error.message) })
-      })
+      // supabase는 lazy Proxy라 상단 static import해도 모듈 로드 시 클라이언트를 만들지 않는다.
+      // 저장 실패해도 UI 전환은 유지(console.warn만).
+      supabase
+        .from('settings')
+        .update({ locale: newLocale })
+        .eq('user_id', userId)
+        .then(({ error }) => { if (error) console.warn('[locale] DB 저장 실패:', error.message) })
     }
   }, [])
 
