@@ -4,6 +4,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { nowUtc } from './time'
 import { getTranscript, summarizeVideo } from './gemini'
+import type { Locale } from './i18n/translations'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워진다. 최상단에서 createClient를 호출하면 키가 undefined가 되어
@@ -264,7 +265,7 @@ type PendingVideo = { video_id: string; title: string; description: string | nul
 
 // 아직 요약이 없는 (쇼츠 아닌, 최근 N일) 영상 목록.
 // ⚠️ 과거 영상은 발송에 안 쓰이므로 요약하지 않는다 (Gemini 비용 절감).
-async function getVideosWithoutSummary(): Promise<PendingVideo[]> {
+async function getVideosWithoutSummary(locale: Locale = 'ko'): Promise<PendingVideo[]> {
   const cutoff = new Date(Date.now() - SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
   const { data: vids } = await supabase
     .from('videos')
@@ -282,6 +283,7 @@ async function getVideosWithoutSummary(): Promise<PendingVideo[]> {
     .from('video_summaries')
     .select('video_id')
     .in('video_id', candidates.map(v => v.video_id))
+    .eq('locale', locale)
 
   const have = new Set((existing ?? []).map(e => (e as any).video_id))
   return candidates.filter(v => !have.has(v.video_id)).slice(0, SUMMARY_LIMIT)
@@ -316,7 +318,7 @@ async function bumpSummaryAttempts(video: PendingVideo): Promise<void> {
 }
 
 // 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
-async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
+async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Promise<boolean> {
   const { transcript, description, unavailable } = await getTranscript(video.video_id) // userId 없음 (공유)
   // 비공개/삭제 영상: Gemini 호출 없이 풀에서 제거 (발송 대상에서도 빠짐)
   if (unavailable) {
@@ -327,7 +329,7 @@ async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
   }
   // video.description이 빈 문자열('')이면 ??가 통과시켜 getTranscript가 가져온 설명을 못 씀 → trim 검사
   const desc = video.description?.trim() ? video.description : description
-  const result = await summarizeVideo(null, video.title, transcript, desc)
+  const result = await summarizeVideo(null, video.title, transcript, desc, locale)
   // 일시적 실패(429/자막 실패 등)는 가짜 성공 객체로 돌아온다. 이걸 저장하면
   // 실패 문구가 공유 풀에 영구 캐시되어 모든 사용자가 영원히 실패본을 받는다.
   // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨 (단 상한까지만).
@@ -339,13 +341,14 @@ async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
   const { error } = await supabase.from('video_summaries').upsert(
     {
       video_id: video.video_id,
+      locale,
       summary: result.summary,
       key_points: asArray(result.keyPoints), // JSONB 배열로 정규화
       timeline: asArray(result.timeline), // JSONB 배열로 정규화
       model: result.model ?? null,
       summary_basis: result.summaryBasis ?? null, // 분석 근거(자막/설명/제목) 표기용
     },
-    { onConflict: 'video_id' }
+    { onConflict: 'video_id,locale' }
   )
   if (error) {
     console.error(`❌ video_summaries 적재 실패 (${video.video_id}): ${error.message}`)
@@ -357,8 +360,8 @@ async function summarizeAndStore(video: PendingVideo): Promise<boolean> {
 
 // 미요약 영상 요약 → video_summaries 적재 (영상당 1번, 전역 공유). 요약한 개수 반환.
 // deadlineTs(ms): 이 시각을 넘으면 다음 배치를 시작하지 않음 (60초 budget 보호).
-export async function summarizePendingVideos(deadlineTs?: number): Promise<number> {
-  const pending = await getVideosWithoutSummary()
+export async function summarizePendingVideos(deadlineTs?: number, locale: Locale = 'ko'): Promise<number> {
+  const pending = await getVideosWithoutSummary(locale)
   console.log(`🤖 요약 대기: ${pending.length}개 (이번 실행 최대 ${SUMMARY_LIMIT}개)`)
   if (!pending.length) return 0
 
@@ -369,7 +372,7 @@ export async function summarizePendingVideos(deadlineTs?: number): Promise<numbe
       break
     }
     const batch = pending.slice(i, i + SUMMARY_CONCURRENCY)
-    await Promise.allSettled(batch.map(async v => { if (await summarizeAndStore(v)) done++ }))
+    await Promise.allSettled(batch.map(async v => { if (await summarizeAndStore(v, locale)) done++ }))
   }
   console.log(`🤖 요약 완료: ${done}개`)
   return done
@@ -389,6 +392,7 @@ export type PoolVideo = {
 
 export type PoolSummary = {
   video_id: string
+  locale: string
   summary: string | null
   key_points: string[] | null
   timeline: { time: string; content: string }[] | null
@@ -425,29 +429,31 @@ export async function getRecentPoolVideos(channelIds: string[], sinceUtc: Date):
 }
 
 // 영상 요약 일괄 조회 (Map)
-export async function getSummariesFromPool(videoIds: string[]): Promise<Map<string, PoolSummary>> {
+export async function getSummariesFromPool(videoIds: string[], locale: Locale = 'ko'): Promise<Map<string, PoolSummary>> {
   const map = new Map<string, PoolSummary>()
   if (!videoIds.length) return map
   const { data } = await supabase
     .from('video_summaries')
-    .select('video_id, summary, key_points, timeline, model, summary_basis')
+    .select('video_id, locale, summary, key_points, timeline, model, summary_basis')
     .in('video_id', videoIds)
+    .eq('locale', locale)
   for (const s of (data ?? []) as PoolSummary[]) map.set(s.video_id, s)
   return map
 }
 
 // 단일 영상 요약 조회 (속보 폴백용)
-export async function getSummary(videoId: string): Promise<PoolSummary | null> {
+export async function getSummary(videoId: string, locale: Locale = 'ko'): Promise<PoolSummary | null> {
   const { data } = await supabase
     .from('video_summaries')
-    .select('video_id, summary, key_points, timeline, model, summary_basis')
+    .select('video_id, locale, summary, key_points, timeline, model, summary_basis')
     .eq('video_id', videoId)
+    .eq('locale', locale)
     .maybeSingle()
   return (data as PoolSummary) ?? null
 }
 
 // 폴백 C: 풀에 요약이 없는 영상을 즉시 요약 (videos에 있는 영상 대상). 요약한 개수 반환.
-export async function summarizeNow(videoIds: string[]): Promise<number> {
+export async function summarizeNow(videoIds: string[], locale: Locale = 'ko'): Promise<number> {
   if (!videoIds.length) return 0
   const { data } = await supabase
     .from('videos')
@@ -459,7 +465,7 @@ export async function summarizeNow(videoIds: string[]): Promise<number> {
 
   let done = 0
   await processInBatches(targets, SUMMARY_CONCURRENCY, async (video) => {
-    if (await summarizeAndStore(video)) done++
+    if (await summarizeAndStore(video, locale)) done++
   })
   return done
 }

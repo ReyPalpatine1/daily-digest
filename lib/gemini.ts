@@ -1,4 +1,5 @@
 import { logApiUsage, SYSTEM_USER_ID } from '@/lib/api-usage'
+import type { Locale } from './i18n/translations'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
@@ -49,11 +50,19 @@ function extractBalancedJson(text: string): string | null {
   return null
 }
 
+const LOCALE_LANGUAGE_NAMES: Record<Locale, string> = {
+  ko: '한국어',
+  en: 'English',
+  zh: '중국어 간체',
+  ja: '일본어',
+}
+
 export async function summarizeVideo(
   userId: string | null,
   title: string,
   transcript: string,
-  description?: string
+  description?: string,
+  locale: Locale = 'ko'
 ): Promise<SummaryResult> {
   const fnStart = Date.now()
 
@@ -75,6 +84,10 @@ export async function summarizeVideo(
     lengthGuide = "summary는 2문장 이내로 간결하게. keyPoints는 2~3개, 부연 없이 제목에서 합리적으로 추론 가능한 범위만. timeline은 빈 배열 []."
   }
 
+  const langInstruction = locale !== 'ko'
+    ? `\n- 다음 언어로 요약: ${LOCALE_LANGUAGE_NAMES[locale]} (summary, keyPoints, timeline 모두 해당 언어로 작성)`
+    : ''
+
   const prompt = `다음은 유튜브 영상의 정보입니다.
 
 제목: ${title}
@@ -84,7 +97,7 @@ ${content || '(자막 및 설명 없음)'}
 - 위 제공된 정보(제목/자막/설명)에 실제로 담긴 내용만 사용하세요.
 - 제공되지 않은 수치, 통계, 인용, 사실을 절대 지어내지 마세요. 정보가 부족하면 무리해서 길게 쓰지 말고 아는 만큼만 쓰세요.
 - 구체적으로: 자막/설명에 등장하는 고유명사, 수치, 핵심 주장을 가능한 한 살려서 요약하세요.
-- ${lengthGuide}
+- ${lengthGuide}${langInstruction}
 
 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 완전한 JSON만 반환하세요:
 {
