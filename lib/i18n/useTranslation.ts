@@ -61,10 +61,23 @@ export function useTranslation() {
     [locale]
   )
 
-  const changeLocale = useCallback((newLocale: Locale) => {
+  // userId를 넘기면 settings.locale(이메일 발송 언어)에도 저장한다. 안 넘기면 기존과
+  // 동일하게 localStorage만 갱신(user 정보 없는 호출부 다수 → 시그니처 호환 유지).
+  // changeLocale은 사용자가 직접 바꿀 때만 호출되므로 초기 로드 시엔 저장되지 않는다.
+  const changeLocale = useCallback((newLocale: Locale, userId?: string) => {
     setLocale(newLocale)
     document.documentElement.lang = htmlLangTag[newLocale]
     try { localStorage.setItem('locale', newLocale) } catch {}
+    if (userId) {
+      // 동적 import로 supabase 클라이언트를 가져와 저장. 실패해도 UI 전환은 유지(console.warn만).
+      import('@/lib/supabase').then(({ supabase }) => {
+        supabase
+          .from('settings')
+          .update({ locale: newLocale })
+          .eq('user_id', userId)
+          .then(({ error }) => { if (error) console.warn('[locale] DB 저장 실패:', error.message) })
+      })
+    }
   }, [])
 
   return { t, locale, changeLocale }
