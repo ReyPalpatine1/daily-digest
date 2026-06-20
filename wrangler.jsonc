@@ -1,6 +1,9 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "daily-digest",
+	// 배포 시 대시보드에 등록된 일반 환경변수를 Wrangler가 덮어써서 지우지 않도록 보존.
+	// (Secret은 원래 보존되지만 일반 변수는 기본적으로 매 배포마다 덮어쓰여 사라짐)
+	"keep_vars": true,
 	// OpenNext 빌드 출력 엔트리
 	"main": ".open-next/worker.js",
 	"compatibility_date": "2025-12-19",
