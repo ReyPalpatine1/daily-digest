@@ -25,5 +25,12 @@
 			"binding": "WORKER_SELF_REFERENCE",
 			"service": "daily-digest"
 		}
-	]
+	],
+	// 실시간 로그를 매번 수동으로 켜지 않아도 자동 수집되도록 항상 활성화.
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		}
+	}
 }
