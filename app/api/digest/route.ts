@@ -8,8 +8,6 @@ import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 
-const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워진다. 최상단에서 createClient를 호출하면 키가 undefined가 되어
 // "supabaseKey is required"로 터지므로, 첫 사용 시점에 1회 lazy 생성한다. (Vercel도 동일 동작)
@@ -77,6 +75,9 @@ async function runDigest(
   trigger: DigestTrigger
 ): Promise<{ status: number; body: any }> {
   const startTime = Date.now()
+  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 시점에 채워짐)
+  // adminEmails는 요청 처리 시점(이 함수 내부)에서 계산한다.
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
   try {
     // 유저 설정 가져오기
     const { data: settings } = await supabase

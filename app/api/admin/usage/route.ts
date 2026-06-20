@@ -3,11 +3,6 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
-const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
-
 type Service = 'gemini' | 'youtube' | 'supadata'
 
 // 관리자 통계는 실시간일 필요 없음 → 60초 메모리 캐시(인증 통과 후 집계 결과에만 적용)
@@ -49,6 +44,14 @@ function daysAgoKstDateString(daysAgo: number): string {
 }
 
 export async function GET() {
+  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 시점에 채워짐)
+  // env는 핸들러 안(요청 처리 시점)에서 읽는다. 최상단에서 읽으면 adminEmails가 빈 배열이 되어
+  // 관리자 판정이 실패하고 403이 난다.
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
+
   const cookieStore = await cookies()
   const authClient = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

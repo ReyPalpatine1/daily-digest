@@ -30,8 +30,6 @@ const supabase: ServiceClient = new Proxy({} as ServiceClient, {
   },
 })
 
-const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-
 export const maxDuration = 60
 
 export async function POST(req: Request) {
@@ -66,6 +64,9 @@ export async function POST(req: Request) {
 }
 
 async function runBreaking(userId: string): Promise<{ status: number; body: any }> {
+  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 시점에 채워짐)
+  // adminEmails는 요청 처리 시점(이 함수 내부)에서 계산한다.
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
   try {
     const { data: settings, error: settingsError } = await supabase
       .from('settings')

@@ -3,14 +3,12 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { normalizeChannelUrl } from '@/lib/channel-url'
 
-const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
 const FREE_CHANNEL_LIMIT = 5
 
 // 서버 측 Pro 판정 (lib/supabase.ts의 checkIsPro와 동일 로직)
+// 요청 처리 중에만 호출되므로 ADMIN_EMAILS는 여기서 읽는다(Cloudflare는 모듈 로드 시 env가 빔).
 function isProPlan(plan: string | null | undefined, planExpiresAt: string | null | undefined, email: string | null | undefined): boolean {
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
   if (email && adminEmails.includes(email.toLowerCase())) return true
   if (plan === 'vip') return true
   if (plan === 'pro') {
@@ -21,6 +19,11 @@ function isProPlan(plan: string | null | undefined, planExpiresAt: string | null
 }
 
 export async function POST(request: Request) {
+  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 시점에 채워짐)
+  // env는 핸들러 안에서 읽는다.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
   const cookieStore = await cookies()
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

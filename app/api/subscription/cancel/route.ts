@@ -4,14 +4,16 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { enforceChannelLimit } from '@/lib/plan-sync'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
-
 // 구독 취소 → Free 강등 + 채널 정리.
 // ⚠️ 현재 결제는 데모 단계라 실제 결제사 연동(환불/해지 처리)은 없음.
 //    실제 결제 연동 시 결제 해지 성공 후 이 로직을 호출하도록 준비해 둔 라우트.
 export async function POST() {
+  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 시점에 채워짐)
+  // env는 핸들러 안에서 읽는다.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
+
   const cookieStore = await cookies()
   const authClient = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
