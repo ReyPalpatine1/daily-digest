@@ -103,7 +103,9 @@ export default function AdminPage() {
   )
 
   // ===== 로딩 스켈레톤 =====
-  if (loading || !isAdmin) {
+  // stats가 아직 null인 동안(로드 전/실패)에도 스켈레톤을 렌더해 s.system 등의
+  // null 접근(Cloudflare에서 "Cannot read properties of null")을 방지한다.
+  if (loading || !isAdmin || !stats) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
         <div style={{ height: 56, background: ADMIN_BAR_BG }} />
@@ -125,7 +127,7 @@ export default function AdminPage() {
     )
   }
 
-  const s = stats!
+  const s = stats // 위 가드로 여기서는 non-null이 보장됨
 
   // API 진행률 막대
   const apiBar = (label: string, used: number, limit: number) => {
