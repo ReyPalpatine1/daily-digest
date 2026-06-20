@@ -96,6 +96,24 @@ ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
 ### 백업/복구
 - 안정 상태 git 태그: `stable-next-16.2.4` (Cloudflare 작업 전 백업). 문제 시 `git checkout stable-next-16.2.4`로 복구 가능. Vercel은 계속 살아있어 서비스 안 멈춤.
 
+### subrequest 한도 (★ 요약 실패 주의)
+- Cloudflare Workers는 "한 번의 Worker 실행"당 외부 호출(subrequest) 횟수 제한이 있음:
+  **무료 플랜 50개 / 유료(Workers Paid $5) 1,000개.**
+- subrequest = 외부 호출 1개. 영상 1개 요약 ≈ 자막+설명+Gemini = 약 3~4개.
+  따라서 무료 50개 한도면 한 실행에 영상 약 10~12개가 한계.
+- 한 실행(= API 호출 1번, 예: "지금 실행하기" 1번, 또는 cron이 부르는
+  /api/collect·/api/cron·/api/digest 각각)이 영상을 너무 많이 처리하면
+  "Too many subrequests by single Worker invocation" 에러 → 그 이후 영상 요약 실패.
+- 한도는 "실행 1번당"이라 동시 실행은 각자 따로 카운트됨
+  (사용자 2명이 동시에 눌러도 각 실행이 한도 내면 OK).
+- **현재 대응**: lib/video-pool.ts에 MAX_SUMMARIES_PER_RUN(환경변수, 기본 10)로
+  한 실행당 요약 영상 수를 제한. 초과분은 다음 cron 주기로 이월(멱등성으로 중복 없음).
+- **★ 유료($5 Workers Paid) 전환 시**: subrequest 한도가 50→1,000으로 늘어나므로
+  MAX_SUMMARIES_PER_RUN 환경변수를 100 정도로 올릴 것(Cloudflare 런타임 변수에 등록).
+  그러면 한 번에 더 많은 영상을 처리해 발송이 빨라짐.
+- 다국어 요약(B방식)을 쓰면 영상당 언어 수만큼 Gemini 호출이 늘어 subrequest를
+  더 먹으므로, 언어가 많아지면 MAX_SUMMARIES_PER_RUN을 더 보수적으로 잡아야 함.
+
 ## 5. 플랜 / VIP 시스템
 
 - 누구나 가입 → Free. 관리자가 VIP 지정 → 무료 Pro. 결제 → Pro.
