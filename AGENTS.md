@@ -37,3 +37,30 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 상업용 기준으로 작업.
 - iOS15 대응 .browserslistrc(ios>=15, safari>=15) 유지.
 - 데이터/파일 삭제는 되돌릴 수 없으므로 신중히.
+
+## Cloudflare Workers 호환 (★ 중요 — 어기면 배포는 되나 런타임에서 터짐)
+- **process.env는 "요청 처리 시점"에 채워진다.** 모듈 최상단(파일 로드 시점,
+  함수 밖)에서 process.env를 읽어 클라이언트를 만들면 Cloudflare에서 undefined가 되어
+  "supabaseKey is required" 등으로 터진다. (Vercel은 로드 시점에도 채워져서 됨)
+  → Supabase 등 모든 클라이언트는 **lazy 초기화**로 작성:
+    함수 내부에서 생성하거나, lazy getter + Proxy 패턴(lib/supabase.ts 참고).
+  → API 라우트에서도 const supabaseUrl = process.env... 를 모듈 최상단에 두지 말 것.
+    핸들러(GET/POST) 함수 내부에서 읽을 것. adminEmails 같은 것도 함수 내부에서 계산.
+- **동적 import 금지**: import('@/lib/supabase') 같은 런타임 동적 import는
+  Cloudflare에서 페이지 로드 실패("This page couldn't load")를 유발한다. static import 사용.
+- **환경변수는 런타임 변수에 등록 필요**: NEXT_PUBLIC_ 이 아닌 변수
+  (SUPABASE_SERVICE_KEY, ADMIN_EMAILS, GEMINI_API_KEY 등)는 Cloudflare
+  "설정 → 변수 및 비밀"(런타임)에 등록돼야 process.env로 읽힌다. 빌드 변수만으론 런타임에서 안 보임.
+- **keep_vars**: wrangler.jsonc에 "keep_vars": true 가 있어야 배포 시 일반 변수가
+  삭제되지 않는다(Secret은 원래 안 지워짐). 이 설정 건드리지 말 것.
+- wrangler.jsonc의 compatibility_flags(nodejs_compat,
+  nodejs_compat_populate_process_env 등)와 r2/observability 바인딩 건드리지 말 것.
+
+## 빌드 검증 (Vercel + Cloudflare 양쪽)
+- 코드 수정 후 셋 다 통과 확인 후 push:
+  npx tsc / npm run build (Vercel용) / npm run cf:build (Cloudflare용 OpenNext)
+- 셋 중 하나라도 실패하면 push하지 말고 에러를 보고할 것.
+
+## null 단언 주의
+- 비동기 로드 데이터(API 응답 등)에 const s = data! 같은 non-null 단언(!)을 쓰지 말 것.
+  로드 전/실패 시 null이면 런타임에서 터진다. if (!data) return <로딩> 가드 후 사용.
