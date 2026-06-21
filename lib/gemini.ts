@@ -167,6 +167,9 @@ async function callGeminiModel(
   // 없으면(Vercel) 기존 직접 호출. 끝 슬래시 중복 방지.
   const base = (process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com').replace(/\/+$/, '')
 
+  // [임시 진단] Gateway 경유 여부 확인용 (키는 절대 찍지 않음)
+  console.log('[diag-gemini] base =', base, '| viaGateway =', base.includes('gateway.ai.cloudflare.com'))
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const callStart = Date.now()
