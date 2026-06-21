@@ -1,7 +1,8 @@
 import { logApiUsage, SYSTEM_USER_ID } from '@/lib/api-usage'
 import type { Locale } from './i18n/translations'
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
+// Cloudflare 호환: process.env는 요청 처리 시점에 채워지므로 모듈 최상단에서 읽지 않고
+// 호출 함수 내부에서 읽는다. (다른 파일과 동일 패턴)
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 // -latest alias는 실험 모델(프로덕션 부적합, 엄격한 rate limit, 가용성 미보장)이라
 // 503이 잦다 → 안정(GA) 모델 고정 + 503 시 폴백 모델로 1회 재시도.
@@ -160,11 +161,17 @@ async function callGeminiModel(
 ): Promise<ModelOutcome> {
   const retryDelay = 2000 // 2초
 
+  // Cloudflare 호환: 요청 시점에 env를 읽는다.
+  const apiKey = process.env.GEMINI_API_KEY!
+  // GEMINI_BASE_URL이 있으면(Cloudflare) AI Gateway 경유로 지역 차단 우회,
+  // 없으면(Vercel) 기존 직접 호출. 끝 슬래시 중복 방지.
+  const base = (process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com').replace(/\/+$/, '')
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const callStart = Date.now()
       const res = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+        `${base}/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
