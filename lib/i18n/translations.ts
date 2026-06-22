@@ -119,6 +119,7 @@ export const translations = {
       kakaoChannel: '카카오톡',
       telegramChannel: '텔레그램',
       discordChannel: '디스코드',
+      comingSoon: '준비 중',
     },
     history: {
       title: '열람 기록',
@@ -543,6 +544,7 @@ export const translations = {
       kakaoChannel: 'KakaoTalk',
       telegramChannel: 'Telegram',
       discordChannel: 'Discord',
+      comingSoon: 'Coming soon',
     },
     history: {
       title: 'History',
@@ -966,6 +968,7 @@ export const translations = {
       kakaoChannel: 'KakaoTalk',
       telegramChannel: 'Telegram',
       discordChannel: 'Discord',
+      comingSoon: '即将推出',
     },
     history: {
       title: '历史记录',
@@ -1386,6 +1389,7 @@ export const translations = {
       kakaoChannel: 'KakaoTalk',
       telegramChannel: 'Telegram',
       discordChannel: 'Discord',
+      comingSoon: '準備中',
     },
     history: {
       title: '履歴',

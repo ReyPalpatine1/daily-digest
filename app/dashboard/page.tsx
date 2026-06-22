@@ -9,6 +9,8 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
+import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
+import { Mail, Send, MessageCircle, MessageSquare, Lock } from 'lucide-react'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -41,6 +43,16 @@ function timeAgo(iso: string | null | undefined, t: TFn): string {
   if (week < 4) return t('time.weeksAgo', { n: week })
   const month = Math.floor(day / 30)
   return t('time.monthsAgo', { n: month })
+}
+
+// 발송 채널 → lucide 아이콘 매핑. lucide엔 카카오/라인/왓츠앱 브랜드 아이콘이
+// 없어 메시지 계열 대체 아이콘 사용.
+const channelIcons: Record<ChannelId, typeof Mail> = {
+  email: Mail,
+  telegram: Send,
+  kakao: MessageCircle,
+  whatsapp: MessageCircle,
+  line: MessageSquare,
 }
 
 export default function Dashboard() {
@@ -1658,12 +1670,26 @@ export default function Dashboard() {
             whiteSpace: 'nowrap',
           }
 
-          const notifChannels = [
-            { id: 'email', label: t('schedule.emailChannel'), icon: '📧', checked: true, locked: false, fixed: true },
-            { id: 'kakao', label: t('schedule.kakaoChannel'), icon: '💬', checked: false, locked: !isPro, fixed: false },
-            { id: 'telegram', label: t('schedule.telegramChannel'), icon: '✈️', checked: false, locked: !isPro, fixed: false },
-            { id: 'discord', label: t('schedule.discordChannel'), icon: '🎮', checked: false, locked: !isPro, fixed: false },
-          ]
+          // 발송 채널 목록 — lib/channels.ts 단일 소스 + 언어별 동적 순서.
+          const currentMethod: ChannelId = (settings?.delivery_method as ChannelId) ?? 'email'
+          const notifChannels = orderedChannels(locale).map(def => ({
+            def,
+            label: t(def.labelKey),
+            selected: currentMethod === def.id,
+            locked: def.proOnly && !isPro, // PRO 전용인데 무료 사용자
+            comingSoon: !def.enabled,       // 아직 미구현(카카오/왓츠앱/라인)
+          }))
+
+          // 채널 선택(라디오 택1). 준비중/잠금 채널은 선택 대신 안내.
+          const selectChannel = (def: typeof CHANNELS[number]) => {
+            if (!def.enabled) return // 준비 중 — 선택 불가
+            if (def.proOnly && !isPro) {
+              router.push('/pricing') // PRO 게이트 — 업그레이드 안내
+              return
+            }
+            if (currentMethod === def.id) return // 이미 선택됨
+            saveSettings({ delivery_method: def.id })
+          }
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1749,57 +1775,66 @@ export default function Dashboard() {
 
               {/* 알림 채널 */}
               <div style={cardStyle}>
-                <div style={sectionTitle}><span>🔔</span> {t('schedule.channels')}</div>
+                <div style={sectionTitle}>{t('schedule.channels')}</div>
                 <div style={sectionSubtitle}>{t('schedule.channelsDesc')}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {notifChannels.map(ch => (
-                    <div key={ch.id}
-                      onClick={() => {
-                        if (ch.locked) {
-                          console.log('[phase4] open upgrade modal — channel:', ch.id)
-                        } else if (ch.fixed) {
-                          // 이메일은 변경 불가
-                        } else {
-                          console.log('[phase4] toggle channel:', ch.id)
-                        }
-                      }}
-                      onMouseEnter={e => { if (!ch.fixed) e.currentTarget.style.background = 'var(--bg-subtle)' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '10px 12px', borderRadius: 7,
-                        cursor: ch.fixed ? 'default' : 'pointer',
-                        background: 'transparent',
-                        transition: 'background 0.15s',
-                        opacity: ch.locked ? 0.65 : 1,
-                      }}>
-                      <span style={{
-                        width: 18, height: 18, borderRadius: 4,
-                        border: '0.5px solid var(--border)',
-                        background: ch.checked ? 'var(--accent)' : 'var(--bg-card)',
-                        color: 'var(--bg-card)',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 700,
-                        flexShrink: 0,
-                      }}>
-                        {ch.checked ? '✓' : ''}
-                      </span>
-                      <span style={{
-                        fontSize: 13,
-                        color: ch.locked ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                      }}>
-                        {ch.icon} {ch.label}
-                      </span>
-                      {ch.locked && (
-                        <span style={{ marginLeft: 'auto', ...proBadge }}>🔒 Pro</span>
-                      )}
-                      {ch.fixed && (
-                        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
-                          {t('schedule.defaultLabel')}
+                  {notifChannels.map(ch => {
+                    const Icon = channelIcons[ch.def.id]
+                    const interactive = ch.def.enabled && !ch.locked
+                    const dimmed = ch.comingSoon || ch.locked
+                    return (
+                      <div key={ch.def.id}
+                        onClick={() => selectChannel(ch.def)}
+                        onMouseEnter={e => { if (interactive && !ch.selected) e.currentTarget.style.background = 'var(--bg-subtle)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '10px 12px', borderRadius: 7,
+                          cursor: ch.comingSoon ? 'not-allowed' : 'pointer',
+                          background: 'transparent',
+                          transition: 'background 0.15s',
+                          opacity: dimmed ? 0.55 : 1,
+                        }}>
+                        {/* 라디오 (택1) */}
+                        <span style={{
+                          width: 18, height: 18, borderRadius: '50%',
+                          border: ch.selected ? '5px solid var(--accent)' : '1.5px solid var(--border)',
+                          background: 'var(--bg-card)',
+                          boxSizing: 'border-box',
+                          flexShrink: 0,
+                          transition: 'border 0.15s',
+                        }} />
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          color: dimmed ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                          flexShrink: 0,
+                        }}>
+                          <Icon size={16} />
                         </span>
-                      )}
-                    </div>
-                  ))}
+                        <span style={{
+                          fontSize: 13,
+                          color: dimmed ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                        }}>
+                          {ch.label}
+                        </span>
+                        {ch.locked && (
+                          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, ...proBadge }}>
+                            <Lock size={11} /> Pro
+                          </span>
+                        )}
+                        {!ch.locked && ch.comingSoon && (
+                          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
+                            {t('schedule.comingSoon')}
+                          </span>
+                        )}
+                        {!ch.locked && !ch.comingSoon && ch.def.id === 'email' && (
+                          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
+                            {t('schedule.defaultLabel')}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 

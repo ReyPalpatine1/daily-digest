@@ -80,7 +80,7 @@ export type Settings = {
   breaking_keywords: string[]
   breaking_alert: boolean
   active: boolean
-  locale: 'ko' | 'en'
+  locale: 'ko' | 'en' | 'zh' | 'ja'
   notify_when_empty?: boolean
   // 발송 채널 선택 (lib/channels.ts ChannelId). 미설정/구버전 사용자는 'email' 로 취급.
   delivery_method?: 'email' | 'telegram' | 'whatsapp' | 'line' | 'kakao' | null
