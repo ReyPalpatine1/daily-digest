@@ -65,6 +65,8 @@ export default function Dashboard() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [digests, setDigests] = useState<Digest[]>([])
   const [activeTab, setActiveTab] = useState<'channels' | 'schedule' | 'history'>('channels')
+  // PRO 전용 채널 클릭 시 잠깐 뜨는 안내 문구(결제창 이동 없음)
+  const [channelNotice, setChannelNotice] = useState<string | null>(null)
   // 열람 기록 "맨 위로" 버튼: 일정량 스크롤 시 노출
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -1680,11 +1682,13 @@ export default function Dashboard() {
             comingSoon: !def.enabled,       // 아직 미구현(카카오/왓츠앱/라인)
           }))
 
-          // 채널 선택(라디오 택1). 준비중/잠금 채널은 선택 대신 안내.
+          // 채널 선택(라디오 택1). 준비중/잠금 채널은 선택 대신 안내(이동·모달 없음).
           const selectChannel = (def: typeof CHANNELS[number]) => {
             if (!def.enabled) return // 준비 중 — 선택 불가
             if (def.proOnly && !isPro) {
-              router.push('/pricing') // PRO 게이트 — 업그레이드 안내
+              // PRO 전용 채널 — 결제창 이동 없이 가벼운 안내만 잠깐 표시
+              setChannelNotice(t('schedule.proChannelNotice'))
+              window.setTimeout(() => setChannelNotice(null), 3000)
               return
             }
             if (currentMethod === def.id) return // 이미 선택됨
@@ -1790,15 +1794,15 @@ export default function Dashboard() {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 10,
                           padding: '10px 12px', borderRadius: 7,
-                          cursor: ch.comingSoon ? 'not-allowed' : 'pointer',
+                          cursor: ch.comingSoon ? 'default' : (interactive ? 'pointer' : 'default'),
                           background: 'transparent',
                           transition: 'background 0.15s',
                           opacity: dimmed ? 0.55 : 1,
                         }}>
                         {/* 라디오 (택1) */}
                         <span style={{
-                          width: 18, height: 18, borderRadius: '50%',
-                          border: ch.selected ? '5px solid var(--accent)' : '1.5px solid var(--border)',
+                          width: 14, height: 14, borderRadius: '50%',
+                          border: ch.selected ? '4px solid var(--accent)' : '1px solid var(--border)',
                           background: 'var(--bg-card)',
                           boxSizing: 'border-box',
                           flexShrink: 0,
@@ -1809,7 +1813,7 @@ export default function Dashboard() {
                           color: dimmed ? 'var(--text-tertiary)' : 'var(--text-primary)',
                           flexShrink: 0,
                         }}>
-                          <Icon size={16} />
+                          <Icon size={14} />
                         </span>
                         <span style={{
                           fontSize: 13,
@@ -1819,7 +1823,7 @@ export default function Dashboard() {
                         </span>
                         {ch.locked && (
                           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, ...proBadge }}>
-                            <Lock size={11} /> Pro
+                            <Lock size={10} /> Pro
                           </span>
                         )}
                         {!ch.locked && ch.comingSoon && (
@@ -1827,15 +1831,15 @@ export default function Dashboard() {
                             {t('schedule.comingSoon')}
                           </span>
                         )}
-                        {!ch.locked && !ch.comingSoon && ch.def.id === 'email' && (
-                          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
-                            {t('schedule.defaultLabel')}
-                          </span>
-                        )}
                       </div>
                     )
                   })}
                 </div>
+                {channelNotice && (
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8 }}>
+                    {channelNotice}
+                  </div>
+                )}
               </div>
 
               {/* 새 영상 없는 날 알림 */}

@@ -120,6 +120,7 @@ export const translations = {
       telegramChannel: '텔레그램',
       discordChannel: '디스코드',
       comingSoon: '준비 중',
+      proChannelNotice: 'PRO 전용 채널입니다',
     },
     history: {
       title: '열람 기록',
@@ -545,6 +546,7 @@ export const translations = {
       telegramChannel: 'Telegram',
       discordChannel: 'Discord',
       comingSoon: 'Coming soon',
+      proChannelNotice: 'PRO-only channel',
     },
     history: {
       title: 'History',
@@ -969,6 +971,7 @@ export const translations = {
       telegramChannel: 'Telegram',
       discordChannel: 'Discord',
       comingSoon: '即将推出',
+      proChannelNotice: '仅限 PRO 的渠道',
     },
     history: {
       title: '历史记录',
@@ -1390,6 +1393,7 @@ export const translations = {
       telegramChannel: 'Telegram',
       discordChannel: 'Discord',
       comingSoon: '準備中',
+      proChannelNotice: 'PRO限定チャンネルです',
     },
     history: {
       title: '履歴',
