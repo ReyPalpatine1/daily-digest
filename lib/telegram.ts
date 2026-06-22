@@ -72,7 +72,12 @@ function escapeHtml(s: string): string {
 }
 
 // 단일 메시지 발송. TELEGRAM_BOT_TOKEN 미설정 시 명확한 에러로 실패(우회 발송 안 함).
-export async function sendTelegramMessage(chatId: string, text: string): Promise<void> {
+// disablePreview: 링크 미리보기 끄기 여부(기본 true). 다이제스트는 끄고, 속보는 켠다.
+export async function sendTelegramMessage(
+  chatId: string,
+  text: string,
+  disablePreview = true
+): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) {
     throw new Error('TELEGRAM_BOT_TOKEN 미설정 — 텔레그램 발송 불가')
@@ -85,7 +90,7 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
-      disable_web_page_preview: false,
+      disable_web_page_preview: disablePreview,
     }),
   })
 
@@ -97,26 +102,30 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
 
 // 여러 줄을 4096자 한도에 맞춰 메시지로 나눠 순차 발송.
 // 줄 단위로 자르므로 HTML 태그가 중간에 끊기지 않는다.
-async function sendLongMessage(chatId: string, lines: string[]): Promise<void> {
+async function sendLongMessage(
+  chatId: string,
+  lines: string[],
+  disablePreview = true
+): Promise<void> {
   let buf = ''
   for (const line of lines) {
     const candidate = buf ? `${buf}\n${line}` : line
     if (candidate.length > SAFE_LIMIT) {
       if (buf) {
-        await sendTelegramMessage(chatId, buf)
+        await sendTelegramMessage(chatId, buf, disablePreview)
         buf = line.length > SAFE_LIMIT ? '' : line
       }
       if (!buf && line.length > SAFE_LIMIT) {
         // 한 줄 자체가 한도 초과(드묾) — 안전하게 잘라 발송
         for (let i = 0; i < line.length; i += SAFE_LIMIT) {
-          await sendTelegramMessage(chatId, line.slice(i, i + SAFE_LIMIT))
+          await sendTelegramMessage(chatId, line.slice(i, i + SAFE_LIMIT), disablePreview)
         }
       }
     } else {
       buf = candidate
     }
   }
-  if (buf) await sendTelegramMessage(chatId, buf)
+  if (buf) await sendTelegramMessage(chatId, buf, disablePreview)
 }
 
 // 요약 1건을 텔레그램용 줄 배열로 변환.
@@ -165,7 +174,8 @@ export async function sendDigestTelegram(
   lines.push(escapeHtml(et(lc, 'digest.footer')))
 
   try {
-    await sendLongMessage(chatId, lines)
+    // 다이제스트는 여러 영상을 묶어 보내므로 미리보기 끔
+    await sendLongMessage(chatId, lines, true)
     await logTelegramResult(userId, chatId, 'digest', true)
   } catch (e) {
     await logTelegramResult(userId, chatId, 'digest', false, String(e))
@@ -206,7 +216,8 @@ export async function sendBreakingTelegram(
   }
 
   try {
-    await sendLongMessage(chatId, lines)
+    // 속보는 단일 영상이므로 미리보기 켬
+    await sendLongMessage(chatId, lines, false)
     await logTelegramResult(userId, chatId, 'breaking', true)
   } catch (e) {
     await logTelegramResult(userId, chatId, 'breaking', false, String(e))
