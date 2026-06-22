@@ -25,14 +25,22 @@ function isEnabled(method: string): boolean {
   return CHANNELS.some(c => c.id === method && c.enabled)
 }
 
+// 실제 사용할 채널 결정 — 무료/강등 사용자가 PRO 채널을 가리키면 이메일로 방어 폴백.
+function effectiveMethod(method: string | null | undefined, isPro: boolean): string {
+  const m = method ?? 'email'
+  if (m !== 'email' && !isPro) return 'email'
+  return m
+}
+
 export async function deliverDigest(
   settings: DeliverySettings,
   userName: string,
   items: DeliverItem[],
   locale: string | null = 'ko',
-  userId: string | null = null
+  userId: string | null = null,
+  isPro = true
 ): Promise<void> {
-  const method = settings.delivery_method ?? 'email'
+  const method = effectiveMethod(settings.delivery_method, isPro)
 
   if (method === 'telegram' && isEnabled('telegram')) {
     const chatId = settings.telegram_chat_id
@@ -52,9 +60,10 @@ export async function deliverBreaking(
   userName: string,
   item: DeliverItem,
   locale: string | null = 'ko',
-  userId: string | null = null
+  userId: string | null = null,
+  isPro = true
 ): Promise<void> {
-  const method = settings.delivery_method ?? 'email'
+  const method = effectiveMethod(settings.delivery_method, isPro)
 
   if (method === 'telegram' && isEnabled('telegram')) {
     const chatId = settings.telegram_chat_id

@@ -212,7 +212,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
           isBreaking: true,
         }
 
-        await deliverBreaking(settings, profile?.name ?? '사용자', digestItem, userLocale, userId)
+        await deliverBreaking(settings, profile?.name ?? '사용자', digestItem, userLocale, userId, isPro)
 
         if (!s) {
           failedItems.push({

@@ -74,6 +74,12 @@ export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vi
         .update({ plan: 'free', plan_expires_at: null })
         .eq('id', userId)
       await enforceChannelLimit(userId)
+      // PRO 전용 발송 채널(텔레그램 등)을 쓰던 사용자는 강등 시 이메일로 자동 복구.
+      await supabase
+        .from('settings')
+        .update({ delivery_method: 'email' })
+        .eq('user_id', userId)
+        .neq('delivery_method', 'email')
       console.log(`📉 Plan 만료 강등: ${userId}`)
       return 'free'
     }

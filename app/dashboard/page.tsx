@@ -1686,9 +1686,9 @@ export default function Dashboard() {
           const selectChannel = (def: typeof CHANNELS[number]) => {
             if (!def.enabled) return // 준비 중 — 선택 불가
             if (def.proOnly && !isPro) {
-              // PRO 전용 채널 — 결제창 이동 없이 가벼운 안내만 잠깐 표시
+              // PRO 전용 채널 — 결제창 이동/모달 없이 토스트로만 안내(2.5초)
               setChannelNotice(t('schedule.proChannelNotice'))
-              window.setTimeout(() => setChannelNotice(null), 3000)
+              window.setTimeout(() => setChannelNotice(null), 2500)
               return
             }
             if (currentMethod === def.id) return // 이미 선택됨
@@ -1835,8 +1835,17 @@ export default function Dashboard() {
                     )
                   })}
                 </div>
+                {/* PRO 전용 채널 안내 토스트 — 결제 토스트와 동일 스타일(하단 중앙 알약).
+                    bg=text-primary / 글씨·아이콘=bg-card 라 라이트·다크 양쪽에서 자동 반전·대비됨. */}
                 {channelNotice && (
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8 }}>
+                  <div style={{
+                    position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+                    zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
+                    padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+                    boxShadow: 'var(--shadow-lg)',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <Lock size={13} color="var(--bg-card)" />
                     {channelNotice}
                   </div>
                 )}
