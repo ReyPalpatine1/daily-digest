@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { enforceChannelLimit, activateAllChannels } from '@/lib/plan-sync'
+import { enforceChannelLimit, activateAllChannels, restoreDeliveryToEmail } from '@/lib/plan-sync'
 import { invalidateUsersCache } from '../users/route'
 
 export async function POST(request: Request) {
@@ -103,6 +103,7 @@ export async function POST(request: Request) {
   // 플랜 변경에 따른 채널 활성화 동기화
   if (plan === 'free') {
     await enforceChannelLimit(targetUserId)   // VIP 해제 → 오래된 5개만 활성
+    await restoreDeliveryToEmail(targetUserId) // PRO 전용 발송 채널 → 이메일로 복구
   } else {
     await activateAllChannels(targetUserId)   // VIP 지정 → 전체 활성
   }

@@ -1673,7 +1673,11 @@ export default function Dashboard() {
           }
 
           // 발송 채널 목록 — lib/channels.ts 단일 소스 + 언어별 동적 순서.
-          const currentMethod: ChannelId = (settings?.delivery_method as ChannelId) ?? 'email'
+          const rawMethod: ChannelId = (settings?.delivery_method as ChannelId) ?? 'email'
+          // UI 방어: 강등 직후 캐시 등으로 PRO 채널이 남아있어도 무료면 email 선택으로 간주.
+          // (서버 restoreDeliveryToEmail이 복구하면 자동으로 일치한다.)
+          const rawDef = CHANNELS.find(c => c.id === rawMethod)
+          const currentMethod: ChannelId = (rawDef?.proOnly && !isPro) ? 'email' : rawMethod
           const notifChannels = orderedChannels(locale).map(def => ({
             def,
             label: t(def.labelKey),

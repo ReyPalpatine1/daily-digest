@@ -55,6 +55,16 @@ export async function activateAllChannels(userId: string): Promise<void> {
   await supabase.from('channels').update({ is_active: true }).eq('user_id', userId)
 }
 
+// Free 강등 시: PRO 전용 발송 채널(텔레그램 등)을 쓰던 사용자를 이메일로 자동 복구.
+// 모든 강등 경로(만료 자동강등 + 관리자 수동강등)에서 공통 호출할 것.
+export async function restoreDeliveryToEmail(userId: string): Promise<void> {
+  await supabase
+    .from('settings')
+    .update({ delivery_method: 'email' })
+    .eq('user_id', userId)
+    .neq('delivery_method', 'email')
+}
+
 // 만료 체크 + 동기화 (cron/digest에서 호출).
 // Pro인데 plan_expires_at 경과 시 free로 강등하고 채널 정리.
 export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vip'> {
@@ -74,12 +84,7 @@ export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vi
         .update({ plan: 'free', plan_expires_at: null })
         .eq('id', userId)
       await enforceChannelLimit(userId)
-      // PRO 전용 발송 채널(텔레그램 등)을 쓰던 사용자는 강등 시 이메일로 자동 복구.
-      await supabase
-        .from('settings')
-        .update({ delivery_method: 'email' })
-        .eq('user_id', userId)
-        .neq('delivery_method', 'email')
+      await restoreDeliveryToEmail(userId)
       console.log(`📉 Plan 만료 강등: ${userId}`)
       return 'free'
     }
