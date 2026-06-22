@@ -96,8 +96,10 @@ export default function Dashboard() {
 
   const [pendingSendTime, setPendingSendTime] = useState('07:00')
   const [pendingEmail, setPendingEmail] = useState('')
+  const [pendingTelegram, setPendingTelegram] = useState('')
   const [sendTimeStatus, setSendTimeStatus] = useState<'idle' | 'saved'>('idle')
   const [emailStatus, setEmailStatus] = useState<'idle' | 'saved'>('idle')
+  const [telegramStatus, setTelegramStatus] = useState<'idle' | 'saved'>('idle')
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
@@ -201,6 +203,7 @@ export default function Dashboard() {
     if (settings) {
       setPendingSendTime(settings.send_time ?? '07:00')
       setPendingEmail(settings.email ?? '')
+      setPendingTelegram(settings.telegram_chat_id ?? '')
     }
   }, [settings])
 
@@ -246,8 +249,10 @@ export default function Dashboard() {
 
   const currentSendTime = settings?.send_time ?? '07:00'
   const currentEmail = settings?.email ?? ''
+  const currentTelegram = settings?.telegram_chat_id ?? ''
   const sendTimeChanged = pendingSendTime !== currentSendTime
   const emailChanged = pendingEmail !== currentEmail
+  const telegramChanged = pendingTelegram !== currentTelegram
 
   async function saveSendTime() {
     if (!sendTimeChanged) return
@@ -261,6 +266,14 @@ export default function Dashboard() {
     await saveSettings({ email: pendingEmail })
     setEmailStatus('saved')
     setTimeout(() => setEmailStatus('idle'), 1500)
+  }
+
+  // 텔레그램 Chat ID 저장 — 빈 값은 저장 막음(버튼 비활성과 이중 방어).
+  async function saveTelegram() {
+    if (!telegramChanged || !pendingTelegram.trim()) return
+    await saveSettings({ telegram_chat_id: pendingTelegram.trim() })
+    setTelegramStatus('saved')
+    setTimeout(() => setTelegramStatus('idle'), 1500)
   }
 
   async function loadData(userId: string) {
@@ -1763,38 +1776,6 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* 수신 이메일 */}
-              <div style={cardStyle}>
-                <div style={sectionTitle}><span>📧</span> {t('schedule.email')}</div>
-                <div style={sectionSubtitle}>{t('schedule.emailDesc')}</div>
-                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center' }}>
-                  <input
-                    type="email"
-                    value={pendingEmail}
-                    onChange={e => setPendingEmail(e.target.value)}
-                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                    onBlur={e => (e.currentTarget.style.borderColor = emailChanged ? 'var(--accent)' : 'var(--border)')}
-                    placeholder="your@email.com"
-                    style={{
-                      ...inputStyle,
-                      flex: 1,
-                      borderColor: emailChanged ? 'var(--accent)' : 'var(--border)',
-                    }} />
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
-                    {emailStatus === 'saved' && (
-                      <span style={{ fontSize: 12, color: 'var(--success)' }}>{t('common.saved')}</span>
-                    )}
-                    {emailChanged && emailStatus !== 'saved' && (
-                      <span style={{ fontSize: 12, color: 'var(--warning)' }}>{t('common.changed')}</span>
-                    )}
-                    <button onClick={saveEmail} disabled={!emailChanged}
-                      style={emailChanged ? primaryBtn : disabledBtn}>
-                      {t('common.save')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
               {/* 알림 채널 */}
               <div style={cardStyle}>
                 <div style={sectionTitle}>{t('schedule.channels')}</div>
@@ -1804,50 +1785,112 @@ export default function Dashboard() {
                     const Icon = channelIcons[ch.def.id]
                     const interactive = ch.def.enabled && !ch.locked
                     const dimmed = ch.comingSoon || ch.locked
+                    const telegramSaveReady = telegramChanged && !!pendingTelegram.trim()
                     return (
-                      <div key={ch.def.id}
-                        onClick={() => selectChannel(ch.def)}
-                        onMouseEnter={e => { if (interactive && !ch.selected) e.currentTarget.style.background = 'var(--bg-subtle)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '10px 12px', borderRadius: 7,
-                          cursor: ch.comingSoon ? 'default' : (interactive ? 'pointer' : 'default'),
-                          background: 'transparent',
-                          transition: 'background 0.15s',
-                          opacity: dimmed ? 0.55 : 1,
-                        }}>
-                        {/* 라디오 (택1) */}
-                        <span style={{
-                          width: 14, height: 14, borderRadius: '50%',
-                          border: ch.selected ? '4px solid var(--accent)' : '1px solid var(--border)',
-                          background: 'var(--bg-card)',
-                          boxSizing: 'border-box',
-                          flexShrink: 0,
-                          transition: 'border 0.15s',
-                        }} />
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center',
-                          color: dimmed ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                          flexShrink: 0,
-                        }}>
-                          <Icon size={14} />
-                        </span>
-                        <span style={{
-                          fontSize: 13,
-                          color: dimmed ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                        }}>
-                          {ch.label}
-                        </span>
-                        {ch.locked && (
-                          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, ...proBadge }}>
-                            <Lock size={10} /> Pro
+                      <div key={ch.def.id}>
+                        <div
+                          onClick={() => selectChannel(ch.def)}
+                          onMouseEnter={e => { if (interactive && !ch.selected) e.currentTarget.style.background = 'var(--bg-subtle)' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px', borderRadius: 7,
+                            cursor: ch.comingSoon ? 'default' : (interactive ? 'pointer' : 'default'),
+                            background: 'transparent',
+                            transition: 'background 0.15s',
+                            opacity: dimmed ? 0.55 : 1,
+                          }}>
+                          {/* 라디오 (택1) */}
+                          <span style={{
+                            width: 14, height: 14, borderRadius: '50%',
+                            border: ch.selected ? '4px solid var(--accent)' : '1px solid var(--border)',
+                            background: 'var(--bg-card)',
+                            boxSizing: 'border-box',
+                            flexShrink: 0,
+                            transition: 'border 0.15s',
+                          }} />
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center',
+                            color: dimmed ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                            flexShrink: 0,
+                          }}>
+                            <Icon size={14} />
                           </span>
-                        )}
-                        {!ch.locked && ch.comingSoon && (
-                          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
-                            {t('schedule.comingSoon')}
+                          <span style={{
+                            fontSize: 13,
+                            color: dimmed ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                          }}>
+                            {ch.label}
                           </span>
+                          {ch.locked && (
+                            <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, ...proBadge }}>
+                              <Lock size={10} /> Pro
+                            </span>
+                          )}
+                          {!ch.locked && ch.comingSoon && (
+                            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
+                              {t('schedule.comingSoon')}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 선택된 채널 바로 아래 주소 입력칸 펼침 */}
+                        {ch.selected && interactive && (
+                          <div style={{ padding: '4px 4px 12px 46px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {ch.def.id === 'email' && (
+                              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center' }}>
+                                <input
+                                  type="email"
+                                  value={pendingEmail}
+                                  onChange={e => setPendingEmail(e.target.value)}
+                                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                                  onBlur={e => (e.currentTarget.style.borderColor = emailChanged ? 'var(--accent)' : 'var(--border)')}
+                                  placeholder="your@email.com"
+                                  style={{ ...inputStyle, flex: 1, borderColor: emailChanged ? 'var(--accent)' : 'var(--border)' }} />
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                  {emailStatus === 'saved' && (
+                                    <span style={{ fontSize: 12, color: 'var(--success)' }}>{t('common.saved')}</span>
+                                  )}
+                                  {emailChanged && emailStatus !== 'saved' && (
+                                    <span style={{ fontSize: 12, color: 'var(--warning)' }}>{t('common.changed')}</span>
+                                  )}
+                                  <button onClick={saveEmail} disabled={!emailChanged}
+                                    style={emailChanged ? primaryBtn : disabledBtn}>
+                                    {t('common.save')}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {ch.def.id === 'telegram' && (
+                              <>
+                                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center' }}>
+                                  <input
+                                    type="text"
+                                    value={pendingTelegram}
+                                    onChange={e => setPendingTelegram(e.target.value)}
+                                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                                    onBlur={e => (e.currentTarget.style.borderColor = telegramChanged ? 'var(--accent)' : 'var(--border)')}
+                                    placeholder={t('schedule.telegramChatId')}
+                                    style={{ ...inputStyle, flex: 1, borderColor: telegramChanged ? 'var(--accent)' : 'var(--border)' }} />
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    {telegramStatus === 'saved' && (
+                                      <span style={{ fontSize: 12, color: 'var(--success)' }}>{t('common.saved')}</span>
+                                    )}
+                                    {telegramSaveReady && telegramStatus !== 'saved' && (
+                                      <span style={{ fontSize: 12, color: 'var(--warning)' }}>{t('common.changed')}</span>
+                                    )}
+                                    <button onClick={saveTelegram} disabled={!telegramSaveReady}
+                                      style={telegramSaveReady ? primaryBtn : disabledBtn}>
+                                      {t('common.save')}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                                  {t('schedule.telegramHelp')}
+                                </div>
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
                     )

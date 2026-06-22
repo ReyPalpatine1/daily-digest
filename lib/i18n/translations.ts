@@ -121,6 +121,8 @@ export const translations = {
       discordChannel: '디스코드',
       comingSoon: '준비 중',
       proChannelNotice: 'PRO 전용 채널입니다',
+      telegramChatId: 'Chat ID',
+      telegramHelp: '텔레그램에서 봇에 /start 후, @userinfobot에게 메시지를 보내 Chat ID를 확인해 입력하세요.',
     },
     history: {
       title: '열람 기록',
@@ -547,6 +549,8 @@ export const translations = {
       discordChannel: 'Discord',
       comingSoon: 'Coming soon',
       proChannelNotice: 'PRO-only channel',
+      telegramChatId: 'Chat ID',
+      telegramHelp: 'Start the bot in Telegram, then message @userinfobot to get your Chat ID and enter it here.',
     },
     history: {
       title: 'History',
@@ -972,6 +976,8 @@ export const translations = {
       discordChannel: 'Discord',
       comingSoon: '即将推出',
       proChannelNotice: '仅限 PRO 的渠道',
+      telegramChatId: 'Chat ID',
+      telegramHelp: '在 Telegram 中对机器人发送 /start，再向 @userinfobot 发消息获取 Chat ID 并填入。',
     },
     history: {
       title: '历史记录',
@@ -1394,6 +1400,8 @@ export const translations = {
       discordChannel: 'Discord',
       comingSoon: '準備中',
       proChannelNotice: 'PRO限定チャンネルです',
+      telegramChatId: 'Chat ID',
+      telegramHelp: 'Telegramでボットに /start 後、@userinfobot にメッセージを送って Chat ID を確認し入力してください。',
     },
     history: {
       title: '履歴',
