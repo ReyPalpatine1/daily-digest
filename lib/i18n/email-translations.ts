@@ -48,6 +48,13 @@ export const emailTranslations = {
       desc: '매일 아침 구독한 유튜브 채널의 영상을 요약해서 보내드릴게요',
       startCta: '채널 추가하러 가기',
     },
+    channels: {
+      email: '이메일',
+      telegram: '텔레그램',
+      kakao: '카카오톡',
+      whatsapp: 'WhatsApp',
+      line: 'LINE',
+    },
   },
   en: {
     digest: {
@@ -94,6 +101,13 @@ export const emailTranslations = {
       heading: 'Welcome!',
       desc: 'Every morning, we summarize videos from your subscribed YouTube channels',
       startCta: 'Add Channels',
+    },
+    channels: {
+      email: 'Email',
+      telegram: 'Telegram',
+      kakao: 'KakaoTalk',
+      whatsapp: 'WhatsApp',
+      line: 'LINE',
     },
   },
   zh: {
@@ -142,6 +156,13 @@ export const emailTranslations = {
       desc: '每天早上，我们会把你订阅的 YouTube 频道视频总结后发送给你',
       startCta: '去添加频道',
     },
+    channels: {
+      email: '邮件',
+      telegram: 'Telegram',
+      kakao: 'KakaoTalk',
+      whatsapp: 'WhatsApp',
+      line: 'LINE',
+    },
   },
   ja: {
     digest: {
@@ -188,6 +209,13 @@ export const emailTranslations = {
       heading: 'ようこそ！',
       desc: '毎朝、購読中のYouTubeチャンネルの動画を要約してお届けします',
       startCta: 'チャンネルを追加する',
+    },
+    channels: {
+      email: 'メール',
+      telegram: 'Telegram',
+      kakao: 'KakaoTalk',
+      whatsapp: 'WhatsApp',
+      line: 'LINE',
     },
   },
 }
