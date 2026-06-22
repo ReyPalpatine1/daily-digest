@@ -49,9 +49,9 @@ export async function POST(request: Request) {
   }
 
   const { targetUserId, plan } = body
-  if (!targetUserId || (plan !== 'vip' && plan !== 'free')) {
-    // VIP 지정('vip') / VIP 해제('free')만 허용
-    return NextResponse.json({ error: 'targetUserId와 plan(vip|free)이 필요합니다' }, { status: 400 })
+  if (!targetUserId || (plan !== 'vip' && plan !== 'pro' && plan !== 'free')) {
+    // 승격: VIP 지정('vip') / Pro 지정('pro') · 강등: 해제('free')
+    return NextResponse.json({ error: 'targetUserId와 plan(vip|pro|free)이 필요합니다' }, { status: 400 })
   }
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
@@ -67,8 +67,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '대상 사용자를 찾을 수 없습니다' }, { status: 404 })
   }
 
-  // 결제 Pro 사용자는 관리자가 함부로 변경 못 하게 보호
-  if (target.plan === 'pro') {
+  // 결제 Pro 사용자는 관리자가 함부로 변경 못 하게 보호.
+  // 단, 관리자 본인 계정(대시보드 Free/Pro 미리보기 토글)은 예외 — 본인이 의도적으로 바꾸는 것.
+  if (target.plan === 'pro' && targetUserId !== user.id) {
     return NextResponse.json(
       { error: '결제한 Pro 사용자는 VIP 지정/해제로 변경할 수 없습니다' },
       { status: 409 }
@@ -76,12 +77,21 @@ export async function POST(request: Request) {
   }
 
   // === 플랜 업데이트 ===
+  // 관리자 지정 Pro는 만료 없는 Pro(plan_expires_at=null) — 결제 Pro(만료일 있음)와 구분되고
+  // syncUserPlan 자동 만료강등 대상도 아님.
   const update =
     plan === 'vip'
       ? {
           plan: 'vip',
           vip_granted_by: user.email,
           vip_granted_at: new Date().toISOString(),
+          plan_expires_at: null,
+        }
+      : plan === 'pro'
+      ? {
+          plan: 'pro',
+          vip_granted_by: null,
+          vip_granted_at: null,
           plan_expires_at: null,
         }
       : {

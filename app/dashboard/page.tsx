@@ -106,13 +106,11 @@ export default function Dashboard() {
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
   // 실제 구독 상태는 profile.plan(free/pro/vip)에서 판정
   const [profile, setProfile] = useState<Profile | null>(null)
-  // 관리자 전용 임시 모드 토글 ('free' | 'pro') — localStorage에 영속화
-  const [adminPlanMode, setAdminPlanMode] = useState<'free' | 'pro'>('free')
 
-  // 실제 Pro 여부 (VIP/Pro 결제 통합 판정)
-  const realIsPro = checkIsPro(profile, isAdmin)
-  // 관리자는 미리보기 토글 우선, 일반 사용자는 실제 plan 기반
-  const isPro = isAdmin ? (adminPlanMode === 'pro') : realIsPro
+  // isPro는 항상 실제 profile.plan 기준(관리자도 동일). 관리자 Free/Pro 토글이
+  // 실제 DB plan을 바꾸므로 별도 미리보기 플래그(adminPlanMode)를 두지 않는다.
+  // checkIsPro의 2번째 인자(isAdmin)를 false로 고정해 "관리자=무조건 Pro" 단축을 끈다.
+  const isPro = checkIsPro(profile, false)
   // VIP/Pro 모두 사용자에겐 "PRO"로 표시 (구분 없음)
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
@@ -133,14 +131,6 @@ export default function Dashboard() {
       const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
       const isAdminUser = adminEmails.includes(data.user.email?.toLowerCase() ?? '')
       setIsAdmin(isAdminUser)
-
-      // 관리자: localStorage에 저장된 임시 미리보기 모드 복원
-      if (isAdminUser) {
-        const savedMode = localStorage.getItem('admin_plan_mode')
-        if (savedMode === 'pro') {
-          setAdminPlanMode('pro')
-        }
-      }
 
       // 프로필 없으면 자동 생성 (신규 가입자는 plan='free')
       const { data: profileRow } = await supabase
@@ -286,6 +276,12 @@ export default function Dashboard() {
     setChannels(sortedChs)
     setSettings(sets)
     setDigests(digs ?? [])
+  }
+
+  // 프로필만 재로드 (관리자 토글로 plan 변경 후 isPro 갱신용)
+  async function reloadProfile(userId: string) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    if (data) setProfile(data as Profile)
   }
 
   // Free 플랜 채널 한도 도달 시 업그레이드 유도 (확인 시 /pricing 이동)
@@ -502,10 +498,28 @@ export default function Dashboard() {
     try { localStorage.setItem('theme', next) } catch {}
   }
 
-  function switchPlanMode(mode: 'free' | 'pro') {
-    setAdminPlanMode(mode)
-    try { localStorage.setItem('admin_plan_mode', mode) } catch {}
-    console.log(`[Admin] Plan mode switched to: ${mode}`)
+  // 관리자 Free/Pro 토글 — 본인 계정의 실제 DB plan을 변경(일반 강등/승격과 동일 효과).
+  // 강등(free) 시 set-plan이 채널 정리 + delivery_method→email 복구까지 수행한다.
+  async function switchPlanMode(mode: 'free' | 'pro') {
+    if (!user) return
+    try {
+      const res = await fetch('/api/admin/set-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: user.id, plan: mode }),
+      })
+      if (!res.ok) {
+        console.error('[Admin] set-plan 실패:', await res.text())
+        return
+      }
+      // 다른 페이지(프로필/요금제/헤더)의 미리보기 표시를 위해 localStorage도 동기화
+      try { localStorage.setItem('admin_plan_mode', mode) } catch {}
+      // 실제 plan 기반으로 isPro가 갱신되도록 프로필 + 설정(delivery_method 복구 등) 재로드
+      await reloadProfile(user.id)
+      await loadData(user.id)
+    } catch (e) {
+      console.error('[Admin] set-plan 호출 오류:', e)
+    }
   }
 
   const filteredChannels = filterCat ? channels.filter(c => c.category_id === filterCat) : channels
@@ -848,7 +862,7 @@ export default function Dashboard() {
                     border: '0.5px dashed var(--border)',
                   }}>
                   {(['free', 'pro'] as const).map(mode => {
-                    const active = adminPlanMode === mode
+                    const active = (isPro ? 'pro' : 'free') === mode
                     const label = mode === 'pro' ? 'Pro' : 'Free'
                     return (
                       <button key={mode}
