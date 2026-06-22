@@ -2,7 +2,8 @@ import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId } from '@/lib/youtube'
 import { yesterdayRangeUtc, formatDateKst } from '@/lib/time'
-import { sendDigestEmail, sendBreakingAlert, sendAdminBulkErrorEmail, sendEmptyDigestEmail, DigestTrigger } from '@/lib/mailer'
+import { sendAdminBulkErrorEmail, DigestTrigger } from '@/lib/mailer'
+import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
@@ -186,7 +187,7 @@ async function runDigest(
     if (rawVideoCount === 0) {
       if (trigger === 'cron' && settings.notify_when_empty !== false) {
         try {
-          await sendEmptyDigestEmail(settings.email, userName, userLocale, userId)
+          await deliverEmptyDigest(settings, userName, userLocale, userId)
         } catch (e) {
           console.error(`[digest] 빈 다이제스트 메일 발송 실패 userId=${userId}:`, e)
         }
@@ -247,7 +248,7 @@ async function runDigest(
 
     // 다이제스트 이메일 발송
     if (digestItems.length > 0) {
-      await sendDigestEmail(settings.email, userName, digestItems, userLocale, userId)
+      await deliverDigest(settings, userName, digestItems, userLocale, userId)
     }
 
     // 속보 표시 영상은 속보 메일도 (Pro & breaking_alert 켜짐) — 사용자별 키워드 기준.
@@ -258,7 +259,7 @@ async function runDigest(
         const canSend = await tryStartBreaking(userId, item.video.videoId)
         if (!canSend) continue
         try {
-          await sendBreakingAlert(settings.email, userName, item, userLocale, userId)
+          await deliverBreaking(settings, userName, item, userLocale, userId)
           await markBreakingSent(userId, item.video.videoId)
         } catch (e) {
           await markBreakingFailed(userId, item.video.videoId, String(e))

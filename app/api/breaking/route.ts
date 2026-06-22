@@ -1,7 +1,8 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId } from '@/lib/youtube'
-import { sendBreakingAlert, sendAdminBulkErrorEmail } from '@/lib/mailer'
+import { sendAdminBulkErrorEmail } from '@/lib/mailer'
+import { deliverBreaking } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { getRecentPoolVideos, getSummary, summarizeNow, matchesKeyword } from '@/lib/video-pool'
 import type { Locale } from '@/lib/i18n/translations'
@@ -211,7 +212,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
           isBreaking: true,
         }
 
-        await sendBreakingAlert(settings.email, profile?.name ?? '사용자', digestItem, userLocale, userId)
+        await deliverBreaking(settings, profile?.name ?? '사용자', digestItem, userLocale, userId)
 
         if (!s) {
           failedItems.push({
