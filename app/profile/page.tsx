@@ -19,7 +19,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminPreviewPro, setAdminPreviewPro] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toastKey, setToastKey] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -68,8 +68,8 @@ export default function ProfilePage() {
 
   // 결제 기능은 아직 미구현 — 결제/구독 관리 액션은 안내만
   function comingSoon() {
-    setToast(t('profile.paymentComingSoon'))
-    setTimeout(() => setToast(''), 2500)
+    setToastKey('profile.paymentComingSoon')
+    setTimeout(() => setToastKey(null), 2500)
   }
 
   // === 공용 스타일 ===
@@ -152,14 +152,14 @@ export default function ProfilePage() {
       </main>
 
       {/* === 토스트 === */}
-      {toast && (
+      {toastKey && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
           zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)',
         }}>
-          {toast}
+          {t(toastKey)}
         </div>
       )}
     </div>

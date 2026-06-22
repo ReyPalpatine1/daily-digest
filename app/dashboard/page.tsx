@@ -67,7 +67,7 @@ export default function Dashboard() {
   const [historyChannel, setHistoryChannel] = useState('')
   const [historyCategory, setHistoryCategory] = useState('')
   const [loading, setLoading] = useState(false)
-  const [msg, setMsg] = useState('')
+  const [msgKey, setMsgKey] = useState<{ key: string; params?: Record<string, string | number>; ok?: boolean } | null>(null)
   const [newKeyword, setNewKeyword] = useState('')
   const [expandedDigest, setExpandedDigest] = useState<string | null>(null)
 
@@ -416,7 +416,7 @@ export default function Dashboard() {
     if (!user) return
     if (loading) return // 중복 클릭 방지
     setLoading(true)
-    setMsg('')
+    setMsgKey(null)
 
     // 서버 maxDuration=60s + 네트워크/콜드스타트 여유 = 90s
     const controller = new AbortController()
@@ -432,27 +432,26 @@ export default function Dashboard() {
       })
 
       if (!res.ok) {
-        setMsg(t('alerts.digestError'))
+        setMsgKey({ key: 'alerts.digestError' })
         return
       }
 
       const data = await res.json()
       if (data.success) {
         if (data.empty) {
-          // 어제 새 영상이 없던 경우: 서버 안내 메시지 우선, 없으면 번역 키
-          setMsg(data.message ?? t('alerts.digestEmpty'))
+          setMsgKey({ key: 'alerts.digestEmpty', ok: true })
         } else {
           const n = data.processed ?? data.succeeded ?? data.sent ?? 0
-          setMsg(t('alerts.digestDone', { n }))
+          setMsgKey({ key: 'alerts.digestDone', params: { n }, ok: true })
         }
       } else {
-        setMsg(t('alerts.digestError'))
+        setMsgKey({ key: 'alerts.digestError' })
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') {
-        setMsg(t('alerts.digestTimeout'))
+        setMsgKey({ key: 'alerts.digestTimeout' })
       } else {
-        setMsg(t('alerts.digestError'))
+        setMsgKey({ key: 'alerts.digestError' })
       }
       console.error('[runDigestNow] 실패:', err)
     } finally {
@@ -1900,11 +1899,11 @@ export default function Dashboard() {
               <div style={cardStyle}>
                 <div style={sectionTitle}><span>⚡</span> {t('schedule.runNow')}</div>
                 <div style={sectionSubtitle}>{t('schedule.runNowDesc')}</div>
-                {msg && (
+                {msgKey && (
                   <div style={{
                     fontSize: 12, marginBottom: 10,
-                    color: msg.includes('✅') ? 'var(--success)' : 'var(--danger)',
-                  }}>{msg}</div>
+                    color: msgKey.ok ? 'var(--success)' : 'var(--danger)',
+                  }}>{t(msgKey.key, msgKey.params)}</div>
                 )}
                 <button onClick={runDigestNow} disabled={loading}
                   style={{
