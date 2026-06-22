@@ -14,6 +14,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 관리자용 플랜 뱃지: components/PlanBadge.tsx 사용 (FREE/PRO/VIP/ADMIN 4종)
 - ※ 사용자용/관리자용 뱃지는 색·역할이 다르므로 섞지 말 것
 
+## 디자인 원칙 (UI 작업 시 항상 준수)
+- **라이트/다크 모드 양쪽 고려 필수**: 모든 색상은 CSS 변수(--bg-card, --text-primary,
+  --border, --accent 등)를 쓰고, 하드코딩 색상(#fff, #000 등) 금지.
+  라이트·다크 양쪽에서 충분한 대비가 나는지 항상 확인.
+- **기존 디자인과 통일**: 새 UI는 기존 컴포넌트의 톤을 따를 것.
+  - 카드: var(--bg-card) + 0.5px solid var(--border) + borderRadius 7~14
+  - 버튼: 기존 primaryBtn/proUpgradeBtn 스타일 재사용
+  - 토스트: 하단 중앙, 알약(borderRadius 999), 2.5초 자동 사라짐(pricing 패턴)
+  - 모달이 정말 필요한 경우가 아니면 토스트/인라인 안내 우선
+  - 아이콘: lucide-react 사용(이모지 지양, 점진적으로 이모지→아이콘 교체)
+- **새 색·간격·폰트를 임의로 만들지 말 것**: 기존 변수/패턴 재사용.
+- 디자인 변경 시 기존 화면과 어색하지 않은지 점검.
+
 ## 플랜 판정
 - isPro 판정은 lib/supabase.ts의 checkIsPro 헬퍼를 쓸 것. 새로 만들지 말 것.
 - localStorage 'demo_pro' 같은 임시 플래그로 플랜을 판정하지 말 것 (실제 DB 기준).
