@@ -55,6 +55,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   삭제되지 않는다(Secret은 원래 안 지워짐). 이 설정 건드리지 말 것.
 - wrangler.jsonc의 compatibility_flags(nodejs_compat,
   nodejs_compat_populate_process_env 등)와 r2/observability 바인딩 건드리지 말 것.
+- **Gemini 호출은 GEMINI_BASE_URL 환경변수 기반**으로 할 것(lib/gemini.ts 패턴).
+  Cloudflare는 AI Gateway 경유(지역 차단 우회), Vercel은 직접 호출.
+  새 Gemini 호출을 추가할 때도 generativelanguage.googleapis.com을 하드코딩하지 말고
+  `const base = process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com'`
+  패턴을 따를 것.
 
 ## 빌드 검증 (Vercel + Cloudflare 양쪽)
 - 코드 수정 후 셋 다 통과 확인 후 push:

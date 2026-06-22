@@ -114,6 +114,19 @@ ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
 - 다국어 요약(B방식)을 쓰면 영상당 언어 수만큼 Gemini 호출이 늘어 subrequest를
   더 먹으므로, 언어가 많아지면 MAX_SUMMARIES_PER_RUN을 더 보수적으로 잡아야 함.
 
+### Gemini 지역 차단 (★ 요약 전체 실패 주의)
+- 증상: Cloudflare에서 요약 시 "User location is not supported for the API use"
+  (Gemini API 400 FAILED_PRECONDITION). Cloudflare Workers가 Gemini 미지원
+  지역(홍콩 등) 엣지에서 실행되면 Google이 거부. 한국에서 접속해도 발생 가능.
+- 해결: **Cloudflare AI Gateway 경유**로 우회함(지원 위치에서 중계됨).
+  - AI Gateway 'daily-digest-gemini' 생성(인증 토글 끔, API 키만으로 호출).
+  - 환경변수 GEMINI_BASE_URL을 Cloudflare 런타임 변수에 설정:
+    https://gateway.ai.cloudflare.com/v1/d0c818cc564e1942b7bd8f65c6c53fcb/daily-digest-gemini/google-ai-studio
+  - lib/gemini.ts가 GEMINI_BASE_URL 있으면 Gateway 경유, 없으면(Vercel) 직접 호출.
+  - 검증: 요약 성공 + "User location" 에러 없음으로 확인됨.
+- Vercel은 GEMINI_BASE_URL 미설정 → 직접 호출(기존대로). 양쪽 호환.
+- 만약 Gateway로도 안 되면(지역에 따라 다를 수 있음) Vertex AI(리전 지정) 검토.
+
 ## 5. 플랜 / VIP 시스템
 
 - 누구나 가입 → Free. 관리자가 VIP 지정 → 무료 Pro. 결제 → Pro.
