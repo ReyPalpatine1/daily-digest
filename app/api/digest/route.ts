@@ -167,16 +167,16 @@ async function runDigest(
     const rawVideoCount = poolVideos.length
     const videoIds = poolVideos.map(v => v.video_id)
 
-    // 요약 조인 (공유 캐시)
-    let summaries = await getSummariesFromPool(videoIds)
+    // 요약 조인 (공유 캐시, 사용자 언어 기준)
+    let summaries = await getSummariesFromPool(videoIds, userLocale)
 
     // 폴백 C: 요약 없는 영상 즉시 요약 후 재조회 (누락 0 보장)
     const missingIds = videoIds.filter(id => !summaries.has(id))
     let summarizedNow = 0
     if (missingIds.length > 0) {
       console.log(`⚡ 즉시 요약 필요(폴백 C): ${missingIds.length}개`)
-      summarizedNow = await summarizeNow(missingIds)
-      summaries = await getSummariesFromPool(videoIds)
+      summarizedNow = await summarizeNow(missingIds, userLocale)
+      summaries = await getSummariesFromPool(videoIds, userLocale)
     }
     console.log(
       `📊 풀 영상 ${rawVideoCount}개 | 캐시히트 ${rawVideoCount - missingIds.length}개 | 즉시요약 ${summarizedNow}개 (${isManual ? '수동' : '자동'})`

@@ -4,6 +4,7 @@ import { getChannelId } from '@/lib/youtube'
 import { sendBreakingAlert, sendAdminBulkErrorEmail } from '@/lib/mailer'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { getRecentPoolVideos, getSummary, summarizeNow, matchesKeyword } from '@/lib/video-pool'
+import type { Locale } from '@/lib/i18n/translations'
 import { tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
 import { nowUtc, startOfDayUtc } from '@/lib/time'
 
@@ -83,8 +84,9 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       return { status: 200, body: { message: 'breaking alert not enabled or email missing' } }
     }
 
-    // 사용자 이메일 언어 (미설정 시 'ko'). 정규화(ko/en/zh/ja)는 mailer가 담당.
-    const userLocale: string = settings.locale ?? 'ko'
+    // 사용자 이메일 언어 (미지원 값은 'ko' 폴백)
+    const _loc = settings.locale
+    const userLocale: Locale = _loc === 'en' || _loc === 'zh' || _loc === 'ja' ? _loc : 'ko'
 
     // 만료 체크 + 동기화
     const currentPlan = await syncUserPlan(userId)
@@ -187,11 +189,11 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       const meta = channelMeta.get(video.channel_id) ?? { alias: '채널', emoji: '📺', category: '미분류' }
       const url = `https://youtube.com/watch?v=${video.video_id}`
       try {
-        // 요약 (공유 풀, 없으면 폴백 C: 즉시 요약)
-        let s = await getSummary(video.video_id)
+        // 요약 (공유 풀, 사용자 언어 기준, 없으면 폴백 C: 즉시 요약)
+        let s = await getSummary(video.video_id, userLocale)
         if (!s) {
-          await summarizeNow([video.video_id])
-          s = await getSummary(video.video_id)
+          await summarizeNow([video.video_id], userLocale)
+          s = await getSummary(video.video_id, userLocale)
         }
 
         const digestItem = {
