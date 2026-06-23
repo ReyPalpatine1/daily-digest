@@ -10,7 +10,7 @@ import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
-import { Mail, Send, MessageCircle, MessageSquare, Lock } from 'lucide-react'
+import { Mail, Send, MessageCircle, MessageSquare, Lock, Check } from 'lucide-react'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -98,10 +98,11 @@ export default function Dashboard() {
   const [pendingEmail, setPendingEmail] = useState('')
   const [sendTimeStatus, setSendTimeStatus] = useState<'idle' | 'saved'>('idle')
   const [emailStatus, setEmailStatus] = useState<'idle' | 'saved'>('idle')
-  const [telegramLinking, setTelegramLinking] = useState(false)
-  const [telegramPolling, setTelegramPolling] = useState(false)
+  const [telegramLinking, setTelegramLinking] = useState(false) // 코드 발급 fetch 중(버튼 비활성)
+  const [linkPending, setLinkPending] = useState(false) // ② 연결 대기 중
+  const [telegramRemaining, setTelegramRemaining] = useState(0) // 카운트다운(초)
   const telegramPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const telegramPollCountRef = useRef(0)
+  const telegramCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
@@ -210,13 +211,10 @@ export default function Dashboard() {
 
   // 텔레그램 연결 완료 감지 → 폴링 중단
   useEffect(() => {
-    if (settings?.telegram_chat_id && telegramPolling) {
-      if (telegramPollTimerRef.current) {
-        clearTimeout(telegramPollTimerRef.current)
-        telegramPollTimerRef.current = null
-      }
-      setTelegramPolling(false)
-      setTelegramLinking(false)
+    if (settings?.telegram_chat_id && linkPending) {
+      clearTelegramTimers()
+      setLinkPending(false)
+      setTelegramRemaining(0)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings?.telegram_chat_id])
@@ -225,6 +223,7 @@ export default function Dashboard() {
   useEffect(() => {
     return () => {
       if (telegramPollTimerRef.current) clearTimeout(telegramPollTimerRef.current)
+      if (telegramCountdownRef.current) clearInterval(telegramCountdownRef.current)
     }
   }, [])
 
@@ -287,35 +286,59 @@ export default function Dashboard() {
     setTimeout(() => setEmailStatus('idle'), 1500)
   }
 
+  // 텔레그램 연결 타이머(카운트다운·폴링) 일괄 정리
+  function clearTelegramTimers() {
+    if (telegramPollTimerRef.current) { clearTimeout(telegramPollTimerRef.current); telegramPollTimerRef.current = null }
+    if (telegramCountdownRef.current) { clearInterval(telegramCountdownRef.current); telegramCountdownRef.current = null }
+  }
+
+  // ②→① 취소/만료: 타이머·폴링 정리 후 연결 전 상태로 복귀
+  function cancelTelegramLink() {
+    clearTelegramTimers()
+    setLinkPending(false)
+    setTelegramRemaining(0)
+  }
+
   async function connectTelegram() {
     if (!user || telegramLinking) return
     setTelegramLinking(true)
     try {
       const res = await fetch('/api/telegram/link-code', { method: 'POST' })
-      if (!res.ok) { setTelegramLinking(false); return }
+      if (!res.ok) return
       const { deepLink } = await res.json() as { deepLink: string }
       window.open(deepLink, '_blank')
-      // 5초 간격 최대 6회 폴링 (30초)
-      telegramPollCountRef.current = 0
-      setTelegramPolling(true)
+      // ②로 전환: 10분(600초) 카운트다운 + 5초 간격 연결 폴링
+      clearTelegramTimers()
+      setLinkPending(true)
+      setTelegramRemaining(600)
+      telegramCountdownRef.current = setInterval(() => {
+        setTelegramRemaining(prev => {
+          const next = prev - 1
+          if (next <= 0) {
+            // 만료 → ①로 복귀(타이머·폴링 정리)
+            clearTelegramTimers()
+            setLinkPending(false)
+            return 0
+          }
+          return next
+        })
+      }, 1000)
       const uid = user.id
       const poll = () => {
-        telegramPollCountRef.current++
         loadData(uid)
-        if (telegramPollCountRef.current < 6) {
-          telegramPollTimerRef.current = setTimeout(poll, 5000)
-        } else {
-          setTelegramPolling(false)
-        }
+        telegramPollTimerRef.current = setTimeout(poll, 5000)
       }
       telegramPollTimerRef.current = setTimeout(poll, 5000)
     } catch {
+      // 무시: ① 상태 유지
+    } finally {
       setTelegramLinking(false)
     }
   }
 
   async function disconnectTelegram() {
     if (!user) return
+    cancelTelegramLink()
     await saveSettings({ telegram_chat_id: null, delivery_method: 'email' })
   }
 
@@ -1715,6 +1738,13 @@ export default function Dashboard() {
             cursor: 'not-allowed', fontSize: 13, fontWeight: 600,
             fontFamily: 'inherit', whiteSpace: 'nowrap',
           }
+          const secondaryBtn: React.CSSProperties = {
+            padding: '8px 14px', borderRadius: 8,
+            border: '0.5px solid var(--border)',
+            background: 'transparent', color: 'var(--text-secondary)',
+            cursor: 'pointer', fontSize: 13, fontWeight: 500,
+            fontFamily: 'inherit', whiteSpace: 'nowrap',
+          }
           const inputStyle: React.CSSProperties = {
             background: 'var(--bg-card)',
             border: '0.5px solid var(--border)',
@@ -1904,75 +1934,64 @@ export default function Dashboard() {
                           </div>
                         )}
 
-                        {/* 텔레그램 선택 시 연결/상태 펼침 (9-4c-4 연결 로직 재사용) */}
+                        {/* 텔레그램 선택 시 연결 영역 (3상태: ① 연결 전 / ② 진행 중 / ③ 연결됨).
+                            흑백 톤 통일 — 상태별 색 구분 없이 기본 카드 + 텍스트 굵기로만 강조. */}
                         {ch.selected && interactive && ch.def.id === 'telegram' && (
-                          <div style={{ padding: '4px 4px 12px 46px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {telegramConnected ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 12, color: 'var(--success, #22c55e)', fontWeight: 600 }}>
-                                  {t('schedule.telegramConnected')}
-                                </span>
-                                <button
-                                  onClick={disconnectTelegram}
-                                  style={{
-                                    padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--border)',
-                                    background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
-                                    cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-                                  }}>
-                                  {t('schedule.telegramDisconnect')}
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                  <button
-                                    onClick={connectTelegram}
-                                    disabled={telegramLinking}
-                                    style={telegramLinking ? {
-                                      padding: '4px 10px', borderRadius: 6, border: 'none',
-                                      background: 'var(--bg-subtle)', color: 'var(--text-muted)',
-                                      cursor: 'not-allowed', fontSize: 11, fontFamily: 'inherit', fontWeight: 600,
-                                    } : {
-                                      padding: '4px 10px', borderRadius: 6, border: 'none',
-                                      background: 'var(--accent)', color: 'var(--bg-card)',
-                                      cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', fontWeight: 600,
-                                    }}>
-                                    {telegramLinking ? '...' : t('schedule.telegramConnect')}
-                                  </button>
-                                  {telegramPolling && (
-                                    <>
-                                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                                        {t('schedule.telegramConnecting')}
-                                      </span>
-                                      <button
-                                        onClick={() => user && loadData(user.id)}
-                                        style={{
-                                          padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--border)',
-                                          background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
-                                          cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-                                        }}>
-                                        {t('schedule.telegramCheckConnection')}
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                                {telegramLinking && (
-                                  <div style={{
-                                    padding: '8px 10px',
-                                    background: 'var(--bg-subtle)',
-                                    borderRadius: 7,
-                                    border: '0.5px solid var(--border)',
-                                  }}>
-                                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                                      {t('schedule.telegramConnectInstructions')}
-                                    </div>
-                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                                      {t('schedule.telegramCodeExpiry')}
-                                    </div>
+                          <div style={{ padding: '4px 4px 12px 46px' }}>
+                            <div style={cardStyle}>
+                              {telegramConnected ? (
+                                /* ③ 연결 완료 */
+                                <>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Check size={15} style={{ color: 'var(--text-primary)' }} />
+                                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                                      {t('schedule.telegramConnected')}
+                                    </span>
                                   </div>
-                                )}
-                              </>
-                            )}
+                                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
+                                    {t('schedule.telegramConnectedDesc')}
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                                    <button onClick={disconnectTelegram} style={secondaryBtn}>
+                                      {t('schedule.telegramDisconnect')}
+                                    </button>
+                                  </div>
+                                </>
+                              ) : linkPending ? (
+                                /* ② 진행 중 */
+                                <>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                                      {t('schedule.telegramConnecting')}
+                                    </span>
+                                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                                      {Math.floor(telegramRemaining / 60)}:{String(telegramRemaining % 60).padStart(2, '0')}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
+                                    {t('schedule.telegramConnectingDesc')}
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                                    <button onClick={cancelTelegramLink} style={secondaryBtn}>
+                                      {t('common.cancel')}
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                /* ① 연결 전 */
+                                <>
+                                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+                                    {t('schedule.telegramConnectDesc')}
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                                    <button onClick={connectTelegram} disabled={telegramLinking}
+                                      style={telegramLinking ? disabledBtn : primaryBtn}>
+                                      {t('schedule.telegramConnect')}
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
