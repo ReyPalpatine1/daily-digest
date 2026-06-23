@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { createHmac } from 'crypto'
+import { decodeLinkCode, getLinkSecret } from '@/lib/telegram-link'
 
 type TelegramUpdate = {
   message?: {
@@ -8,26 +8,6 @@ type TelegramUpdate = {
     text?: string
     from?: { first_name?: string }
   }
-}
-
-function decodeCode(code: string, secret: string): { userId: string; expired: boolean } | null {
-  const parts = code.split('.')
-  if (parts.length !== 2) return null
-  const [payloadB64, sig] = parts
-  let payload: Buffer
-  try {
-    payload = Buffer.from(payloadB64, 'base64url')
-  } catch {
-    return null
-  }
-  if (payload.length !== 20) return null
-  const expectedSig = createHmac('sha256', secret).update(payload).digest('base64url').slice(0, 6)
-  if (sig !== expectedSig) return null
-  const uuidHex = payload.slice(0, 16).toString('hex')
-  const userId = `${uuidHex.slice(0, 8)}-${uuidHex.slice(8, 12)}-${uuidHex.slice(12, 16)}-${uuidHex.slice(16, 20)}-${uuidHex.slice(20)}`
-  const expiry = payload.readUInt32BE(16)
-  const expired = Math.floor(Date.now() / 1000) > expiry
-  return { userId, expired }
 }
 
 async function sendTelegramMessage(botToken: string, chatId: number, text: string): Promise<void> {
@@ -52,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN ?? ''
-  const linkSecret = process.env.TELEGRAM_LINK_SECRET ?? 'default-link-secret'
+  const linkSecret = getLinkSecret()
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
 
@@ -81,7 +61,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  const decoded = decodeCode(code, linkSecret)
+  const decoded = decodeLinkCode(code, linkSecret)
 
   if (!decoded) {
     if (botToken) {
@@ -98,9 +78,10 @@ export async function POST(request: Request) {
   }
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
+  // 연결 완료: chat_id 저장 + 발송 채널을 telegram으로 전환(택1).
   await serviceClient
     .from('settings')
-    .update({ telegram_chat_id: chatId.toString() })
+    .update({ telegram_chat_id: chatId.toString(), delivery_method: 'telegram' })
     .eq('user_id', decoded.userId)
 
   if (botToken) {
