@@ -82,10 +82,7 @@ export type Settings = {
   active: boolean
   locale: 'ko' | 'en' | 'zh' | 'ja'
   notify_when_empty?: boolean
-  // 발송 채널 선택 (lib/channels.ts ChannelId). 미설정/구버전 사용자는 'email' 로 취급.
   delivery_method?: 'email' | 'telegram' | 'whatsapp' | 'line' | 'kakao' | null
-  // 발송 채널별 주소 (lib/channels.ts CHANNELS.addressField 가 가리키는 컬럼).
-  // 이메일 외 채널은 아직 준비중이라 optional. email 은 위에 이미 정의됨.
   telegram_chat_id?: string | null
   whatsapp_number?: string | null
   line_user_id?: string | null
