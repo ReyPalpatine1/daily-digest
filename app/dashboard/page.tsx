@@ -1748,7 +1748,6 @@ export default function Dashboard() {
           const rawDef = CHANNELS.find(c => c.id === rawMethod)
           const currentMethod: ChannelId = (rawDef?.proOnly && !isPro) ? 'email' : rawMethod
           const notifChannels = orderedChannels(locale)
-            .filter(def => def.id !== 'telegram') // telegram은 별도 연결 UI로 처리
             .map(def => ({
               def,
               label: t(def.labelKey),
@@ -1904,102 +1903,81 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
+
+                        {/* 텔레그램 선택 시 연결/상태 펼침 (9-4c-4 연결 로직 재사용) */}
+                        {ch.selected && interactive && ch.def.id === 'telegram' && (
+                          <div style={{ padding: '4px 4px 12px 46px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {telegramConnected ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 12, color: 'var(--success, #22c55e)', fontWeight: 600 }}>
+                                  {t('schedule.telegramConnected')}
+                                </span>
+                                <button
+                                  onClick={disconnectTelegram}
+                                  style={{
+                                    padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--border)',
+                                    background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
+                                    cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+                                  }}>
+                                  {t('schedule.telegramDisconnect')}
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <button
+                                    onClick={connectTelegram}
+                                    disabled={telegramLinking}
+                                    style={telegramLinking ? {
+                                      padding: '4px 10px', borderRadius: 6, border: 'none',
+                                      background: 'var(--bg-subtle)', color: 'var(--text-muted)',
+                                      cursor: 'not-allowed', fontSize: 11, fontFamily: 'inherit', fontWeight: 600,
+                                    } : {
+                                      padding: '4px 10px', borderRadius: 6, border: 'none',
+                                      background: 'var(--accent)', color: 'var(--bg-card)',
+                                      cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', fontWeight: 600,
+                                    }}>
+                                    {telegramLinking ? '...' : t('schedule.telegramConnect')}
+                                  </button>
+                                  {telegramPolling && (
+                                    <>
+                                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                                        {t('schedule.telegramConnecting')}
+                                      </span>
+                                      <button
+                                        onClick={() => user && loadData(user.id)}
+                                        style={{
+                                          padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--border)',
+                                          background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
+                                          cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+                                        }}>
+                                        {t('schedule.telegramCheckConnection')}
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                                {telegramLinking && (
+                                  <div style={{
+                                    padding: '8px 10px',
+                                    background: 'var(--bg-subtle)',
+                                    borderRadius: 7,
+                                    border: '0.5px solid var(--border)',
+                                  }}>
+                                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                                      {t('schedule.telegramConnectInstructions')}
+                                    </div>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                                      {t('schedule.telegramCodeExpiry')}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
-
-                  {/* 텔레그램 — 원탭 연결 행 */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 12px', borderRadius: 7,
-                    opacity: isPro ? 1 : 0.55,
-                  }}>
-                    <span style={{
-                      width: 14, height: 14, borderRadius: '50%',
-                      border: telegramConnected ? '4px solid var(--success, #22c55e)' : '1px solid var(--border)',
-                      background: 'var(--bg-card)',
-                      boxSizing: 'border-box',
-                      flexShrink: 0,
-                      transition: 'border 0.15s',
-                    }} />
-                    <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-primary)', flexShrink: 0 }}>
-                      <Send size={14} />
-                    </span>
-                    <span style={{ fontSize: 13, color: 'var(--text-primary)', flex: 1 }}>
-                      {t('schedule.telegramChannel')}
-                    </span>
-                    {!isPro ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, ...proBadge }}>
-                        <Lock size={10} /> Pro
-                      </span>
-                    ) : telegramConnected ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                        <span style={{ fontSize: 11, color: 'var(--success, #22c55e)', fontWeight: 600 }}>
-                          {t('schedule.telegramConnected')}
-                        </span>
-                        <button
-                          onClick={disconnectTelegram}
-                          style={{
-                            padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--border)',
-                            background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
-                            cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-                          }}>
-                          {t('schedule.telegramDisconnect')}
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                        {telegramPolling && (
-                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                            {t('schedule.telegramConnecting')}
-                          </span>
-                        )}
-                        <button
-                          onClick={connectTelegram}
-                          disabled={telegramLinking}
-                          style={telegramLinking ? {
-                            padding: '4px 10px', borderRadius: 6, border: 'none',
-                            background: 'var(--bg-subtle)', color: 'var(--text-muted)',
-                            cursor: 'not-allowed', fontSize: 11, fontFamily: 'inherit', fontWeight: 600,
-                          } : {
-                            padding: '4px 10px', borderRadius: 6, border: 'none',
-                            background: 'var(--accent)', color: 'var(--bg-card)',
-                            cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', fontWeight: 600,
-                          }}>
-                          {telegramLinking ? '...' : t('schedule.telegramConnect')}
-                        </button>
-                        {telegramPolling && (
-                          <button
-                            onClick={() => user && loadData(user.id)}
-                            style={{
-                              padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--border)',
-                              background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
-                              cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-                            }}>
-                            {t('schedule.telegramCheckConnection')}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 연결 진행 중 안내 */}
-                  {isPro && !telegramConnected && telegramLinking && (
-                    <div style={{
-                      margin: '2px 12px 6px',
-                      padding: '8px 10px',
-                      background: 'var(--bg-subtle)',
-                      borderRadius: 7,
-                      border: '0.5px solid var(--border)',
-                    }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {t('schedule.telegramConnectInstructions')}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                        {t('schedule.telegramCodeExpiry')}
-                      </div>
-                    </div>
-                  )}
                 </div>
                 {/* PRO 전용 채널 안내 토스트 — 결제 토스트와 동일 스타일(하단 중앙 알약).
                     bg=text-primary / 글씨·아이콘=bg-card 라 라이트·다크 양쪽에서 자동 반전·대비됨. */}
