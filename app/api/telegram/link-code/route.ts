@@ -39,12 +39,18 @@ export async function POST() {
   }
 
   const secret = process.env.TELEGRAM_LINK_SECRET ?? 'default-link-secret'
-  const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? ''
+  // NEXT_PUBLIC 우선, 없으면 일반 변수. @ 기호·공백 제거(둘 중 뭐가 등록됐든 동작).
+  const botUsername = (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? process.env.TELEGRAM_BOT_USERNAME ?? '').trim().replace(/^@/, '')
+
+  // 봇 username 미설정 시 잘못된 폴백('YourBotHere')으로 엉뚱한 채널 연결되는 사고 방지 →
+  // 명확히 500으로 실패.
+  if (!botUsername) {
+    console.error('[telegram/link-code] TELEGRAM_BOT_USERNAME 미설정')
+    return NextResponse.json({ error: 'Telegram bot is not configured' }, { status: 500 })
+  }
 
   const code = buildCode(user.id, secret)
-  const deepLink = botUsername
-    ? `https://t.me/${botUsername}?start=${code}`
-    : `https://t.me/YourBotHere?start=${code}`
+  const deepLink = `https://t.me/${botUsername}?start=${code}`
 
   return NextResponse.json({ code, deepLink })
 }
