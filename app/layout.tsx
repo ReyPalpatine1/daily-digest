@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { LocaleProvider } from "@/lib/i18n/LocaleProvider";
 
 // 영문/숫자 본문 폰트
 const inter = Inter({
@@ -73,7 +74,7 @@ export default function RootLayout({
           fontFamily: "var(--font-sans)",
         }}
       >
-        {children}
+        <LocaleProvider>{children}</LocaleProvider>
       </body>
     </html>
   );

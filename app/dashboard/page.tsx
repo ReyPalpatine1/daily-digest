@@ -789,7 +789,7 @@ export default function Dashboard() {
           label={t('settings.language')}
           itemStyle={dropdownItemStyle}
           isMobile={isMobile}
-          onSelect={(l) => { closeMenu(); changeLocale(l, user?.id) }}
+          onSelect={(l) => { closeMenu(); changeLocale(l) }}
         />
 
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
