@@ -1817,7 +1817,7 @@ export default function Dashboard() {
 
               {/* 발송 시간 */}
               <div style={cardStyle}>
-                <div style={sectionTitle}><span>⏰</span> {t('schedule.sendTime')}</div>
+                <div style={sectionTitle}>{t('schedule.sendTime')}</div>
                 <div style={sectionSubtitle}>{t('schedule.sendTimeDesc')}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <select
@@ -1944,42 +1944,34 @@ export default function Dashboard() {
                           <div style={{ padding: '4px 4px 12px 46px' }}>
                             {telegramConnected ? (
                               /* ③ 연결 완료 */
-                              <>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <Check size={15} style={{ color: 'var(--text-primary)' }} />
                                   <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
                                     {t('schedule.telegramConnected')}
                                   </span>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
-                                  {t('schedule.telegramConnectedDesc')}
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                                  <button onClick={disconnectTelegram} style={secondaryBtn}>
-                                    {t('schedule.telegramDisconnect')}
-                                  </button>
-                                </div>
-                              </>
+                                <button onClick={disconnectTelegram} style={{ ...secondaryBtn, flexShrink: 0 }}>
+                                  {t('schedule.telegramDisconnect')}
+                                </button>
+                              </div>
                             ) : linkPending ? (
                               /* ② 진행 중 */
                               <>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-                                    {t('schedule.telegramConnecting')}
-                                  </span>
-                                  <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+                                    {t('schedule.telegramConnectingDesc', {
+                                      bot: (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? '').replace(/^@/, '') || 'DailyDigest_test_bot',
+                                    })}
+                                  </div>
+                                  <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
                                     {Math.floor(telegramRemaining / 60)}:{String(telegramRemaining % 60).padStart(2, '0')}
                                   </span>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
-                                  {t('schedule.telegramConnectingDesc', {
-                                    bot: (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? '').replace(/^@/, '') || 'DailyDigest_test_bot',
-                                  })}
-                                </div>
                                 {telegramLinkCode && (
-                                  <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <code style={{
-                                      flex: 1, fontSize: 12, padding: '6px 10px',
+                                      flex: 1, minWidth: 0, fontSize: 12, padding: '6px 10px',
                                       background: 'var(--bg-subtle)', borderRadius: 6,
                                       border: '0.5px solid var(--border)',
                                       color: 'var(--text-primary)', fontFamily: 'monospace',
@@ -2000,29 +1992,25 @@ export default function Dashboard() {
                                         : <><Copy size={13} />{t('schedule.telegramCopyCode')}</>
                                       }
                                     </button>
+                                    <button onClick={cancelTelegramLink} style={{ ...secondaryBtn, flexShrink: 0 }}>
+                                      {t('common.cancel')}
+                                    </button>
                                   </div>
                                 )}
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
-                                  <button onClick={cancelTelegramLink} style={secondaryBtn}>
-                                    {t('common.cancel')}
-                                  </button>
-                                </div>
                               </>
                             ) : (
                               /* ① 연결 전 */
-                              <>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
                                   {t('schedule.telegramConnectDesc', {
                                     bot: (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? '').replace(/^@/, '') || 'DailyDigest_test_bot',
                                   })}
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                                  <button onClick={connectTelegram} disabled={telegramLinking}
-                                    style={telegramLinking ? disabledBtn : primaryBtn}>
-                                    {t('schedule.telegramConnect')}
-                                  </button>
-                                </div>
-                              </>
+                                <button onClick={connectTelegram} disabled={telegramLinking}
+                                  style={{ ...(telegramLinking ? disabledBtn : primaryBtn), flexShrink: 0 }}>
+                                  {t('schedule.telegramConnect')}
+                                </button>
+                              </div>
                             )}
                           </div>
                         )}
@@ -2049,7 +2037,7 @@ export default function Dashboard() {
               {/* 새 영상 없는 날 알림 */}
               <div style={cardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={sectionTitle}><span>📭</span> {t('schedule.notifyEmpty')}</div>
+                  <div style={sectionTitle}>{t('schedule.notifyEmpty')}</div>
                   <div onClick={() => saveSettings({ notify_when_empty: !(settings?.notify_when_empty !== false) })}
                     style={{
                       width: 36, height: 20, borderRadius: 999,
@@ -2072,7 +2060,7 @@ export default function Dashboard() {
               {/* 속보 키워드 */}
               <div style={{ ...cardStyle, opacity: isPro ? 1 : 0.85 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={sectionTitle}><span>🚨</span> {t('schedule.breaking')}</div>
+                  <div style={sectionTitle}>{t('schedule.breaking')}</div>
                   {!isPro ? (
                     <span style={proBadge}>{t('schedule.breakingProOnly')}</span>
                   ) : (
@@ -2140,7 +2128,7 @@ export default function Dashboard() {
 
               {/* 지금 바로 실행 */}
               <div style={cardStyle}>
-                <div style={sectionTitle}><span>⚡</span> {t('schedule.runNow')}</div>
+                <div style={sectionTitle}>{t('schedule.runNow')}</div>
                 <div style={sectionSubtitle}>{t('schedule.runNowDesc')}</div>
                 {msgKey && (
                   <div style={{
