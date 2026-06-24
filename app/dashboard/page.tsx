@@ -105,6 +105,7 @@ export default function Dashboard() {
   const [codeCopied, setCodeCopied] = useState(false) // 복사 완료 표시
   const telegramPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const telegramCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const telegramExpiryRef = useRef<number>(0)
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
@@ -314,18 +315,16 @@ export default function Dashboard() {
       // ②로 전환: 10분(600초) 카운트다운 + 5초 간격 연결 폴링
       clearTelegramTimers()
       setLinkPending(true)
+      telegramExpiryRef.current = Date.now() + 600_000
       setTelegramRemaining(600)
       telegramCountdownRef.current = setInterval(() => {
-        setTelegramRemaining(prev => {
-          const next = prev - 1
-          if (next <= 0) {
-            // 만료 → ①로 복귀(타이머·폴링 정리)
-            clearTelegramTimers()
-            setLinkPending(false)
-            return 0
-          }
-          return next
-        })
+        const remaining = Math.max(0, Math.ceil((telegramExpiryRef.current - Date.now()) / 1000))
+        setTelegramRemaining(remaining)
+        if (remaining <= 0) {
+          // 만료 → ①로 복귀(타이머·폴링 정리)
+          clearTelegramTimers()
+          setLinkPending(false)
+        }
       }, 1000)
       const uid = user.id
       const poll = () => {
