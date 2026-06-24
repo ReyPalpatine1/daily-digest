@@ -101,8 +101,7 @@ export default function Dashboard() {
   const [telegramLinking, setTelegramLinking] = useState(false) // 코드 발급 fetch 중(버튼 비활성)
   const [linkPending, setLinkPending] = useState(false) // ② 연결 대기 중
   const [telegramRemaining, setTelegramRemaining] = useState(0) // 카운트다운(초)
-  const [telegramLinkCode, setTelegramLinkCode] = useState('') // 발급된 연결 코드(폴백 표시용)
-  const [telegramDeepLink, setTelegramDeepLink] = useState('') // 딥링크 URL(재오픈 버튼용)
+  const [telegramLinkCode, setTelegramLinkCode] = useState('') // 발급된 연결 코드
   const [codeCopied, setCodeCopied] = useState(false) // 복사 완료 표시
   const telegramPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const telegramCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -301,7 +300,6 @@ export default function Dashboard() {
     setLinkPending(false)
     setTelegramRemaining(0)
     setTelegramLinkCode('')
-    setTelegramDeepLink('')
     setCodeCopied(false)
   }
 
@@ -311,10 +309,8 @@ export default function Dashboard() {
     try {
       const res = await fetch('/api/telegram/link-code', { method: 'POST' })
       if (!res.ok) return
-      const { code, deepLink } = await res.json() as { code: string; deepLink: string }
+      const { code } = await res.json() as { code: string }
       setTelegramLinkCode(code)
-      setTelegramDeepLink(deepLink)
-      window.open(deepLink, '_blank')
       // ②로 전환: 10분(600초) 카운트다운 + 5초 간격 연결 폴링
       clearTelegramTimers()
       setLinkPending(true)
@@ -1976,58 +1972,49 @@ export default function Dashboard() {
                                   </span>
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
-                                  {t('schedule.telegramConnectingDesc')}
+                                  {t('schedule.telegramConnectingDesc', {
+                                    bot: (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? '').replace(/^@/, '') || 'DailyDigest_test_bot',
+                                  })}
                                 </div>
+                                {telegramLinkCode && (
+                                  <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <code style={{
+                                      flex: 1, fontSize: 12, padding: '6px 10px',
+                                      background: 'var(--bg-subtle)', borderRadius: 6,
+                                      border: '0.5px solid var(--border)',
+                                      color: 'var(--text-primary)', fontFamily: 'monospace',
+                                      overflowX: 'auto', whiteSpace: 'nowrap',
+                                    }}>
+                                      {`/start ${telegramLinkCode}`}
+                                    </code>
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(`/start ${telegramLinkCode}`)
+                                        setCodeCopied(true)
+                                        setTimeout(() => setCodeCopied(false), 2000)
+                                      }}
+                                      style={{ ...secondaryBtn, display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+                                    >
+                                      {codeCopied
+                                        ? <><Check size={13} />{t('schedule.telegramCopied')}</>
+                                        : <><Copy size={13} />{t('schedule.telegramCopyCode')}</>
+                                      }
+                                    </button>
+                                  </div>
+                                )}
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, gap: 8 }}>
                                   <button onClick={cancelTelegramLink} style={secondaryBtn}>
                                     {t('common.cancel')}
                                   </button>
-                                  {telegramDeepLink && (
-                                    <button onClick={() => window.open(telegramDeepLink, '_blank')} style={primaryBtn}>
-                                      {t('schedule.telegramOpenApp')}
-                                    </button>
-                                  )}
                                 </div>
-                                {/* 코드 복사 폴백 — PC 웹 딥링크 미동작 대비 */}
-                                {telegramLinkCode && (
-                                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border)' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 8 }}>
-                                      {t('schedule.telegramFallbackDesc', {
-                                        bot: (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? '').replace(/^@/, '') || 'DailyDigest_test_bot',
-                                      })}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <code style={{
-                                        flex: 1, fontSize: 12, padding: '6px 10px',
-                                        background: 'var(--bg-subtle)', borderRadius: 6,
-                                        border: '0.5px solid var(--border)',
-                                        color: 'var(--text-primary)', fontFamily: 'monospace',
-                                        overflowX: 'auto', whiteSpace: 'nowrap',
-                                      }}>
-                                        {`/start ${telegramLinkCode}`}
-                                      </code>
-                                      <button
-                                        onClick={() => {
-                                          navigator.clipboard.writeText(`/start ${telegramLinkCode}`)
-                                          setCodeCopied(true)
-                                          setTimeout(() => setCodeCopied(false), 2000)
-                                        }}
-                                        style={{ ...secondaryBtn, display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
-                                      >
-                                        {codeCopied
-                                          ? <><Check size={13} />{t('schedule.telegramCopied')}</>
-                                          : <><Copy size={13} />{t('schedule.telegramCopyCode')}</>
-                                        }
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
                               </>
                             ) : (
                               /* ① 연결 전 */
                               <>
                                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
-                                  {t('schedule.telegramConnectDesc')}
+                                  {t('schedule.telegramConnectDesc', {
+                                    bot: (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? '').replace(/^@/, '') || 'DailyDigest_test_bot',
+                                  })}
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
                                   <button onClick={connectTelegram} disabled={telegramLinking}
