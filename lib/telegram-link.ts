@@ -12,8 +12,9 @@ export function getLinkSecret(): string {
   return process.env.TELEGRAM_LINK_SECRET ?? DEFAULT_LINK_SECRET
 }
 
-// Compact signed code: 16-byte UUID + 4-byte expiry (uint32 BE, seconds)
-// → base64url(20 bytes) + '.' + 6-char sig. 총 ~34자 (Telegram start 파라미터 64자 이내).
+// Hex-encoded signed code — only [0-9a-f], Telegram deep-link start parameter safe ([A-Za-z0-9_]).
+// Layout: payload hex (20 bytes → 40 chars) + sig hex (12 chars) = 52 chars total.
+// Telegram allows up to 64 chars; base64url '-' and '.' separator were being stripped.
 export function buildLinkCode(userId: string, secret: string): string {
   const uuidHex = userId.replace(/-/g, '')
   const uuidBuf = Buffer.from(uuidHex, 'hex')
@@ -21,24 +22,25 @@ export function buildLinkCode(userId: string, secret: string): string {
   const expiryBuf = Buffer.allocUnsafe(4)
   expiryBuf.writeUInt32BE(expiry, 0)
   const payload = Buffer.concat([uuidBuf, expiryBuf])
-  const payloadB64 = payload.toString('base64url')
-  const sig = createHmac('sha256', secret).update(payload).digest('base64url').slice(0, 6)
-  return `${payloadB64}.${sig}`
+  const payloadHex = payload.toString('hex')
+  const sig = createHmac('sha256', secret).update(payload).digest('hex').slice(0, 12)
+  return `${payloadHex}${sig}`
 }
 
 // 코드 검증: 서명 일치(위조 방지) + 만료 확인. 유효하면 user_id 반환.
 export function decodeLinkCode(code: string, secret: string): { userId: string; expired: boolean } | null {
-  const parts = code.split('.')
-  if (parts.length !== 2) return null
-  const [payloadB64, sig] = parts
+  // 40-char payload hex + 12-char sig hex = 52 chars
+  if (code.length !== 52) return null
+  const payloadHex = code.slice(0, 40)
+  const sig = code.slice(40)
   let payload: Buffer
   try {
-    payload = Buffer.from(payloadB64, 'base64url')
+    payload = Buffer.from(payloadHex, 'hex')
   } catch {
     return null
   }
   if (payload.length !== 20) return null
-  const expectedSig = createHmac('sha256', secret).update(payload).digest('base64url').slice(0, 6)
+  const expectedSig = createHmac('sha256', secret).update(payload).digest('hex').slice(0, 12)
   if (sig !== expectedSig) return null
   const uuidHex = payload.slice(0, 16).toString('hex')
   const userId = `${uuidHex.slice(0, 8)}-${uuidHex.slice(8, 12)}-${uuidHex.slice(12, 16)}-${uuidHex.slice(16, 20)}-${uuidHex.slice(20)}`
