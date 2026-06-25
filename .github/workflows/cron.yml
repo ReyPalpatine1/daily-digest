@@ -1,10 +1,12 @@
 name: Daily Digest Cron
 
 on:
-  schedule:
-    # 15분마다 실행 (UTC 기준)
-    - cron: '*/15 * * * *'
-  workflow_dispatch: # 수동 실행 가능
+  # Cloudflare Cron Triggers(wrangler.jsonc의 triggers.crons)로 이전됨.
+  # 폴백용으로 스케줄만 비활성화하고 워크플로는 남겨둠 — 아래 주석을 풀면 즉시 복원 가능.
+  # schedule:
+  #   # 15분마다 실행 (UTC 기준)
+  #   - cron: '*/15 * * * *'
+  workflow_dispatch: # 수동 실행 가능 (폴백)
 
 jobs:
   # 1) 공유 풀 수집 (영상 적재 + 미요약분 일부 요약). 발송보다 먼저 돌아야 폴백 C 효과.

@@ -4,8 +4,13 @@
 	// 배포 시 대시보드에 등록된 일반 환경변수를 Wrangler가 덮어써서 지우지 않도록 보존.
 	// (Secret은 원래 보존되지만 일반 변수는 기본적으로 매 배포마다 덮어쓰여 사라짐)
 	"keep_vars": true,
-	// OpenNext 빌드 출력 엔트리
-	"main": ".open-next/worker.js",
+	// 커스텀 워커 엔트리(fetch는 .open-next/worker.js에 위임 + scheduled 추가).
+	// cf:build(opennextjs-cloudflare build)는 main과 무관하게 .open-next/worker.js를 생성한다.
+	"main": "worker.ts",
+	// Cloudflare Cron Triggers — 기존 GitHub Actions와 동일 주기(15분). scheduled가 collect→cron 호출.
+	"triggers": {
+		"crons": ["*/15 * * * *"]
+	},
 	"compatibility_date": "2025-12-19",
 	// Node API 사용을 위해 필요
 	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public", "nodejs_compat_populate_process_env"],

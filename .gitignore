@@ -40,6 +40,9 @@ yarn-error.log*
 /.open-next/
 /.wrangler/
 .dev.vars
+# `wrangler types` 생성물 — 런타임 타입이 전역 Response.json() 등을 unknown으로 덮어써
+# 앱 전체 tsc를 깨뜨리므로 커밋하지 말 것(worker.ts는 CloudflareEnv 보강으로 자급자족).
+worker-configuration.d.ts
 
 # typescript
 *.tsbuildinfo
