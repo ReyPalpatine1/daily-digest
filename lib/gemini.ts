@@ -10,6 +10,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
 const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-2.5-flash'
 
 // 외부 API 무한 대기 방지
+const TRANSCRIPTAPI_TIMEOUT_MS = 15000
 const SUPADATA_TIMEOUT_MS = 15000
 const YOUTUBE_HTML_TIMEOUT_MS = 8000
 const GEMINI_TIMEOUT_MS = 30000
@@ -304,9 +305,43 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
   let description = ''
   let unavailable = false // 비공개/삭제 영상 (YouTube API items 비어있음)
 
-  // Supadata API로 자막 추출 (timeout 적용)
+  // 1차: TranscriptAPI (자막 있는 영상은 싸게 — 성공 요청당 과금). 키가 없으면 통째로 건너뛰고
+  // 기존 Supadata 흐름으로 진행(현행 동작 보존). Cloudflare 호환: env는 함수 내부에서 읽는다.
+  const transcriptApiKey = process.env.TRANSCRIPTAPI_KEY
+  if (transcriptApiKey) {
+    const taStart = Date.now()
+    try {
+      // 세그먼트 배열(transcript)을 받아 공백 join → 평문 자막. 타임스탬프 불필요.
+      const res = await fetchWithTimeout(
+        `https://transcriptapi.com/api/v2/youtube/transcript?video_url=${videoId}&format=json&include_timestamp=false`,
+        { headers: { Authorization: `Bearer ${transcriptApiKey}` } },
+        TRANSCRIPTAPI_TIMEOUT_MS
+      )
+      if (res.ok) {
+        const data = await res.json()
+        const segments = Array.isArray(data?.transcript) ? data.transcript : []
+        const text = segments.map((s: { text?: string }) => s?.text ?? '').join(' ').trim()
+        if (text) {
+          transcript = text
+          // 성공 요청당 과금 → 성공 시에만 기록. userId 없으면 시스템 계정 귀속.
+          logApiUsage(userId ?? SYSTEM_USER_ID, 'transcriptapi').catch(e => console.error('[transcriptapi] logApiUsage 실패:', e))
+          console.log(`✅ TranscriptAPI 자막 추출 성공: ${videoId} (${Date.now() - taStart}ms)`)
+        } else {
+          console.log(`❌ TranscriptAPI 자막 비어있음: ${videoId} (${Date.now() - taStart}ms) → Supadata 폴백`)
+        }
+      } else {
+        // 자막없음(404 등) → 과금 없음. Supadata(Whisper) 폴백.
+        console.log(`❌ TranscriptAPI 자막 없음: ${videoId} (status=${res.status}, ${Date.now() - taStart}ms) → Supadata 폴백`)
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.log(`❌ TranscriptAPI 에러/timeout: ${videoId} (${Date.now() - taStart}ms) — ${msg} → Supadata 폴백`)
+    }
+  }
+
+  // 2차 (TranscriptAPI 실패/자막없음 시에만): Supadata API로 자막 추출 (Whisper 폴백, timeout 적용)
   const supadataStart = Date.now()
-  try {
+  if (!transcript) try {
     // lang 없이 1회만 호출 (기본 언어 자막 사용). 실패(206 등)해도 1크레딧이 차감되므로
     // 과거의 ko→기본언어 2단계 호출(자막 없는 영상마다 2크레딧 소모)을 제거.
     const res = await fetchWithTimeout(

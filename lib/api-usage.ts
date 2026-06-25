@@ -23,7 +23,7 @@ const supabaseAdmin: ServiceClient = new Proxy({} as ServiceClient, {
   },
 })
 
-export type ApiService = 'gemini' | 'youtube' | 'supadata'
+export type ApiService = 'gemini' | 'youtube' | 'supadata' | 'transcriptapi'
 
 // 공유 풀 수집/요약처럼 특정 사용자가 없는 시스템 작업의 사용량 귀속용 계정.
 // api_usage.user_id는 uuid NOT NULL(profiles FK 없음)이라 zero-uuid를 그대로 사용.
