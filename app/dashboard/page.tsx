@@ -497,13 +497,14 @@ export default function Dashboard() {
     loadData(user.id)
   }
 
-  // 도움말 팝업 닫기. "다시 보지 않기" 체크 시에만 help_seen=true 저장(다른 컬럼 불변).
-  // 재열기로 연 경우에도 체크 여부로만 판단(체크 안 하면 저장 안 함).
+  // 도움말 팝업 닫기. "다시 보지 않기" 체크 상태(true/false)를 help_seen에 양방향 저장.
+  // 체크=다시 안 봄(자동 노출 끔), 해제=다음 진입 시 다시 자동 노출. 다른 컬럼 불변.
   async function closeHelp(dontShowAgain: boolean) {
     setShowHelp(false)
-    if (!dontShowAgain || !user) return
-    setSettings((prev) => (prev ? { ...prev, help_seen: true } : prev))
-    await supabase.from('settings').update({ help_seen: true }).eq('user_id', user.id)
+    if (!user) return
+    if ((settings?.help_seen ?? false) === dontShowAgain) return // 변경 없으면 저장 생략
+    setSettings((prev) => (prev ? { ...prev, help_seen: dontShowAgain } : prev))
+    await supabase.from('settings').update({ help_seen: dontShowAgain }).eq('user_id', user.id)
   }
 
   async function saveSettings(updated: Partial<Settings>) {
@@ -2530,7 +2531,7 @@ export default function Dashboard() {
 
       {/* 처음 사용자 도움말 팝업 (자동 노출 + 설정에서 재열기) */}
       {showHelp && (
-        <HelpPopup t={t} isMobile={isMobile} onClose={closeHelp} />
+        <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} onClose={closeHelp} />
       )}
     </div>
   )

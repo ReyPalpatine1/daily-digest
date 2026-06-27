@@ -1,178 +1,218 @@
 'use client'
 
 import { useState } from 'react'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Mail, Play, ChevronDown } from 'lucide-react'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
 type Props = {
   t: TFn
   isMobile: boolean
-  // dontShowAgain=true 면 부모가 help_seen=true 저장. false면 저장 안 함.
+  // 열 때의 체크박스 초기값(= 현재 settings.help_seen). 닫을 때 이 값(변경 포함)을 부모가 저장.
+  initialDontShow: boolean
   onClose: (dontShowAgain: boolean) => void
 }
 
-// 미니 UI 공용 토큰 (모두 CSS 변수만 사용 — 하드코딩 색 금지)
-const card: React.CSSProperties = {
-  background: 'var(--bg-card)',
-  border: '0.5px solid var(--border)',
-  borderRadius: 8,
+// ── 공용 토큰 (전부 CSS 변수 / 흑백, 하드코딩·빨강 금지) ──
+const TOTAL = 3
+
+// 탭 바: 현재 스텝 탭만 활성(굵게 + 밑줄)
+function TabBar({ t, active }: { t: TFn; active: number }) {
+  const tabs = [t('nav.channels'), t('nav.schedule'), t('nav.history')]
+  return (
+    <div style={{ display: 'flex', gap: 18, borderBottom: '0.5px solid var(--border)', paddingBottom: 8 }}>
+      {tabs.map((label, i) => (
+        <span
+          key={i}
+          style={{
+            fontSize: 13,
+            whiteSpace: 'nowrap',
+            paddingBottom: 7,
+            marginBottom: -8.5,
+            fontWeight: i === active ? 700 : 500,
+            color: i === active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+            borderBottom: i === active ? '2px solid var(--accent)' : '2px solid transparent',
+          }}>
+          {label}
+        </span>
+      ))}
+    </div>
+  )
 }
+
 const chip: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 4,
-  background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
-  borderRadius: 999, padding: '2px 8px',
-  fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap',
-}
-const pillBtn: React.CSSProperties = {
-  background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
-  borderRadius: 6, padding: '3px 8px',
-  fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap',
-}
-const fakeInput: React.CSSProperties = {
-  background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
-  borderRadius: 6, padding: '4px 8px',
-  fontSize: 10, color: 'var(--text-tertiary)',
-}
-const dot = (filled: boolean): React.CSSProperties => ({
-  width: 10, height: 10, borderRadius: '50%',
-  background: filled ? 'var(--accent)' : 'var(--bg-subtle)',
-  border: filled ? 'none' : '0.5px solid var(--border)',
-})
-
-// ─── 미니 UI 일러스트 (실제 대시보드를 단순화해 본뜸) ───
-
-function MiniChannels({ t }: { t: TFn }) {
-  return (
-    <div style={{ ...card, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{t('help.sample.myChannels')}</span>
-        <div style={{ display: 'flex', gap: 5 }}>
-          <span style={pillBtn}>{t('dashboard.addCategory')}</span>
-          <span style={{ ...pillBtn, background: 'var(--accent)', color: 'var(--bg-card)', border: 'none' }}>{t('dashboard.addChannel')}</span>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 5 }}>
-        <span style={{ ...fakeInput, width: 26, textAlign: 'center' }}>📺</span>
-        <span style={{ ...fakeInput, flex: 1 }}>https://youtube.com/@…</span>
-        <span style={{ ...fakeInput, width: 54 }}>{t('common.alias')}</span>
-      </div>
-      {[
-        { e: '💻', a: t('help.sample.ch1'), c: t('help.sample.catIt') },
-        { e: '📰', a: t('help.sample.ch2'), c: t('help.sample.catNews') },
-      ].map((row, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', ...card, background: 'var(--bg-subtle)' }}>
-          <span style={{ fontSize: 13 }}>{row.e}</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{row.a}</span>
-          <span style={chip}>{row.c}</span>
-        </div>
-      ))}
-    </div>
-  )
+  display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
+  background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+  borderRadius: 999, padding: '2px 9px',
+  fontSize: 11, color: 'var(--text-secondary)',
 }
 
-function MiniCategories({ t }: { t: TFn }) {
-  const groups = [
-    { cat: t('help.sample.catIt'), chans: [{ e: '💻', a: t('help.sample.ch1') }, { e: '🤖', a: t('help.sample.ch3') }] },
-    { cat: t('help.sample.catNews'), chans: [{ e: '📰', a: t('help.sample.ch2') }] },
+// ── 미니 프리뷰: 채널 탭 ──
+function PreviewChannels({ t }: { t: TFn }) {
+  const rows = [
+    { ch: t('help.sample.ch1'), cat: t('help.sample.cat1'), time: t('help.sample.justAdded'), hot: true },
+    { ch: t('help.sample.ch2'), cat: t('help.sample.cat2'), time: t('help.sample.time2'), hot: false },
+    { ch: t('help.sample.ch3'), cat: t('help.sample.cat3'), time: t('help.sample.time3'), hot: false },
   ]
   return (
-    <div style={{ ...card, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {groups.map((g, i) => (
-        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ ...chip, alignSelf: 'flex-start', background: 'var(--accent)', color: 'var(--bg-card)', border: 'none', fontWeight: 700 }}>{g.cat}</span>
-          {g.chans.map((c, j) => (
-            <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', marginLeft: 10, ...card, background: 'var(--bg-subtle)' }}>
-              <span style={{ fontSize: 13 }}>{c.e}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{c.a}</span>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function MiniSchedule({ t }: { t: TFn }) {
-  return (
-    <div style={{ ...card, padding: 12, display: 'flex', flexDirection: 'column', gap: 9 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <TabBar t={t} active={0} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('help.sample.sendTime')}</span>
-        <span style={{ ...chip, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', padding: '3px 12px' }}>07:00</span>
-      </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <span style={{ ...pillBtn, flex: 1, display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--accent)', color: 'var(--bg-card)', border: 'none' }}>
-          <span style={{ ...dot(false), width: 8, height: 8, background: 'var(--bg-card)' }} />{t('help.sample.byEmail')}
-        </span>
-        <span style={{ ...pillBtn, flex: 1, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ ...dot(false), width: 8, height: 8 }} />{t('help.sample.byTelegram')}
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{t('help.sample.myChannels')}</span>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
+          background: 'var(--accent)', color: 'var(--bg-card)',
+          borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600,
+        }}>
+          {t('dashboard.addChannel')}
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{t('help.sample.breakingKeyword')}</span>
-        <span style={{ ...fakeInput, alignSelf: 'flex-start' }}>{t('help.sample.breakingSample')}</span>
-      </div>
-    </div>
-  )
-}
-
-function MiniHistory({ t }: { t: TFn }) {
-  const items = [
-    { e: '💻', ch: t('help.sample.ch1'), title: t('help.sample.title1') },
-    { e: '📰', ch: t('help.sample.ch2'), title: t('help.sample.title2') },
-  ]
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {items.map((it, i) => (
-        <div key={i} style={{ ...card, padding: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 13 }}>{it.e}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{it.ch}</span>
-            <Mail t={t} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map((r, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 12px', borderRadius: 9,
+            background: 'var(--bg-card)',
+            border: r.hot ? '1.5px solid var(--accent)' : '0.5px solid var(--border)',
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-tertiary)', flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{r.ch}</span>
+            <span style={chip}>{r.cat}</span>
+            <span style={{ flex: 1 }} />
+            <span style={{
+              fontSize: 11, whiteSpace: 'nowrap',
+              color: r.hot ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              fontWeight: r.hot ? 600 : 400,
+              ...(r.hot ? { background: 'var(--bg-subtle)', borderRadius: 999, padding: '2px 9px' } : {}),
+            }}>
+              {r.time}
+            </span>
           </div>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{it.title}</span>
-          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>{t('help.sample.summaryLine')}</span>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
 
-// 작은 메일 아이콘 (lucide). t는 미사용이지만 시그니처 통일.
-function Mail(_: { t: TFn }) {
+// ── 미니 프리뷰: 발송 설정 탭 ──
+function PreviewSchedule({ t }: { t: TFn }) {
+  const row = (label: string, right: React.ReactNode) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '14px 14px', borderRadius: 9,
+      background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+    }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{label}</span>
+      {right}
+    </div>
+  )
   return (
-    <span style={{ ...chip, padding: '2px 6px', gap: 0 }}>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <rect width="20" height="16" x="2" y="4" rx="2" />
-        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-      </svg>
-    </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <TabBar t={t} active={1} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {row(t('schedule.sendTime'), (
+          <span style={{ ...chip, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', gap: 5, padding: '4px 11px' }}>
+            {t('help.sample.sendTimeValue')} <ChevronDown size={13} />
+          </span>
+        ))}
+        {row(t('schedule.channels'), (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+            background: 'var(--accent)', color: 'var(--bg-card)',
+            borderRadius: 8, padding: '6px 11px', fontSize: 12, fontWeight: 600,
+          }}>
+            <Mail size={13} /> {t('schedule.emailChannel')}
+          </span>
+        ))}
+        {row(t('schedule.breaking'), (
+          <span style={chip}>{t('help.sample.breakingSample')}</span>
+        ))}
+      </div>
+    </div>
   )
 }
 
-export default function HelpPopup({ t, isMobile, onClose }: Props) {
+// ── 미니 프리뷰: 열람 기록 탭 ──
+function PreviewHistory({ t }: { t: TFn }) {
+  const cards = [
+    { title: t('help.sample.title1'), ch: t('help.sample.ch1'), cat: t('help.sample.cat1'), date: t('help.sample.date1') },
+    { title: t('help.sample.title2'), ch: t('help.sample.ch2'), cat: t('help.sample.cat2'), date: t('help.sample.date2') },
+    { title: t('help.sample.title3'), ch: t('help.sample.ch3'), cat: t('help.sample.cat3'), date: t('help.sample.date3') },
+  ]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <TabBar t={t} active={2} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {cards.map((c, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 11,
+            padding: '10px 12px', borderRadius: 9,
+            background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+          }}>
+            <span style={{
+              width: 46, height: 32, borderRadius: 6, flexShrink: 0,
+              background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--text-tertiary)',
+            }}>
+              <Play size={14} />
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+              <span style={{
+                fontSize: 13, fontWeight: 700, color: 'var(--text-primary)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {c.title}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                {c.ch} · {c.cat} · {c.date}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// 번호(①②③) 단계 안내 한 줄
+function NumberedStep({ n, text }: { n: number; text: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+      <span style={{
+        width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: 1,
+        background: 'var(--accent)', color: 'var(--bg-card)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 700,
+      }}>
+        {n}
+      </span>
+      <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text-secondary)' }}>{text}</span>
+    </div>
+  )
+}
+
+export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Props) {
   const [step, setStep] = useState(0)
-  const [dontShow, setDontShow] = useState(false)
-  const total = 4
+  const [dontShow, setDontShow] = useState(initialDontShow)
 
   const steps = [
-    { mini: <MiniChannels t={t} />, title: t('help.step1_title'), desc: t('help.step1_desc') },
-    { mini: <MiniCategories t={t} />, title: t('help.step2_title'), desc: t('help.step2_desc') },
-    { mini: <MiniSchedule t={t} />, title: t('help.step3_title'), desc: t('help.step3_desc') },
-    { mini: <MiniHistory t={t} />, title: t('help.step4_title'), desc: t('help.step4_desc') },
+    { preview: <PreviewChannels t={t} />, key: 'step1' },
+    { preview: <PreviewSchedule t={t} />, key: 'step2' },
+    { preview: <PreviewHistory t={t} />, key: 'step3' },
   ]
   const isFirst = step === 0
-  const isLast = step === total - 1
+  const isLast = step === TOTAL - 1
   const cur = steps[step]
+  const k = cur.key
 
   const arrowBtn = (disabled: boolean): React.CSSProperties => ({
-    width: 36, height: 36, borderRadius: '50%',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+    height: 40, padding: '0 16px', borderRadius: 999,
     background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-    color: 'var(--text-secondary)',
+    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
     cursor: disabled ? 'default' : 'pointer',
-    opacity: disabled ? 0.35 : 1,
-    fontFamily: 'inherit', flexShrink: 0,
+    opacity: disabled ? 0.35 : 1, fontFamily: 'inherit', flexShrink: 0,
   })
 
   return (
@@ -182,96 +222,116 @@ export default function HelpPopup({ t, isMobile, onClose }: Props) {
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(0,0,0,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: isMobile ? 16 : 24,
+        padding: isMobile ? 14 : 24,
       }}>
       <div
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         style={{
-          width: '100%', maxWidth: 420,
-          maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto',
+          width: isMobile ? '100%' : 720,
+          maxWidth: isMobile ? 440 : 720,
+          height: isMobile ? 'auto' : 680,
+          maxHeight: isMobile ? 'calc(100dvh - 28px)' : 680,
+          overflowY: isMobile ? 'auto' : 'hidden',
           background: 'var(--bg-card)',
           border: '0.5px solid var(--border)',
           borderRadius: 16,
-          padding: isMobile ? 18 : 22,
-          display: 'flex', flexDirection: 'column', gap: 16,
-          boxShadow: '0 12px 40px rgba(0,0,0,0.22)',
+          padding: isMobile ? 20 : 32,
+          display: 'flex', flexDirection: 'column',
+          gap: isMobile ? 16 : 18,
+          boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
         }}>
-        {/* 상단: 진행표시 + 닫기 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>{step + 1} / {total}</span>
+        {/* 헤더: n/4 + 닫기 (고정) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-tertiary)' }}>{step + 1} / {TOTAL}</span>
           <button
             onClick={() => onClose(dontShow)}
             aria-label={t('common.close')}
             style={{
-              width: 30, height: 30, borderRadius: '50%',
+              width: 32, height: 32, borderRadius: '50%',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               background: 'transparent', border: 'none', cursor: 'pointer',
               color: 'var(--text-tertiary)', fontFamily: 'inherit',
             }}>
-            <X size={18} />
+            <X size={19} />
           </button>
         </div>
 
-        {/* 미니 UI 일러스트 */}
+        {/* 미니 프리뷰 (고정 높이, bg-subtle 한 겹) */}
         <div style={{
+          flexShrink: 0,
+          height: isMobile ? undefined : 290,
           background: 'var(--bg-subtle)',
           border: '0.5px solid var(--border)',
-          borderRadius: 12, padding: 14,
+          borderRadius: 12,
+          padding: isMobile ? 16 : 20,
+          overflow: 'hidden',
         }}>
-          {cur.mini}
+          {cur.preview}
         </div>
 
-        {/* 제목 + 설명 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minHeight: isMobile ? undefined : 96 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{cur.title}</h3>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{cur.desc}</p>
+        {/* 설명 영역 (나머지 채움 → 스텝 간 높이 불변) */}
+        <div style={{
+          flex: isMobile ? undefined : 1, minHeight: 0,
+          display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <h3 style={{ margin: 0, fontSize: isMobile ? 20 : 23, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {t(`help.${k}_title`)}
+            </h3>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              {t(`help.${k}_desc`)}
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 2 }}>
+            <NumberedStep n={1} text={t(`help.${k}_1`)} />
+            <NumberedStep n={2} text={t(`help.${k}_2`)} />
+            <NumberedStep n={3} text={t(`help.${k}_3`)} />
+          </div>
         </div>
 
-        {/* 점 인디케이터 */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 7 }}>
-          {Array.from({ length: total }).map((_, i) => (
-            <span key={i} style={dot(i === step)} />
-          ))}
-        </div>
-
-        {/* 좌우 이동 / 시작하기 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        {/* 하단 네비: 이전 / 점 / 다음·확인 (고정) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
           <button
             onClick={() => !isFirst && setStep((s) => s - 1)}
             disabled={isFirst}
-            aria-label={t('help.prev')}
             style={arrowBtn(isFirst)}>
-            <ChevronLeft size={20} />
+            <ChevronLeft size={17} /> {t('help.prev')}
           </button>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            {Array.from({ length: TOTAL }).map((_, i) => (
+              <span key={i} style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: i === step ? 'var(--accent)' : 'var(--bg-subtle)',
+                border: i === step ? 'none' : '0.5px solid var(--border)',
+              }} />
+            ))}
+          </div>
 
           {isLast ? (
             <button
               onClick={() => onClose(dontShow)}
               style={{
-                flex: 1, height: 40, borderRadius: 999,
-                background: 'var(--accent)', color: 'var(--bg-card)',
-                border: 'none', cursor: 'pointer',
-                fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+                ...arrowBtn(false),
+                background: 'var(--accent)', color: 'var(--bg-card)', border: 'none',
+                padding: '0 22px',
               }}>
-              {t('help.start')}
+              {t('help.confirm')}
             </button>
           ) : (
-            <button
-              onClick={() => setStep((s) => s + 1)}
-              aria-label={t('help.next')}
-              style={arrowBtn(false)}>
-              <ChevronRight size={20} />
+            <button onClick={() => setStep((s) => s + 1)} style={arrowBtn(false)}>
+              {t('help.next')} <ChevronRight size={17} />
             </button>
           )}
         </div>
 
-        {/* 다시 보지 않기 — 좌우 이동 줄과 충분히 떨어뜨림 */}
+        {/* 다시 보지 않기 — 좌하단, 네비와 간격 두고 (고정) */}
         <label style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          marginTop: 6, cursor: 'pointer',
-          fontSize: 11, color: 'var(--text-muted)',
+          display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+          cursor: 'pointer', flexShrink: 0,
+          fontSize: 12, color: 'var(--text-muted)',
         }}>
           <input
             type="checkbox"
