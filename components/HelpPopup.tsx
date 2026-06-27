@@ -47,6 +47,20 @@ const chip: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-secondary)',
 }
 
+// "+ 채널 추가" 흰색 버튼 스타일 (미니 프리뷰 + 설명 인라인 버튼이 공유 — 절대 다르게 보이면 안 됨)
+const addChannelBtnStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
+  background: 'var(--bg-card)', color: 'var(--text-primary)',
+  border: '0.5px solid var(--border)',
+  borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600,
+}
+// 인라인(문장 안)용: 동일 디자인 그대로, 크기만 살짝 축소
+const addChannelBtnInlineStyle: React.CSSProperties = {
+  ...addChannelBtnStyle,
+  padding: '2px 8px',
+  verticalAlign: 'middle',
+}
+
 // ── 미니 프리뷰: 채널 탭 ──
 function PreviewChannels({ t }: { t: TFn }) {
   const rows = [
@@ -57,16 +71,8 @@ function PreviewChannels({ t }: { t: TFn }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <TabBar t={t} active={0} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '3px 4px 0 0' }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
-          background: 'var(--bg-card)', color: 'var(--text-primary)',
-          border: '1.5px solid var(--text-primary)',
-          borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
-          boxShadow: '0 0 0 3px var(--bg-subtle), 0 0 0 4.5px var(--text-primary)',
-        }}>
-          {t('dashboard.addChannel')}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <span style={addChannelBtnStyle}>{t('dashboard.addChannel')}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {rows.map((r, i) => (
@@ -176,12 +182,12 @@ function PreviewHistory({ t }: { t: TFn }) {
   )
 }
 
-// 번호(①②③) 단계 안내 한 줄
-function NumberedStep({ n, text }: { n: number; text: string }) {
+// 번호(①②③) 단계 안내 한 줄. 번호와 멘트를 세로 가운데 정렬(두 줄이어도 번호가 중앙).
+function NumberedStep({ n, text }: { n: number; text: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
       <span style={{
-        width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: 1,
+        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
         background: 'var(--accent)', color: 'var(--bg-card)',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 11, fontWeight: 700,
@@ -190,6 +196,19 @@ function NumberedStep({ n, text }: { n: number; text: string }) {
       </span>
       <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text-secondary)' }}>{text}</span>
     </div>
+  )
+}
+
+// 설명 문장 안의 {addBtn} 토큰을 미니 프리뷰와 동일한 "+ 채널 추가" 버튼으로 치환.
+function renderItem(t: TFn, raw: string): React.ReactNode {
+  if (!raw.includes('{addBtn}')) return raw
+  const [before, after] = raw.split('{addBtn}')
+  return (
+    <>
+      {before}
+      <span style={addChannelBtnInlineStyle}>{t('dashboard.addChannel')}</span>
+      {after}
+    </>
   )
 }
 
@@ -280,9 +299,9 @@ export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Pro
           <h3 style={{ margin: 0, fontSize: isMobile ? 20 : 23, fontWeight: 700, color: 'var(--text-primary)' }}>
             {t(`help.${k}_title`)}
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 18 }}>
-            {steps[step].items.map((text, i) => (
-              <NumberedStep key={i} n={i + 1} text={text} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
+            {steps[step].items.map((raw, i) => (
+              <NumberedStep key={i} n={i + 1} text={renderItem(t, raw)} />
             ))}
           </div>
         </div>

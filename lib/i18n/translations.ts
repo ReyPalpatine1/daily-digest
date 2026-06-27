@@ -180,7 +180,7 @@ export const translations = {
     },
     help: {
       step1_title: '채널 추가하기',
-      step1_1: '오른쪽 상단 + 채널 추가 버튼을 누르세요.',
+      step1_1: '오른쪽 상단의 {addBtn} 버튼을 누르세요.',
       step1_2: '추가한 채널이 리스트에 표시되고, 카테고리로 묶어 정리할 수 있어요.',
       step2_title: '발송 설정',
       step2_1: '발송 시간을 정하면 매일 그 시간에 요약을 받아요.',
@@ -669,7 +669,7 @@ export const translations = {
     },
     help: {
       step1_title: 'Add channels',
-      step1_1: 'Tap the + Add Channel button at the top right.',
+      step1_1: 'Tap the {addBtn} button at the top right.',
       step1_2: 'Added channels appear in the list, and you can group them into categories.',
       step2_title: 'Delivery settings',
       step2_1: 'Set a send time to get your summary at that hour every day.',
@@ -1157,7 +1157,7 @@ export const translations = {
     },
     help: {
       step1_title: '添加频道',
-      step1_1: '点击右上角的 + 添加频道 按钮。',
+      step1_1: '点击右上角的 {addBtn} 按钮。',
       step1_2: '添加的频道会显示在列表中，还能用分类整理。',
       step2_title: '推送设置',
       step2_1: '设定推送时间，每天都会在该时刻收到摘要。',
@@ -1642,7 +1642,7 @@ export const translations = {
     },
     help: {
       step1_title: 'チャンネルを追加',
-      step1_1: '右上の + チャンネルを追加 ボタンを押します。',
+      step1_1: '右上の {addBtn} ボタンを押します。',
       step1_2: '追加したチャンネルが一覧に表示され、カテゴリで整理できます。',
       step2_title: '配信設定',
       step2_1: '配信時刻を決めると、毎日その時間に要約が届きます。',
