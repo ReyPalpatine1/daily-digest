@@ -9,6 +9,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
+import HelpPopup from '@/components/HelpPopup'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy } from 'lucide-react'
 
@@ -109,6 +110,8 @@ export default function Dashboard() {
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  // 처음 사용자 도움말 팝업: 진입 시 help_seen===false 자동 노출 / 설정에서 재열기
+  const [showHelp, setShowHelp] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
@@ -209,6 +212,16 @@ export default function Dashboard() {
     if (settings) {
       setPendingSendTime(settings.send_time ?? '07:00')
       setPendingEmail(settings.email ?? '')
+    }
+  }, [settings])
+
+  // 첫 진입 시 도움말 팝업 자동 노출 (settings 로드 후, 마운트당 1회).
+  // help_seen===false 일 때만. 닫아도(체크 안 했으면) 같은 세션엔 다시 안 띄움.
+  const helpAutoShownRef = useRef(false)
+  useEffect(() => {
+    if (settings && !helpAutoShownRef.current && settings.help_seen === false) {
+      helpAutoShownRef.current = true
+      setShowHelp(true)
     }
   }, [settings])
 
@@ -482,6 +495,15 @@ export default function Dashboard() {
     setEditingChannel(null)
     setEditChannelData({ alias: '', emoji: '', url: '' })
     loadData(user.id)
+  }
+
+  // 도움말 팝업 닫기. "다시 보지 않기" 체크 시에만 help_seen=true 저장(다른 컬럼 불변).
+  // 재열기로 연 경우에도 체크 여부로만 판단(체크 안 하면 저장 안 함).
+  async function closeHelp(dontShowAgain: boolean) {
+    setShowHelp(false)
+    if (!dontShowAgain || !user) return
+    setSettings((prev) => (prev ? { ...prev, help_seen: true } : prev))
+    await supabase.from('settings').update({ help_seen: true }).eq('user_id', user.id)
   }
 
   async function saveSettings(updated: Partial<Settings>) {
@@ -792,7 +814,7 @@ export default function Dashboard() {
           onSelect={(l) => { closeMenu(); changeLocale(l) }}
         />
 
-        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); setShowHelp(true) }}>
           {t('settings.help')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>
@@ -2504,6 +2526,11 @@ export default function Dashboard() {
           }}>
           ↑
         </button>
+      )}
+
+      {/* 처음 사용자 도움말 팝업 (자동 노출 + 설정에서 재열기) */}
+      {showHelp && (
+        <HelpPopup t={t} isMobile={isMobile} onClose={closeHelp} />
       )}
     </div>
   )

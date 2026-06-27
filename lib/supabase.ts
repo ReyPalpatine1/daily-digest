@@ -81,6 +81,7 @@ export type Settings = {
   breaking_alert: boolean
   active: boolean
   locale: 'ko' | 'en' | 'zh' | 'ja'
+  help_seen?: boolean
   notify_when_empty?: boolean
   delivery_method?: 'email' | 'telegram' | 'whatsapp' | 'line' | 'kakao' | null
   telegram_chat_id?: string | null
