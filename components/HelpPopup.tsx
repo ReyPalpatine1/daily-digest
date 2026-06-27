@@ -47,11 +47,13 @@ const chip: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-secondary)',
 }
 
-// "+ 채널 추가" 흰색 버튼 스타일 (미니 프리뷰 + 설명 인라인 버튼이 공유 — 절대 다르게 보이면 안 됨)
+// "+ 채널 추가" 버튼 스타일. 실제 대시보드 primaryBtn(accent 배경 + bg-card 글자)과 동일하게.
+// CSS 변수라 테마 반전됨: 라이트=검정 버튼, 다크=흰 버튼 → 두 테마 모두 실제 버튼과 일치.
+// 미니 프리뷰 + 설명 인라인 버튼이 이 객체를 공유(절대 다르게 보이면 안 됨).
 const addChannelBtnStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
-  background: 'var(--bg-card)', color: 'var(--text-primary)',
-  border: '0.5px solid var(--border)',
+  background: 'var(--accent)', color: 'var(--bg-card)',
+  border: 'none',
   borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600,
 }
 // 인라인(문장 안)용: 동일 디자인 그대로, 크기만 살짝 축소
