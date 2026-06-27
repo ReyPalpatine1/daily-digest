@@ -57,12 +57,13 @@ function PreviewChannels({ t }: { t: TFn }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <TabBar t={t} active={0} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{t('help.sample.myChannels')}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '3px 4px 0 0' }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
-          background: 'var(--accent)', color: 'var(--bg-card)',
-          borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600,
+          background: 'var(--bg-card)', color: 'var(--text-primary)',
+          border: '1.5px solid var(--text-primary)',
+          borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
+          boxShadow: '0 0 0 3px var(--bg-subtle), 0 0 0 4.5px var(--text-primary)',
         }}>
           {t('dashboard.addChannel')}
         </span>
@@ -197,9 +198,9 @@ export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Pro
   const [dontShow, setDontShow] = useState(initialDontShow)
 
   const steps = [
-    { preview: <PreviewChannels t={t} />, key: 'step1' },
-    { preview: <PreviewSchedule t={t} />, key: 'step2' },
-    { preview: <PreviewHistory t={t} />, key: 'step3' },
+    { preview: <PreviewChannels t={t} />, key: 'step1', items: [t('help.step1_1'), t('help.step1_2')] },
+    { preview: <PreviewSchedule t={t} />, key: 'step2', items: [t('help.step2_1'), t('help.step2_2'), t('help.step2_3')] },
+    { preview: <PreviewHistory t={t} />, key: 'step3', items: [t('help.step3_1'), t('help.step3_2'), t('help.step3_3')] },
   ]
   const isFirst = step === 0
   const isLast = step === TOTAL - 1
@@ -274,20 +275,15 @@ export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Pro
         {/* 설명 영역 (나머지 채움 → 스텝 간 높이 불변) */}
         <div style={{
           flex: isMobile ? undefined : 1, minHeight: 0,
-          display: 'flex', flexDirection: 'column', gap: 12,
+          display: 'flex', flexDirection: 'column',
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <h3 style={{ margin: 0, fontSize: isMobile ? 20 : 23, fontWeight: 700, color: 'var(--text-primary)' }}>
-              {t(`help.${k}_title`)}
-            </h3>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
-              {t(`help.${k}_desc`)}
-            </p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 2 }}>
-            <NumberedStep n={1} text={t(`help.${k}_1`)} />
-            <NumberedStep n={2} text={t(`help.${k}_2`)} />
-            <NumberedStep n={3} text={t(`help.${k}_3`)} />
+          <h3 style={{ margin: 0, fontSize: isMobile ? 20 : 23, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {t(`help.${k}_title`)}
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 18 }}>
+            {steps[step].items.map((text, i) => (
+              <NumberedStep key={i} n={i + 1} text={text} />
+            ))}
           </div>
         </div>
 
