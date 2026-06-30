@@ -7,14 +7,12 @@ import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
+import { Check, X, ChevronUp, ChevronDown } from 'lucide-react'
 
 const PRICE_MONTHLY = 4900
-const PRICE_YEARLY = 39000
-const YEARLY_DISCOUNT = Math.floor((1 - PRICE_YEARLY / (PRICE_MONTHLY * 12)) * 100)
 
 export default function PricingPage() {
   const { t, locale } = useTranslation()
-  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
   const [isPro, setIsPro] = useState(false)
   const [ready, setReady] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
@@ -84,9 +82,9 @@ export default function PricingPage() {
       padding: '6px 0', fontSize: 13,
       color: included ? 'var(--text-secondary)' : 'var(--text-muted)',
     }}>
-      <span style={{ fontSize: 13, color: included ? 'var(--success)' : 'var(--text-muted)' }}>
-        {included ? '✅' : '❌'}
-      </span>
+      {included
+        ? <Check size={15} strokeWidth={2.5} style={{ flexShrink: 0, color: 'var(--text-primary)' }} />
+        : <X size={15} strokeWidth={2.5} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />}
       {label}
     </div>
   )
@@ -110,28 +108,6 @@ export default function PricingPage() {
           <p style={{ fontSize: 16, color: 'var(--text-tertiary)', marginTop: 10 }}>
             {pricing.subtitle}
           </p>
-        </div>
-
-        {/* 월간/연간 토글 */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
-          <div style={{ display: 'inline-flex', background: 'var(--bg-subtle)', borderRadius: 9, padding: 3 }}>
-            {(['monthly', 'yearly'] as const).map(b => {
-              const active = billing === b
-              return (
-                <button key={b} onClick={() => setBilling(b)}
-                  style={{
-                    padding: '7px 16px', borderRadius: 6, border: 'none',
-                    background: active ? 'var(--bg-card)' : 'transparent',
-                    color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                    fontWeight: active ? 500 : 400, fontSize: 13, cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                  }}>
-                  {b === 'monthly' ? pricing.monthly : `${pricing.yearly} (-${YEARLY_DISCOUNT}%)`}
-                </button>
-              )
-            })}
-          </div>
         </div>
 
         {/* 플랜 카드 */}
@@ -169,22 +145,17 @@ export default function PricingPage() {
               <span style={{ fontSize: 17, fontWeight: 600 }}>{pricing.pro}</span>
               <span style={{
                 fontSize: 11, fontWeight: 600,
-                background: 'var(--warning)', color: '#fff',
+                background: 'var(--accent)', color: 'var(--bg-card)',
                 padding: '2px 8px', borderRadius: 5,
               }}>{pricing.recommended}</span>
             </div>
-            <div style={{ marginTop: 10, marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <div style={{ marginTop: 10, marginBottom: 18, display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1 }}>
-                {won(billing === 'monthly' ? PRICE_MONTHLY : PRICE_YEARLY)}
+                {won(PRICE_MONTHLY)}
               </span>
               <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
-                {billing === 'monthly' ? pricing.perMonth : pricing.perYear}
+                {pricing.perMonth}
               </span>
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 18 }}>
-              {billing === 'monthly'
-                ? pricing.yearlyAlt.replace('{price}', won(PRICE_YEARLY))
-                : pricing.discountBadge.replace('{n}', String(YEARLY_DISCOUNT))}
             </div>
             <div style={{ marginBottom: 18 }}>
               {pricing.proFeatures.map(f => featureRow(f, true))}
@@ -202,27 +173,30 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* 일회성 결제 안내 */}
-        <button
-          onClick={comingSoon}
-          style={{
-            ...card, width: '100%', textAlign: 'left', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 14, marginBottom: 40,
-            borderRadius: 10, padding: 16,
-          }}>
-          <span style={{
-            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-            background: 'var(--bg-subtle)',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
-          }}>💡</span>
-          <span style={{ flex: 1 }}>
-            <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{pricing.onetimeTitle}</span>
-            <span style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-              {pricing.onetimeDesc}
-            </span>
-          </span>
-          <span style={{ color: 'var(--text-muted)', fontSize: 16 }}>→</span>
-        </button>
+        {/* 결제 방식 안내 (자동 갱신 / 일회성) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: 16, marginBottom: 40,
+        }}>
+          {[
+            { title: pricing.autoRenewTitle, desc: pricing.autoRenewDesc },
+            { title: pricing.onetimePassTitle, desc: pricing.onetimePassDesc },
+          ].map(box => (
+            <button
+              key={box.title}
+              onClick={comingSoon}
+              style={{
+                ...card, textAlign: 'left', cursor: 'pointer',
+                borderRadius: 10, padding: 16,
+              }}>
+              <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{box.title}</span>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.6 }}>
+                {box.desc}
+              </span>
+            </button>
+          ))}
+        </div>
 
         {/* FAQ */}
         <div>
@@ -240,7 +214,9 @@ export default function PricingPage() {
                       fontSize: 14, fontWeight: 500, color: 'var(--text-primary)',
                     }}>
                     <span>Q. {item.q}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+                    {open
+                      ? <ChevronUp size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      : <ChevronDown size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
                   </button>
                   {open && (
                     <div style={{
