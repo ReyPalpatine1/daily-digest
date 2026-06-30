@@ -64,6 +64,8 @@ export default function PricingPage() {
     borderRadius: 14,
     padding: 24,
     boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
   }
   const primaryBtn: React.CSSProperties = {
     width: '100%', padding: '11px 16px', borderRadius: 9, border: 'none',
@@ -105,9 +107,6 @@ export default function PricingPage() {
           <h1 style={{ fontSize: 32, fontWeight: 600, margin: 0, letterSpacing: -0.5 }}>
             {pricing.title}
           </h1>
-          <p style={{ fontSize: 16, color: 'var(--text-tertiary)', marginTop: 10 }}>
-            {pricing.subtitle}
-          </p>
         </div>
 
         {/* 플랜 카드 */}
@@ -119,19 +118,18 @@ export default function PricingPage() {
           {/* Free */}
           <div style={card}>
             <div style={{ fontSize: 17, fontWeight: 600 }}>{pricing.free}</div>
-            <div style={{ marginTop: 10, marginBottom: 4 }}>
+            <div style={{ marginTop: 10, marginBottom: 18 }}>
               <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1 }}>{pricing.freePriceLabel}</span>
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 18 }}>
-              {pricing.freeSub}
             </div>
             <div style={{ marginBottom: 18 }}>
               {pricing.freeFeatures.map(f => featureRow(f, true))}
               {pricing.freeExcluded.map(f => featureRow(f, false))}
             </div>
-            <button style={disabledBtn} disabled>
-              {!ready ? '⋯' : isPro ? pricing.basePlan : pricing.currentInUse}
-            </button>
+            <div style={{ marginTop: 'auto' }}>
+              <button style={disabledBtn} disabled>
+                {!ready ? '...' : isPro ? pricing.basePlan : pricing.currentInUse}
+              </button>
+            </div>
           </div>
 
           {/* Pro */}
@@ -149,7 +147,7 @@ export default function PricingPage() {
                 padding: '2px 8px', borderRadius: 5,
               }}>{pricing.recommended}</span>
             </div>
-            <div style={{ marginTop: 10, marginBottom: 18, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <div style={{ marginTop: 10, marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1 }}>
                 {won(PRICE_MONTHLY)}
               </span>
@@ -157,45 +155,25 @@ export default function PricingPage() {
                 {pricing.perMonth}
               </span>
             </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
+              {pricing.payNote}
+            </div>
             <div style={{ marginBottom: 18 }}>
               {pricing.proFeatures.map(f => featureRow(f, true))}
             </div>
-            {!ready ? (
-              <button style={disabledBtn} disabled>⋯</button>
-            ) : isPro ? (
-              <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
-            ) : (
-              <UpgradeButton
-                label={pricing.startTrial}
-                onClick={comingSoon}
-                style={{ ...primaryBtn }} />
-            )}
+            <div style={{ marginTop: 'auto' }}>
+              {!ready ? (
+                <button style={disabledBtn} disabled>...</button>
+              ) : isPro ? (
+                <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
+              ) : (
+                <UpgradeButton
+                  label={pricing.startTrial}
+                  onClick={comingSoon}
+                  style={{ ...primaryBtn }} />
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* 결제 방식 안내 (자동 갱신 / 일회성) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 16, marginBottom: 40,
-        }}>
-          {[
-            { title: pricing.autoRenewTitle, desc: pricing.autoRenewDesc },
-            { title: pricing.onetimePassTitle, desc: pricing.onetimePassDesc },
-          ].map(box => (
-            <button
-              key={box.title}
-              onClick={comingSoon}
-              style={{
-                ...card, textAlign: 'left', cursor: 'pointer',
-                borderRadius: 10, padding: 16,
-              }}>
-              <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{box.title}</span>
-              <span style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.6 }}>
-                {box.desc}
-              </span>
-            </button>
-          ))}
         </div>
 
         {/* FAQ */}
