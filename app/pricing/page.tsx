@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
-import { supabase, checkIsPro } from '@/lib/supabase'
-import type { Profile } from '@/lib/supabase'
+import { supabase, getPlanView } from '@/lib/supabase'
+import type { Profile, PlanView } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import { Check, X, ChevronUp, ChevronDown } from 'lucide-react'
@@ -13,18 +13,16 @@ const PRICE_MONTHLY = 4900
 
 export default function PricingPage() {
   const { t, locale } = useTranslation()
-  const [isPro, setIsPro] = useState(false)
+  const [planView, setPlanView] = useState<PlanView>('free')
   const [ready, setReady] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [toastKey, setToastKey] = useState<string | null>(null)
 
-  // 실제 DB 플랜으로 Pro 판정 (profile 페이지와 동일 규칙).
-  // 로드 전엔 ready=false로 버튼 판정 보류 → 깜빡임 방지.
   useEffect(() => {
     let cancelled = false
     supabase.auth.getUser().then(async ({ data }) => {
       if (cancelled) return
-      if (!data.user) { setReady(true); return } // 비로그인 → FREE 취급
+      if (!data.user) { setReady(true); return }
 
       const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
         .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
@@ -41,21 +39,20 @@ export default function PricingPage() {
         .single()
       if (cancelled) return
 
-      const realIsPro = checkIsPro(profileRow as Profile | null, admin)
-      setIsPro(admin ? adminPreviewPro : realIsPro)
+      const profile = profileRow as Profile | null
+      const effectiveAdmin = admin ? adminPreviewPro : false
+      setPlanView(getPlanView(profile, effectiveAdmin))
       setReady(true)
     })
     return () => { cancelled = true }
   }, [])
 
-  // 실결제 미구현 — 모든 결제 진입은 안내만 (profile 페이지와 동일 패턴)
   function comingSoon() {
     setToastKey('profile.paymentComingSoon')
     setTimeout(() => setToastKey(null), 2500)
   }
 
   const won = (n: number) => `₩${n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US')}`
-  // zh/ja는 아직 번역이 없어 en으로 폴백 (타입은 ko 기준으로 고정)
   const pricing = (((translations as Record<string, any>)[locale]?.pricing) ?? translations.en.pricing) as typeof translations.ko.pricing
 
   const card: React.CSSProperties = {
@@ -91,6 +88,25 @@ export default function PricingPage() {
     </div>
   )
 
+  function proCardButton() {
+    if (!ready) return <button style={disabledBtn} disabled>···</button>
+    if (planView === 'pro') return <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
+    if (planView === 'trialing') return (
+      <>
+        <UpgradeButton label={pricing.payNow} onClick={comingSoon} style={{ ...primaryBtn }} />
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
+          {pricing.trialActive}
+        </div>
+      </>
+    )
+    if (planView === 'trial_expired') {
+      return <UpgradeButton label={pricing.subscribePro} onClick={comingSoon} style={{ ...primaryBtn }} />
+    }
+    return <UpgradeButton label={pricing.startTrial} onClick={comingSoon} style={{ ...primaryBtn }} />
+  }
+
+  const freeBtnLabel = !ready ? '···' : planView !== 'free' ? pricing.basePlan : pricing.currentInUse
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -98,12 +114,11 @@ export default function PricingPage() {
       color: 'var(--text-primary)',
       fontFamily: 'var(--font-sans)',
     }}>
-      {/* 상단바 */}
       <AppHeader showBack />
 
       <main style={{ maxWidth: 880, margin: '0 auto', padding: '40px 20px 64px' }}>
         {/* 헤더 */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <h1 style={{ fontSize: 32, fontWeight: 600, margin: 0, letterSpacing: -0.5 }}>
             {pricing.title}
           </h1>
@@ -113,22 +128,21 @@ export default function PricingPage() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 16, marginBottom: 32,
+          gap: 16, marginBottom: 40,
+          alignItems: 'stretch',
         }}>
           {/* Free */}
-          <div style={card}>
+          <div style={{ ...card, display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: 17, fontWeight: 600 }}>{pricing.free}</div>
             <div style={{ marginTop: 10, marginBottom: 18 }}>
               <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1 }}>{pricing.freePriceLabel}</span>
             </div>
-            <div style={{ marginBottom: 18 }}>
+            <div style={{ flex: 1, marginBottom: 18 }}>
               {pricing.freeFeatures.map(f => featureRow(f, true))}
               {pricing.freeExcluded.map(f => featureRow(f, false))}
             </div>
             <div style={{ marginTop: 'auto' }}>
-              <button style={disabledBtn} disabled>
-                {!ready ? '...' : isPro ? pricing.basePlan : pricing.currentInUse}
-              </button>
+              <button style={disabledBtn} disabled>{freeBtnLabel}</button>
             </div>
           </div>
 
@@ -137,7 +151,7 @@ export default function PricingPage() {
             ...card,
             border: '1px solid var(--accent)',
             boxShadow: 'var(--shadow-lg)',
-            position: 'relative',
+            display: 'flex', flexDirection: 'column',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 17, fontWeight: 600 }}>{pricing.pro}</span>
@@ -158,20 +172,11 @@ export default function PricingPage() {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
               {pricing.payNote}
             </div>
-            <div style={{ marginBottom: 18 }}>
+            <div style={{ flex: 1, marginBottom: 18 }}>
               {pricing.proFeatures.map(f => featureRow(f, true))}
             </div>
             <div style={{ marginTop: 'auto' }}>
-              {!ready ? (
-                <button style={disabledBtn} disabled>...</button>
-              ) : isPro ? (
-                <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
-              ) : (
-                <UpgradeButton
-                  label={pricing.startTrial}
-                  onClick={comingSoon}
-                  style={{ ...primaryBtn }} />
-              )}
+              {proCardButton()}
             </div>
           </div>
         </div>
@@ -211,7 +216,7 @@ export default function PricingPage() {
         </div>
       </main>
 
-      {/* === 토스트 === */}
+      {/* 토스트 */}
       {toastKey && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',

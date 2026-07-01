@@ -35,6 +35,8 @@ export type Profile = {
   plan_expires_at: string | null
   vip_granted_by: string | null
   vip_granted_at: string | null
+  plan_status: 'none' | 'trialing' | 'active' | 'canceled'
+  trial_used: boolean
 }
 
 // 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)
@@ -52,6 +54,17 @@ export function checkIsPro(profile: Profile | null, isAdmin: boolean): boolean {
   }
 
   return false // free
+}
+
+export type PlanView = 'free' | 'trialing' | 'pro' | 'trial_expired'
+
+export function getPlanView(profile: Profile | null, isAdmin: boolean): PlanView {
+  if (!profile) return 'free'
+  if (isAdmin || profile.plan === 'vip') return 'pro'
+  if (checkIsPro(profile, isAdmin)) {
+    return profile.plan_status === 'trialing' ? 'trialing' : 'pro'
+  }
+  return profile.trial_used ? 'trial_expired' : 'free'
 }
 
 export type Category = {

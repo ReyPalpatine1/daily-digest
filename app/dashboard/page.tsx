@@ -164,6 +164,8 @@ export default function Dashboard() {
           plan_expires_at: null,
           vip_granted_by: null,
           vip_granted_at: null,
+          plan_status: 'none',
+          trial_used: false,
         })
         // 기본 설정 자동 생성
         await supabase.from('settings').insert({
