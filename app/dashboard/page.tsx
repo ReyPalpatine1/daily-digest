@@ -823,6 +823,12 @@ export default function Dashboard() {
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>
           {t('settings.terms')}
         </button>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/privacy') }}>
+          {t('settings.privacy')}
+        </button>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/refund') }}>
+          {t('settings.refund')}
+        </button>
 
         {isAdmin && (
           <>
