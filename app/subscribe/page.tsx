@@ -28,6 +28,7 @@ function SubscribeContent() {
   const [agreeTerms, setAgreeTerms] = useState(false)
   const [agreeAutoPay, setAgreeAutoPay] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -53,10 +54,28 @@ function SubscribeContent() {
     setTimeout(() => setToastKey(null), 2500)
   }
 
-  const canSubmit = agreeTerms && (payType !== 'auto' || agreeAutoPay)
+  const canSubmit = mode === 'trial' ? agreeTerms : agreeTerms && (payType !== 'auto' || agreeAutoPay)
+
+  async function startTrial() {
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/subscription/trial', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok) {
+        router.push('/dashboard')
+        return
+      }
+      showToast(data.error === 'trial_already_used' ? 'subscribe.trialUsedNotice' : 'adminUsers.actionFailed')
+    } catch {
+      showToast('adminUsers.actionFailed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   function handleSubmit() {
     if (!canSubmit) { showToast('subscribe.needAgree'); return }
+    if (mode === 'trial') { startTrial(); return }
     showToast('profile.paymentComingSoon')
   }
 
@@ -139,71 +158,72 @@ function SubscribeContent() {
           </div>
         </div>
 
-        {/* 결제 방식 */}
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={sectionTitle}>{subscribe.paymentMethod}</div>
-          {payOption('auto', subscribe.proMonthly, `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`)}
-          {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`)}
+        {mode === 'trial' ? (
+          /* 체험 안내 (카드 없이 시작) */
+          <div style={{ ...card, marginBottom: 16 }}>
+            <div style={sectionTitle}>{subscribe.firstWeekFree}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              {t('subscribe.billingStarts', { date: billingDateLabel })}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* 결제 방식 */}
+            <div style={{ ...card, marginBottom: 16 }}>
+              <div style={sectionTitle}>{subscribe.paymentMethod}</div>
+              {payOption('auto', subscribe.proMonthly, `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`)}
+              {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`)}
+            </div>
 
-          {mode === 'trial' && (
-            <div style={{
-              marginTop: 8, padding: '10px 12px', borderRadius: 8,
-              background: 'var(--bg-subtle)', fontSize: 12, color: 'var(--text-secondary)',
-              lineHeight: 1.6,
-            }}>
-              <div>{subscribe.firstWeekFree}</div>
-              <div>{t('subscribe.billingStarts', { date: billingDateLabel })}</div>
+            {/* 결제 수단 (카드) */}
+            <div style={{ ...card, marginBottom: 16 }}>
+              <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CreditCard size={16} style={{ color: 'var(--text-secondary)' }} />
+                {subscribe.creditCard}
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <span style={label}>{subscribe.cardNumber}</span>
+                <input
+                  style={inputStyle}
+                  value={cardNumber}
+                  onChange={e => setCardNumber(e.target.value)}
+                  placeholder="0000 0000 0000 0000"
+                  inputMode="numeric"
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={label}>{subscribe.expiry}</span>
+                  <input
+                    style={inputStyle}
+                    value={expiry}
+                    onChange={e => setExpiry(e.target.value)}
+                    placeholder="MM/YY"
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={label}>{subscribe.cvc}</span>
+                  <input
+                    style={inputStyle}
+                    value={cvc}
+                    onChange={e => setCvc(e.target.value)}
+                    placeholder="CVC"
+                    inputMode="numeric"
+                  />
+                </div>
+              </div>
+              <div>
+                <span style={label}>{subscribe.cardHolder}</span>
+                <input
+                  style={inputStyle}
+                  value={cardHolder}
+                  onChange={e => setCardHolder(e.target.value)}
+                  placeholder={subscribe.cardHolder}
+                />
+              </div>
             </div>
-          )}
-        </div>
-
-        {/* 결제 수단 (카드) */}
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CreditCard size={16} style={{ color: 'var(--text-secondary)' }} />
-            {subscribe.creditCard}
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <span style={label}>{subscribe.cardNumber}</span>
-            <input
-              style={inputStyle}
-              value={cardNumber}
-              onChange={e => setCardNumber(e.target.value)}
-              placeholder="0000 0000 0000 0000"
-              inputMode="numeric"
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <span style={label}>{subscribe.expiry}</span>
-              <input
-                style={inputStyle}
-                value={expiry}
-                onChange={e => setExpiry(e.target.value)}
-                placeholder="MM/YY"
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <span style={label}>{subscribe.cvc}</span>
-              <input
-                style={inputStyle}
-                value={cvc}
-                onChange={e => setCvc(e.target.value)}
-                placeholder="CVC"
-                inputMode="numeric"
-              />
-            </div>
-          </div>
-          <div>
-            <span style={label}>{subscribe.cardHolder}</span>
-            <input
-              style={inputStyle}
-              value={cardHolder}
-              onChange={e => setCardHolder(e.target.value)}
-              placeholder={subscribe.cardHolder}
-            />
-          </div>
-        </div>
+          </>
+        )}
 
         {/* 약관 동의 */}
         <div style={{ ...card, marginBottom: 20 }}>
@@ -216,7 +236,7 @@ function SubscribeContent() {
             />
             {subscribe.agreeTerms}
           </label>
-          {payType === 'auto' && (
+          {mode === 'pay' && payType === 'auto' && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)', marginTop: 10 }}>
               <input
                 type="checkbox"
@@ -229,8 +249,8 @@ function SubscribeContent() {
           )}
         </div>
 
-        <button style={canSubmit ? primaryBtn : disabledBtn} onClick={handleSubmit}>
-          {mode === 'trial' ? subscribe.startTrialCta : subscribe.payCta}
+        <button style={canSubmit ? primaryBtn : disabledBtn} onClick={handleSubmit} disabled={submitting}>
+          {submitting ? '···' : mode === 'trial' ? subscribe.startTrialCta : subscribe.payCta}
         </button>
 
         <div style={{

@@ -411,6 +411,7 @@ export const translations = {
       secureNote: '안전한 결제 시스템으로 보호됩니다',
       needAgree: '약관에 동의해 주세요.',
       demoNotice: '결제 시스템은 구현 예정입니다. 데모로 Pro가 활성화됩니다.',
+      trialUsedNotice: '이미 무료 체험을 사용하셨습니다.',
     },
     subscribeSuccess: {
       title: 'Pro 구독이 시작되었어요!',
@@ -895,6 +896,7 @@ export const translations = {
       secureNote: 'Protected by a secure payment system',
       needAgree: 'Please agree to the terms.',
       demoNotice: 'The payment system is coming soon. Pro is activated as a demo.',
+      trialUsedNotice: 'You have already used your free trial.',
     },
     subscribeSuccess: {
       title: 'Your Pro subscription has started!',
@@ -1375,6 +1377,7 @@ export const translations = {
       secureNote: '由安全支付系统保护',
       needAgree: '请先同意条款。',
       demoNotice: '支付系统即将上线。Pro 已作为演示开启。',
+      trialUsedNotice: '您已使用过免费试用。',
     },
     subscribeSuccess: {
       title: '你的 Pro 订阅已开始！',
@@ -1855,6 +1858,7 @@ export const translations = {
       secureNote: '安全な決済システムで保護されています',
       needAgree: '規約に同意してください。',
       demoNotice: '決済システムは近日公開予定です。Proはデモとして有効化されます。',
+      trialUsedNotice: 'すでに無料体験を利用済みです。',
     },
     subscribeSuccess: {
       title: 'Proサブスクが開始しました！',
