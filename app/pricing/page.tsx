@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
 import { supabase, getPlanView } from '@/lib/supabase'
@@ -12,11 +13,11 @@ import { Check, X, ChevronUp, ChevronDown } from 'lucide-react'
 const PRICE_MONTHLY = 4900
 
 export default function PricingPage() {
-  const { t, locale } = useTranslation()
+  const router = useRouter()
+  const { locale } = useTranslation()
   const [planView, setPlanView] = useState<PlanView>('free')
   const [ready, setReady] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
-  const [toastKey, setToastKey] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -46,11 +47,6 @@ export default function PricingPage() {
     })
     return () => { cancelled = true }
   }, [])
-
-  function comingSoon() {
-    setToastKey('profile.paymentComingSoon')
-    setTimeout(() => setToastKey(null), 2500)
-  }
 
   const won = (n: number) => `₩${n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US')}`
   const pricing = (((translations as Record<string, any>)[locale]?.pricing) ?? translations.en.pricing) as typeof translations.ko.pricing
@@ -93,16 +89,16 @@ export default function PricingPage() {
     if (planView === 'pro') return <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
     if (planView === 'trialing') return (
       <>
-        <UpgradeButton label={pricing.payNow} onClick={comingSoon} style={{ ...primaryBtn }} />
+        <UpgradeButton label={pricing.payNow} onClick={() => router.push('/subscribe?mode=pay')} style={{ ...primaryBtn }} />
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
           {pricing.trialActive}
         </div>
       </>
     )
     if (planView === 'trial_expired') {
-      return <UpgradeButton label={pricing.subscribePro} onClick={comingSoon} style={{ ...primaryBtn }} />
+      return <UpgradeButton label={pricing.subscribePro} onClick={() => router.push('/subscribe?mode=pay')} style={{ ...primaryBtn }} />
     }
-    return <UpgradeButton label={pricing.startTrial} onClick={comingSoon} style={{ ...primaryBtn }} />
+    return <UpgradeButton label={pricing.startTrial} onClick={() => router.push('/subscribe?mode=trial')} style={{ ...primaryBtn }} />
   }
 
   const freeBtnLabel = !ready ? '···' : planView !== 'free' ? pricing.basePlan : pricing.currentInUse
@@ -215,18 +211,6 @@ export default function PricingPage() {
           </div>
         </div>
       </main>
-
-      {/* 토스트 */}
-      {toastKey && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
-          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
-          boxShadow: 'var(--shadow-lg)',
-        }}>
-          {t(toastKey)}
-        </div>
-      )}
     </div>
   )
 }
