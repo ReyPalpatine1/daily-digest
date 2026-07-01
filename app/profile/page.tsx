@@ -9,6 +9,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import UserPlanBadge from '@/components/UserPlanBadge'
+import { AlertTriangle } from 'lucide-react'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -20,6 +21,9 @@ export default function ProfilePage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminPreviewPro, setAdminPreviewPro] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleteAgree, setDeleteAgree] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -70,6 +74,32 @@ export default function ProfilePage() {
   function comingSoon() {
     setToastKey('profile.paymentComingSoon')
     setTimeout(() => setToastKey(null), 2500)
+  }
+
+  function openDeleteModal() {
+    setDeleteAgree(false)
+    setShowDelete(true)
+  }
+
+  function closeDeleteModal() {
+    if (deleting) return
+    setShowDelete(false)
+  }
+
+  async function handleDelete() {
+    if (!deleteAgree || deleting) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/account/delete', { method: 'POST' })
+      if (!res.ok) throw new Error('delete failed')
+      await supabase.auth.signOut()
+      router.push('/')
+    } catch {
+      setDeleting(false)
+      setShowDelete(false)
+      setToastKey('profile.deleteFailed')
+      setTimeout(() => setToastKey(null), 2500)
+    }
   }
 
   // === 공용 스타일 ===
@@ -149,7 +179,104 @@ export default function ProfilePage() {
             </span>
           </div>
         </div>
+
+        {/* ============ 위험 영역: 회원 탈퇴 ============ */}
+        <div style={{ marginTop: 28, textAlign: 'center' }}>
+          <button
+            onClick={openDeleteModal}
+            style={{
+              background: 'transparent', border: 'none',
+              color: 'var(--text-muted)', fontSize: 12,
+              cursor: 'pointer', fontFamily: 'inherit',
+              padding: '4px 8px', textDecoration: 'underline',
+            }}>
+            {t('profile.deleteAccount')}
+          </button>
+        </div>
       </main>
+
+      {/* === 탈퇴 확인 모달 === */}
+      {showDelete && (
+        <div
+          onClick={closeDeleteModal}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 120,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+          }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 400,
+              background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+              borderRadius: 14, padding: 22, boxSizing: 'border-box',
+              boxShadow: 'var(--shadow-lg)',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <AlertTriangle size={18} style={{ color: 'var(--text-primary)' }} />
+              <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>
+                {t('profile.deleteConfirmTitle')}
+              </h2>
+            </div>
+
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+              {t('profile.deleteConfirmBody')}
+            </p>
+
+            {plan === 'PRO' && (
+              <p style={{
+                fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
+                margin: '0 0 12px', padding: '10px 12px',
+                background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
+                borderRadius: 8,
+              }}>
+                {t('profile.deleteProNotice')}
+              </p>
+            )}
+
+            <label style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              fontSize: 12.5, color: 'var(--text-primary)', cursor: 'pointer',
+              margin: '4px 0 18px',
+            }}>
+              <input
+                type="checkbox"
+                checked={deleteAgree}
+                onChange={e => setDeleteAgree(e.target.checked)}
+                style={{ marginTop: 2, accentColor: 'var(--text-primary)', cursor: 'pointer' }}
+              />
+              <span>{t('profile.deleteAgree')}</span>
+            </label>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={closeDeleteModal}
+                disabled={deleting}
+                style={{
+                  padding: '8px 14px', borderRadius: 8,
+                  border: '0.5px solid var(--border)', background: 'var(--bg-card)',
+                  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
+                  cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={!deleteAgree || deleting}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, border: 'none',
+                  background: 'var(--text-primary)', color: 'var(--bg-card)',
+                  fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                  cursor: !deleteAgree || deleting ? 'default' : 'pointer',
+                  opacity: !deleteAgree || deleting ? 0.5 : 1,
+                }}>
+                {t('profile.deleteConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* === 토스트 === */}
       {toastKey && (
