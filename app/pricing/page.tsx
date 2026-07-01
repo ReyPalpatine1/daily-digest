@@ -70,6 +70,11 @@ export default function PricingPage() {
     background: 'var(--bg-subtle)', color: 'var(--text-muted)',
     fontSize: 14, fontWeight: 600, cursor: 'default', fontFamily: 'inherit',
   }
+  // 버튼 아래 캡션 한 줄 자리(높이 고정) — Free/Pro 카드 버튼 상단 y좌표를 항상 맞추기 위해
+  // planView와 무관하게 항상 렌더(내용 없으면 빈 자리만 차지).
+  const captionSlot: React.CSSProperties = {
+    height: 15, marginTop: 8, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center',
+  }
 
   const featureRow = (label: string, included: boolean) => (
     <div key={label} style={{
@@ -85,20 +90,36 @@ export default function PricingPage() {
   )
 
   function proCardButton() {
-    if (!ready) return <button style={disabledBtn} disabled>···</button>
-    if (planView === 'pro') return <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
-    if (planView === 'trialing') return (
+    if (!ready) return (
       <>
-        <UpgradeButton label={pricing.payNow} onClick={() => router.push('/subscribe?mode=pay')} style={{ ...primaryBtn }} />
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
-          {pricing.trialActive}
-        </div>
+        <button style={disabledBtn} disabled>···</button>
+        <div style={captionSlot} />
       </>
     )
-    if (planView === 'trial_expired') {
-      return <UpgradeButton label={pricing.subscribePro} onClick={() => router.push('/subscribe?mode=pay')} style={{ ...primaryBtn }} />
-    }
-    return <UpgradeButton label={pricing.startTrial} onClick={() => router.push('/subscribe?mode=trial')} style={{ ...primaryBtn }} />
+    if (planView === 'pro') return (
+      <>
+        <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
+        <div style={captionSlot} />
+      </>
+    )
+    if (planView === 'trialing') return (
+      <>
+        <button style={disabledBtn} disabled>{pricing.payComingSoon}</button>
+        <div style={captionSlot}>{pricing.trialActive}</div>
+      </>
+    )
+    if (planView === 'trial_expired') return (
+      <>
+        <UpgradeButton label={pricing.subscribePro} onClick={() => router.push('/subscribe?mode=pay')} style={{ ...primaryBtn }} />
+        <div style={captionSlot} />
+      </>
+    )
+    return (
+      <>
+        <UpgradeButton label={pricing.startTrial} onClick={() => router.push('/subscribe?mode=trial')} style={{ ...primaryBtn }} />
+        <div style={captionSlot} />
+      </>
+    )
   }
 
   const freeBtnLabel = !ready ? '···' : planView !== 'free' ? pricing.basePlan : pricing.currentInUse
@@ -139,6 +160,7 @@ export default function PricingPage() {
             </div>
             <div style={{ marginTop: 'auto' }}>
               <button style={disabledBtn} disabled>{freeBtnLabel}</button>
+              <div style={captionSlot} />
             </div>
           </div>
 
