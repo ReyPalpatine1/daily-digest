@@ -29,6 +29,8 @@ function SubscribeContent() {
   const [agreeAutoPay, setAgreeAutoPay] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // trial 모드로 잘못 진입한 재가입자(체험 이력 있음) 대비 — 확인 전엔 화면 미확정.
+  const [trialChecked, setTrialChecked] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -39,6 +41,23 @@ function SubscribeContent() {
     })
     return () => { cancelled = true }
   }, [router])
+
+  useEffect(() => {
+    if (mode !== 'trial') { setTrialChecked(true); return }
+    let cancelled = false
+    fetch('/api/subscription/trial')
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return
+        if (data?.eligible === false) router.replace('/subscribe?mode=pay')
+        setTrialChecked(true)
+      })
+      .catch(() => {
+        // 조회 실패 시 trial 화면 유지(POST 서버 검증이 최종 방어선)
+        if (!cancelled) setTrialChecked(true)
+      })
+    return () => { cancelled = true }
+  }, [mode, router])
 
   const subscribe = (((translations as Record<string, any>)[locale]?.subscribe) ?? translations.en.subscribe) as typeof translations.ko.subscribe
   const pricing = (((translations as Record<string, any>)[locale]?.pricing) ?? translations.en.pricing) as typeof translations.ko.pricing
@@ -65,7 +84,13 @@ function SubscribeContent() {
         router.push('/dashboard')
         return
       }
-      showToast(data.error === 'trial_already_used' ? 'subscribe.trialUsedNotice' : 'adminUsers.actionFailed')
+      if (data.error === 'trial_already_used') {
+        // 체험 불가 안내 후 결제 모드로 전환 — 사용자가 바로 결제 흐름을 이어갈 수 있게.
+        showToast('subscribe.trialUsedNotice')
+        router.replace('/subscribe?mode=pay')
+        return
+      }
+      showToast('adminUsers.actionFailed')
     } catch {
       showToast('adminUsers.actionFailed')
     } finally {
@@ -130,7 +155,7 @@ function SubscribeContent() {
     )
   }
 
-  if (!ready) {
+  if (!ready || !trialChecked) {
     return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />
   }
 

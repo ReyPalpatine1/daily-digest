@@ -42,7 +42,22 @@ export default function PricingPage() {
 
       const profile = profileRow as Profile | null
       const effectiveAdmin = admin ? adminPreviewPro : false
-      setPlanView(getPlanView(profile, effectiveAdmin))
+      let view = getPlanView(profile, effectiveAdmin)
+
+      // 탈퇴→재가입 사용자는 trial_used=false라 'free'로 판정되지만 체험 이력이 남아 있어
+      // 체험을 시작할 수 없다. 'free'(=체험 버튼 상황)일 때만 서버에 가능 여부를 대조해 보정.
+      if (view === 'free') {
+        try {
+          const res = await fetch('/api/subscription/trial')
+          const eligibility = await res.json().catch(() => ({}))
+          if (eligibility?.eligible === false) view = 'trial_expired'
+        } catch {
+          // 조회 실패 시 기존 판정 유지(POST 서버 검증이 최종 방어선)
+        }
+        if (cancelled) return
+      }
+
+      setPlanView(view)
       setReady(true)
     })
     return () => { cancelled = true }
