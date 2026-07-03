@@ -137,7 +137,7 @@ async function fetchPlaylistItems(
   return { items, nextPageToken: data.nextPageToken }
 }
 
-type VideoDetail = { durationSeconds: number; description: string; title: string }
+type VideoDetail = { durationSeconds: number; description: string; title: string; liveBroadcastContent: string }
 
 // 영상 상세 배치 (videos.list contentDetails+snippet, 50개당 1 unit)
 async function getVideoDetailsBatch(videoIds: string[]): Promise<Map<string, VideoDetail>> {
@@ -157,10 +157,29 @@ async function getVideoDetailsBatch(videoIds: string[]): Promise<Map<string, Vid
         durationSeconds: parseDurationToSeconds(v.contentDetails?.duration ?? ''),
         description: (v.snippet?.description ?? '').slice(0, 2000),
         title: v.snippet?.title ?? '',
+        // 라이브/예정 판별 (part=snippet에 포함 → 추가 비용 없음). none | live | upcoming
+        liveBroadcastContent: v.snippet?.liveBroadcastContent ?? 'none',
       })
     }
   }
   return out
+}
+
+// 라이브/예정 영상의 현재 상태 재확인 (videos.list snippet, 1 unit).
+// 확인 실패 시 null → 이번 주기는 건너뜀 (자막 API 크레딧 낭비 방지).
+async function fetchLiveBroadcastContent(videoId: string): Promise<string | null> {
+  try {
+    // Cloudflare 호환: env는 함수 내부에서 읽는다.
+    const apiKey = process.env.YOUTUBE_API_KEY!
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`
+    )
+    const data = await res.json()
+    if (!res.ok || data.error || !data.items?.length) return null
+    return data.items[0]?.snippet?.liveBroadcastContent ?? 'none'
+  } catch {
+    return null
+  }
 }
 
 // ── 채널 영상 수집 ────────────────────────────────────────────
@@ -226,6 +245,8 @@ async function collectChannelVideos(channel: UniqueChannel): Promise<number> {
   const details = await getVideoDetailsBatch(newVideos.map(v => v.videoId))
   const rows = newVideos.map(v => {
     const d = details.get(v.videoId)
+    // 라이브/예정 영상은 요약 대상이 아님 → 수집 시점에 사유를 함께 기록 (요약 주기에서 skip)
+    const isLive = d?.liveBroadcastContent === 'live' || d?.liveBroadcastContent === 'upcoming'
     return {
       video_id: v.videoId,
       channel_id: channel.channelId,
@@ -234,6 +255,9 @@ async function collectChannelVideos(channel: UniqueChannel): Promise<number> {
       duration_seconds: d?.durationSeconds ?? null,
       is_short: isShort(d?.durationSeconds, v.title || d?.title),
       description: d?.description ?? null,
+      live_broadcast_content: d?.liveBroadcastContent ?? null,
+      fail_reason: isLive ? 'live' : null,
+      fail_detail: isLive ? `liveBroadcastContent=${d?.liveBroadcastContent}` : null,
       fetched_at: nowUtc().toISOString(),
     }
   })
@@ -261,7 +285,14 @@ async function upsertChannelState(channelId: string, playlistId: string | null, 
 }
 
 // ── 공유 요약 (영상당 1번) ────────────────────────────────────
-type PendingVideo = { video_id: string; title: string; description: string | null; summary_attempts?: number | null }
+type PendingVideo = {
+  video_id: string
+  title: string
+  description: string | null
+  summary_attempts?: number | null
+  live_broadcast_content?: string | null
+  fail_reason?: string | null
+}
 
 // 아직 요약이 없는 (쇼츠 아닌, 최근 N일) 영상 목록.
 // ⚠️ 과거 영상은 발송에 안 쓰이므로 요약하지 않는다 (Gemini 비용 절감).
@@ -269,7 +300,7 @@ async function getVideosWithoutSummary(locale: Locale = 'ko', limit: number = SU
   const cutoff = new Date(Date.now() - SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
   const { data: vids } = await supabase
     .from('videos')
-    .select('video_id, title, description, summary_attempts')
+    .select('video_id, title, description, summary_attempts, live_broadcast_content, fail_reason')
     .eq('is_short', false)
     .gte('published_at', cutoff.toISOString())
     .lt('summary_attempts', MAX_SUMMARY_ATTEMPTS) // 재시도 상한 초과는 영구 제외
@@ -310,15 +341,46 @@ function asArray<T = any>(value: any): T[] {
   return []
 }
 
-// 요약 실패 시 재시도 카운트 +1 (실패해도 흐름을 막지 않게 best-effort).
-async function bumpSummaryAttempts(video: PendingVideo): Promise<void> {
+// 요약 실패 시 재시도 카운트 +1 + 사유 기록 (실패해도 흐름을 막지 않게 best-effort).
+// 상한 도달 전엔 'pending'(다음 주기 재시도), 도달 시 종결 사유(no_source/temporary)를 기록.
+async function bumpSummaryAttempts(video: PendingVideo, cause: 'no_source' | 'temporary', detail: string): Promise<void> {
   const next = (video.summary_attempts ?? 0) + 1
-  const { error } = await supabase.from('videos').update({ summary_attempts: next }).eq('video_id', video.video_id)
+  const failReason = next >= MAX_SUMMARY_ATTEMPTS ? cause : 'pending'
+  const { error } = await supabase
+    .from('videos')
+    .update({ summary_attempts: next, fail_reason: failReason, fail_detail: detail.slice(0, 500) })
+    .eq('video_id', video.video_id)
   if (error) console.error(`❌ summary_attempts 증가 실패 (${video.video_id}): ${error.message}`)
 }
 
 // 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
 async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Promise<boolean> {
+  // 라이브/예정 영상: 요약 시도 없이 skip. summary_attempts는 소모하지 않는다
+  // (라이브 종료 후 일반 영상이 되면 다음 실행에서 정상 요약되도록).
+  const markedLive =
+    video.live_broadcast_content === 'live' ||
+    video.live_broadcast_content === 'upcoming' ||
+    video.fail_reason === 'live'
+  if (markedLive) {
+    const fresh = await fetchLiveBroadcastContent(video.video_id)
+    if (fresh !== 'none') {
+      // 아직 라이브/예정 (또는 확인 실패 → 다음 주기 재확인). 자막 API 호출 전에 차단해 크레딧 낭비 방지.
+      if (fresh) {
+        await supabase
+          .from('videos')
+          .update({ live_broadcast_content: fresh, fail_reason: 'live', fail_detail: `liveBroadcastContent=${fresh}` })
+          .eq('video_id', video.video_id)
+      }
+      console.log(`📺 라이브/예정 영상 → 요약 제외 (${video.video_id}): liveBroadcastContent=${fresh ?? 'unknown'}`)
+      return false
+    }
+    // 라이브 종료 → 일반 영상으로 전환 후 요약 진행
+    await supabase
+      .from('videos')
+      .update({ live_broadcast_content: 'none', fail_reason: null, fail_detail: null })
+      .eq('video_id', video.video_id)
+    console.log(`📺 라이브 종료 감지 → 일반 요약 진행 (${video.video_id})`)
+  }
   const { transcript, description, unavailable } = await getTranscript(video.video_id) // userId 없음 (공유)
   // 비공개/삭제 영상: Gemini 호출 없이 풀에서 제거 (발송 대상에서도 빠짐)
   if (unavailable) {
@@ -334,8 +396,10 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
   // 실패 문구가 공유 풀에 영구 캐시되어 모든 사용자가 영원히 실패본을 받는다.
   // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨 (단 상한까지만).
   if (result.errorInfo || result.summaryBasis === '요약 실패') {
-    console.error(`❌ 요약 실패 → 저장 생략, 재시도 대기 (${video.video_id}): ${result.errorInfo ?? result.summaryBasis}`)
-    await bumpSummaryAttempts(video)
+    const cause = result.failReason === 'no_source' ? 'no_source' : 'temporary'
+    const detail = result.errorInfo ?? result.summaryBasis
+    console.error(`❌ 요약 실패 → 저장 생략, 재시도 대기 (${video.video_id}): ${detail}`)
+    await bumpSummaryAttempts(video, cause, detail)
     return false
   }
   const { error } = await supabase.from('video_summaries').upsert(
@@ -352,8 +416,12 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
   )
   if (error) {
     console.error(`❌ video_summaries 적재 실패 (${video.video_id}): ${error.message}`)
-    await bumpSummaryAttempts(video)
+    await bumpSummaryAttempts(video, 'temporary', `video_summaries upsert: ${error.message}`)
     return false
+  }
+  // 요약 성공 → 이전 실패/대기 사유 정리 (fail_reason/fail_detail = null)
+  if (video.fail_reason || (video.summary_attempts ?? 0) > 0) {
+    await supabase.from('videos').update({ fail_reason: null, fail_detail: null }).eq('video_id', video.video_id)
   }
   return true
 }
@@ -399,6 +467,9 @@ export type PoolVideo = {
   is_short: boolean
   description: string | null
   summary_attempts?: number | null
+  live_broadcast_content?: string | null
+  fail_reason?: string | null
+  fail_detail?: string | null
 }
 
 export type PoolSummary = {
@@ -416,7 +487,7 @@ export async function getVideosFromPool(channelIds: string[], start: Date, end: 
   if (!channelIds.length) return []
   const { data } = await supabase
     .from('videos')
-    .select('video_id, channel_id, title, published_at, duration_seconds, is_short, description, summary_attempts')
+    .select('video_id, channel_id, title, published_at, duration_seconds, is_short, description, summary_attempts, live_broadcast_content, fail_reason, fail_detail')
     .in('channel_id', channelIds)
     .gte('published_at', start.toISOString())
     .lt('published_at', end.toISOString())
@@ -468,7 +539,7 @@ export async function summarizeNow(videoIds: string[], locale: Locale = 'ko'): P
   if (!videoIds.length) return 0
   const { data } = await supabase
     .from('videos')
-    .select('video_id, title, description, summary_attempts')
+    .select('video_id, title, description, summary_attempts, live_broadcast_content, fail_reason')
     .in('video_id', videoIds)
     .lt('summary_attempts', MAX_SUMMARY_ATTEMPTS) // 재시도 상한 초과는 즉시요약 대상에서도 제외
   const targets = (data ?? []) as PendingVideo[]

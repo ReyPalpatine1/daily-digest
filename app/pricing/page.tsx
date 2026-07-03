@@ -247,6 +247,14 @@ export default function PricingPage() {
             })}
           </div>
         </div>
+
+        {/* 요약 한계 고지 */}
+        <div style={{
+          marginTop: 20, fontSize: 12, color: 'var(--text-muted)',
+          textAlign: 'center', lineHeight: 1.6,
+        }}>
+          {pricing.limitNotice}
+        </div>
       </main>
     </div>
   )

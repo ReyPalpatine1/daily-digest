@@ -119,4 +119,7 @@ export type Digest = {
   is_breaking: boolean
   is_read: boolean
   created_at: string
+  summary_basis?: string | null // 요약 근거 라벨 (자막/설명 기반 등, 한국어 원문)
+  fail_reason?: string | null // no_source | temporary | pending | live — 요약 성공 시 null
+  fail_detail?: string | null // 관리자 디버그용 세부 사유
 }

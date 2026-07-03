@@ -56,6 +56,21 @@ const channelIcons: Record<ChannelId, typeof Mail> = {
   line: MessageSquare,
 }
 
+// 기록 항목의 요약 상태 라벨 키 (fail_reason 우선, 없으면 summary_basis 기반).
+// 매칭 없으면 null → 라벨 생략 (과거 데이터 호환: fail_reason/summary_basis 없는 행).
+function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
+  switch (d.fail_reason) {
+    case 'no_source': return { labelKey: 'history.failNoSourceLabel', noteKey: 'history.failNoSourceNote' }
+    case 'temporary': return { labelKey: 'history.failTemporaryLabel', noteKey: 'history.failTemporaryNote' }
+    case 'pending': return { labelKey: 'history.failPendingLabel', noteKey: 'history.failPendingNote' }
+    case 'live': return { labelKey: 'history.failLiveLabel', noteKey: 'history.failLiveNote' }
+  }
+  const basis = d.summary_basis ?? ''
+  if (basis.includes('자막')) return { labelKey: 'history.basisTranscriptLabel' }
+  if (basis.includes('설명')) return { labelKey: 'history.basisDescriptionLabel', noteKey: 'history.basisDescriptionNote' }
+  return null
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
@@ -2427,12 +2442,48 @@ export default function Dashboard() {
                             padding: '14px 16px 16px',
                             borderTop: '0.5px solid var(--border-light)',
                           }}>
-                            <div style={{
-                              fontSize: 13, color: 'var(--text-secondary)',
-                              lineHeight: 1.7, marginBottom: 14,
-                            }}>
-                              {digest.summary}
-                            </div>
+                            {/* 요약 상태 라벨 (자막/설명 기반, 실패·대기·라이브 사유) */}
+                            {(() => {
+                              const status = summaryStatusKeys(digest)
+                              if (!status) return null
+                              return (
+                                <div style={{ marginBottom: 12 }}>
+                                  <div style={{
+                                    fontSize: 11, fontWeight: 600,
+                                    color: 'var(--text-muted)', letterSpacing: 0.2,
+                                  }}>
+                                    {t(status.labelKey)}
+                                  </div>
+                                  {status.noteKey && (
+                                    <div style={{
+                                      fontSize: 11, color: 'var(--text-muted)',
+                                      lineHeight: 1.6, marginTop: 3,
+                                    }}>
+                                      {t(status.noteKey)}
+                                    </div>
+                                  )}
+                                  {isAdmin && digest.fail_detail && (
+                                    <div style={{
+                                      fontSize: 11, color: 'var(--text-muted)',
+                                      fontFamily: 'monospace', marginTop: 3,
+                                      wordBreak: 'break-all',
+                                    }}>
+                                      [debug] {digest.fail_detail}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
+
+                            {/* 실패·대기·라이브 항목은 자리표시 문구 대신 위 라벨이 사유를 설명 */}
+                            {!digest.fail_reason && (
+                              <div style={{
+                                fontSize: 13, color: 'var(--text-secondary)',
+                                lineHeight: 1.7, marginBottom: 14,
+                              }}>
+                                {digest.summary}
+                              </div>
+                            )}
 
                             {digest.key_points?.length > 0 && (
                               <div style={{ marginBottom: 14 }}>

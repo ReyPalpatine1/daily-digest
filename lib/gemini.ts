@@ -27,6 +27,8 @@ export type SummaryResult = {
   model?: string // 요약에 사용한 모델명
   errorInfo?: string
   attempts?: number
+  failReason?: string // 실패 사유 코드 (no_source: 자막·설명 없음 → Gemini 미호출. 그 외 실패는 temporary로 간주)
+  failDetail?: string // 관리자 디버그용 세부 사유 (발송 경로에서 채워 전달)
 }
 
 // 깨진 JSON 복구용: 첫 '{'부터 중괄호 깊이를 세어 깊이가 0이 되는 지점까지 잘라낸다.
@@ -81,9 +83,9 @@ export async function summarizeVideo(
     summaryBasis = '영상 설명 기반 요약'
     lengthGuide = "summary는 3~4문장. keyPoints는 3~4개, '핵심 내용 — 부연' 형태. timeline은 빈 배열 []."
   } else {
-    content = ''
-    summaryBasis = '제목 기반 요약'
-    lengthGuide = "summary는 2문장 이내로 간결하게. keyPoints는 2~3개, 부연 없이 제목에서 합리적으로 추론 가능한 범위만. timeline은 빈 배열 []."
+    // 자막·설명 모두 없음 → 제목만으로는 요약하지 않는다 (환각 위험). Gemini 미호출 즉시 실패.
+    console.log(`❌ 자막·설명 없음 → 요약 불가 (no_source): ${title}`)
+    return { ...failureResult(GEMINI_MODEL, '자막·설명 없음 (no_source)', 0), failReason: 'no_source' }
   }
 
   const langInstruction = locale !== 'ko'

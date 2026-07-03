@@ -202,6 +202,14 @@ async function runDigest(
       }
     }
 
+    // 실패 사유 코드 → 이메일 문구 번역 키
+    const failTextKeys: Record<string, string> = {
+      no_source: 'digest.failNoSource',
+      temporary: 'digest.failTemporary',
+      pending: 'digest.failPending',
+      live: 'digest.failLive',
+    }
+
     // 다이제스트 아이템 구성 (공유 요약 + 사용자별 속보 판정)
     const digestItems = []
     const failedItems = []
@@ -210,6 +218,14 @@ async function runDigest(
       const s = summaries.get(v.video_id)
       const isBreaking = matchesKeyword(v.title, keywords)
       const url = `https://youtube.com/watch?v=${v.video_id}`
+      // 요약 없음 → 사유 판정: 라이브 > 풀에 기록된 사유 > (상한 도달=temporary / 미도달=pending)
+      let failReason: string | null = null
+      if (!s) {
+        const isLive = v.live_broadcast_content === 'live' || v.live_broadcast_content === 'upcoming'
+        failReason = isLive
+          ? 'live'
+          : (v.fail_reason ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS ? 'temporary' : 'pending'))
+      }
       const item = {
         channel: meta.alias,
         category: meta.category,
@@ -222,14 +238,14 @@ async function runDigest(
           url,
         },
         summary: {
-          // 요약 없음: 재시도 상한 도달 시 영구 실패 문구, 그 외엔 "준비 중"
-          summary: s?.summary ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS
-            ? et(userLocale, 'digest.summaryUnavailable')
-            : '요약을 준비 중이에요.'),
+          // 요약 없음: 사유별 구분 문구 (텔레그램 등 요약 텍스트를 그대로 쓰는 채널 호환)
+          summary: s?.summary ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
           // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
           keyPoints: Array.isArray(s?.key_points) ? s.key_points : [],
           timeline: Array.isArray(s?.timeline) ? s.timeline : [],
           summaryBasis: s?.summary_basis ?? '요약',
+          failReason: failReason ?? undefined,
+          failDetail: !s ? (v.fail_detail ?? undefined) : undefined,
         },
         isBreaking,
       }
@@ -294,6 +310,9 @@ async function runDigest(
             is_breaking: item.isBreaking,
             is_read: false,
             summary_basis: item.summary.summaryBasis,
+            // 요약 성공 시 null (upsert가 이전 실패 기록도 정리), 실패·라이브·대기 시 사유 기록
+            fail_reason: item.summary.failReason ?? null,
+            fail_detail: item.summary.failDetail ?? null,
           },
           { onConflict: 'user_id,video_id' }
         )

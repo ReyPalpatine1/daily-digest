@@ -16,6 +16,7 @@ export type EmailDigestItem = {
     timeline: { time: string; content: string }[]
     summaryBasis?: string
     errorInfo?: string
+    failReason?: string // no_source | temporary | pending | live — 실패·대기·라이브 항목 표기용
   }
 }
 
@@ -111,10 +112,20 @@ function basisTranslationKey(summaryBasis?: string): string | null {
   return null
 }
 
+// fail_reason 코드 → 실패·대기·라이브 문구 번역 키. 매칭 안 되면 null(정상 요약 표기).
+function failReasonTranslationKey(failReason?: string): string | null {
+  if (failReason === 'no_source') return 'digest.failNoSource'
+  if (failReason === 'temporary') return 'digest.failTemporary'
+  if (failReason === 'pending') return 'digest.failPending'
+  if (failReason === 'live') return 'digest.failLive'
+  return null
+}
+
 function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
   const kp = safeArray<string>(item.summary.keyPoints)
   const tl = safeArray<{ time: string; content: string }>(item.summary.timeline)
   const basisKey = basisTranslationKey(item.summary.summaryBasis)
+  const failKey = failReasonTranslationKey(item.summary.failReason)
   return `
     <div style="background:#FFFFFF;border-radius:10px;padding:20px 24px;border:1px solid #E5E5E5;margin-bottom:12px;">
       ${item.summary.errorInfo ? '' : ''}
@@ -127,9 +138,13 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       <div style="font-size:11px;color:#A1A1AA;margin-bottom:12px;">
         🕐 ${escapeHtml(formatTime(item.video.publishedAt, locale))} ${et(locale, 'digest.uploadedAt')}
       </div>
+      ${failKey ? `
+      <div style="font-size:12px;color:#A1A1AA;line-height:1.7;margin-bottom:12px;">
+        ${escapeHtml(et(locale, failKey))}
+      </div>` : `
       <div style="font-size:13px;color:#525252;line-height:1.7;margin-bottom:12px;">
         ${escapeHtml(item.summary.summary)}
-      </div>
+      </div>`}
       ${kp.length > 0 ? `
         <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">
           <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.keyPoints')}</div>
