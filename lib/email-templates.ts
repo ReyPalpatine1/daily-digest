@@ -20,7 +20,7 @@ export type EmailDigestItem = {
   }
 }
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://daily-digest-one-vert.vercel.app').replace(/\/+$/, '')
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.com').replace(/\/+$/, '')
 
 function dateLocaleCode(locale: EmailLocale): string {
   return ({ ko: 'ko-KR', en: 'en-US', zh: 'zh-CN', ja: 'ja-JP' } as Record<EmailLocale, string>)[locale] ?? 'en-US'

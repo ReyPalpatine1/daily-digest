@@ -18,7 +18,7 @@ declare global {
 
 // 자기 공개 URL (global_fetch_strictly_public 플래그가 켜져 있어 자기 호출 가능).
 // 기존 GitHub Actions와 동일 동작: 각 라우트가 독립 invocation이라 subrequest budget도 분리됨.
-const BASE_URL = "https://daily-digest.8539519.workers.dev";
+const BASE_URL = "https://dailyvideodigest.com";
 
 export default {
   fetch: handler.fetch,
