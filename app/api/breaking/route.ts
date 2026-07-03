@@ -1,7 +1,8 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId } from '@/lib/youtube'
-import { sendAdminBulkErrorEmail } from '@/lib/mailer'
+import { sendAdminFailureAlert } from '@/lib/admin-alert'
+import { logErrorEvent } from '@/lib/error-log'
 import { deliverBreaking } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { getRecentPoolVideos, getSummary, summarizeNow, matchesKeyword } from '@/lib/video-pool'
@@ -247,22 +248,27 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       } catch (e) {
         await markBreakingFailed(userId, video.video_id, String(e))
         console.error(`[breaking] 발송 실패 user=${userId} video=${video.video_id}:`, e)
+        await logErrorEvent({
+          source: 'breaking',
+          videoId: video.video_id,
+          videoTitle: video.title,
+          channelName: meta.alias,
+          failReason: 'send_error',
+          failDetail: String(e),
+        })
       }
     }
 
     if (failedItems.length > 0) {
-      console.log(`[breaking] 관리자 오류 메일 발송 시도: userId=${userId}, failedCount=${failedItems.length}`)
-      try {
-        await sendAdminBulkErrorEmail(
-          profile?.name ?? '사용자',
-          settings.email,
-          userId,
-          failedItems,
-          'breaking'
-        )
-      } catch (adminMailError) {
-        console.error(`[breaking] 관리자 오류 메일 발송 실패: userId=${userId}`, adminMailError)
-      }
+      console.log(`[breaking] 관리자 오류 알림 시도: userId=${userId}, failedCount=${failedItems.length}`)
+      // admin_alert_settings에 따라 메일/텔레그램 분기. 내부에서 전부 try-catch.
+      await sendAdminFailureAlert(
+        profile?.name ?? '사용자',
+        settings.email,
+        userId,
+        failedItems,
+        'breaking'
+      )
     }
 
     return {
@@ -271,6 +277,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
     }
   } catch (error) {
     console.error('Breaking route error:', error)
+    await logErrorEvent({ source: 'breaking', failDetail: `breaking 처리 실패 (userId=${userId}): ${String(error)}` })
     return { status: 500, body: { error: '서버 오류' } }
   }
 }

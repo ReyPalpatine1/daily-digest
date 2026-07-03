@@ -14,7 +14,7 @@ const ADMIN_BAR_FG = '#FAFAFA'
 const ADMIN_BAR_MUTED = '#71717A'
 const ADMIN_BAR_SUBTLE = '#1F1F1F'
 
-export type AdminNavKey = 'dashboard' | 'users' | 'content' | 'system' | 'email'
+export type AdminNavKey = 'dashboard' | 'users' | 'errors' | 'content' | 'system' | 'email'
 
 export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
   const router = useRouter()
@@ -23,6 +23,7 @@ export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
   const navItems: { key: AdminNavKey; label: string; href?: string }[] = [
     { key: 'dashboard', label: t('admin.menuDashboard'), href: '/admin' },
     { key: 'users', label: t('admin.menuUsers'), href: '/admin/users' },
+    { key: 'errors', label: t('admin.menuErrors'), href: '/admin/errors' },
     { key: 'content', label: t('admin.menuContent') },
     { key: 'system', label: t('admin.menuSystem') },
     { key: 'email', label: '📧 Email', href: '/admin/email-preview' },

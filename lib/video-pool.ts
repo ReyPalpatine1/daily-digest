@@ -4,6 +4,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { nowUtc } from './time'
 import { getTranscript, summarizeVideo } from './gemini'
+import { logErrorEvent } from './error-log'
 import type { Locale } from './i18n/translations'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
@@ -264,6 +265,21 @@ async function collectChannelVideos(channel: UniqueChannel): Promise<number> {
   // video_id PRIMARY KEY → upsert로 중복 자동 방지
   await supabase.from('videos').upsert(rows, { onConflict: 'video_id' })
 
+  // 라이브/예정 감지 영상은 관리자 오류 로그에도 적재 (video_id+reason 중복 시 skip)
+  for (const row of rows) {
+    if (row.fail_reason === 'live') {
+      await logErrorEvent({
+        source: 'summary',
+        videoId: row.video_id,
+        videoTitle: row.title,
+        channelId: channel.channelId,
+        failReason: 'live',
+        failDetail: row.fail_detail,
+        dedupe: true,
+      })
+    }
+  }
+
   // 가장 최신 영상의 publishedAt으로 상태 갱신 (newVideos[0]이 최신)
   const newest = newVideos.reduce((a, b) => (new Date(a.publishedAt) >= new Date(b.publishedAt) ? a : b))
   await upsertChannelState(channel.channelId, playlistId, newest.publishedAt)
@@ -351,6 +367,17 @@ async function bumpSummaryAttempts(video: PendingVideo, cause: 'no_source' | 'te
     .update({ summary_attempts: next, fail_reason: failReason, fail_detail: detail.slice(0, 500) })
     .eq('video_id', video.video_id)
   if (error) console.error(`❌ summary_attempts 증가 실패 (${video.video_id}): ${error.message}`)
+  // 최종 실패 확정(상한 도달) 시에만 관리자 오류 로그 적재 (pending은 소음 방지 위해 제외)
+  if (next >= MAX_SUMMARY_ATTEMPTS) {
+    await logErrorEvent({
+      source: 'summary',
+      videoId: video.video_id,
+      videoTitle: video.title,
+      failReason: cause,
+      failDetail: detail,
+      dedupe: true,
+    })
+  }
 }
 
 // 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
@@ -370,6 +397,15 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
           .from('videos')
           .update({ live_broadcast_content: fresh, fail_reason: 'live', fail_detail: `liveBroadcastContent=${fresh}` })
           .eq('video_id', video.video_id)
+        // 라이브 감지 적재 (수집 시 이미 적재됐으면 dedupe로 skip)
+        await logErrorEvent({
+          source: 'summary',
+          videoId: video.video_id,
+          videoTitle: video.title,
+          failReason: 'live',
+          failDetail: `liveBroadcastContent=${fresh}`,
+          dedupe: true,
+        })
       }
       console.log(`📺 라이브/예정 영상 → 요약 제외 (${video.video_id}): liveBroadcastContent=${fresh ?? 'unknown'}`)
       return false

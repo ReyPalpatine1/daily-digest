@@ -2,7 +2,9 @@ import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId } from '@/lib/youtube'
 import { yesterdayRangeUtc, formatDateKst } from '@/lib/time'
-import { sendAdminBulkErrorEmail, DigestTrigger } from '@/lib/mailer'
+import { DigestTrigger } from '@/lib/mailer'
+import { sendAdminFailureAlert } from '@/lib/admin-alert'
+import { logErrorEvent, cleanupOldErrorLogs } from '@/lib/error-log'
 import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
@@ -190,6 +192,7 @@ async function runDigest(
           await deliverEmptyDigest(settings, userName, userLocale, userId)
         } catch (e) {
           console.error(`[digest] 빈 다이제스트 메일 발송 실패 userId=${userId}:`, e)
+          await logErrorEvent({ source: 'digest', failReason: 'send_error', failDetail: `빈 다이제스트 발송 실패 (userId=${userId}): ${String(e)}` })
         }
       }
       if (trigger === 'cron') await markScheduledSent(userId)
@@ -258,6 +261,7 @@ async function runDigest(
           videoTitle: v.title,
           videoUrl: url,
           errorInfo: '요약 없음 (풀 미스 + 즉시요약 실패)',
+          reason: failReason ?? undefined, // 텔레그램 알림 표기용 (이메일 포맷 불변)
         })
       }
     }
@@ -280,6 +284,14 @@ async function runDigest(
         } catch (e) {
           await markBreakingFailed(userId, item.video.videoId, String(e))
           console.error(`[digest] 속보 메일 실패 (${item.video.videoId}):`, e)
+          await logErrorEvent({
+            source: 'breaking',
+            videoId: item.video.videoId,
+            videoTitle: item.video.title,
+            channelName: item.channel,
+            failReason: 'send_error',
+            failDetail: String(e),
+          })
         }
       }
     }
@@ -324,18 +336,16 @@ async function runDigest(
       }
     }
 
-    // 오류 항목 번들 메일 (요약 누락 등) — 실패해도 응답엔 영향 없게
+    // 오류 항목 번들 알림 (요약 누락 등) — admin_alert_settings에 따라 메일/텔레그램 분기.
+    // 내부에서 전부 try-catch 하므로 실패해도 응답엔 영향 없음.
     if (failedItems.length > 0) {
-      console.log(`[digest] 관리자 오류 메일 발송 시도: userId=${userId}, failedCount=${failedItems.length}`)
-      try {
-        await sendAdminBulkErrorEmail(userName, settings.email, userId, failedItems, trigger)
-      } catch (adminMailError) {
-        console.error(`[digest] 관리자 오류 메일 발송 실패: userId=${userId}`, adminMailError)
-      }
+      console.log(`[digest] 관리자 오류 알림 시도: userId=${userId}, failedCount=${failedItems.length}`)
+      await sendAdminFailureAlert(userName, settings.email, userId, failedItems, trigger)
     }
 
-    // 30일 지난 기록 삭제
+    // 30일 지난 기록 삭제 (digests + error_log)
     await supabase.rpc('delete_old_digests')
+    await cleanupOldErrorLogs()
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     const successCount = digestItems.length - failedItems.length
@@ -367,6 +377,7 @@ async function runDigest(
     if (trigger === 'cron') {
       try { await markScheduledFailed(userId, String(error)) } catch { /* 기록 실패는 무시 */ }
     }
+    await logErrorEvent({ source: 'digest', failDetail: `digest 처리 실패 (userId=${userId}, trigger=${trigger}): ${String(error)}` })
     return { status: 500, body: { error: '서버 오류' } }
   }
 }

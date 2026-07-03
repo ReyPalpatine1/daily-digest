@@ -203,7 +203,7 @@ export async function sendWelcomeEmail(
   })
 }
 
-type FailedItem = {
+export type FailedItem = {
   channel: string
   category: string
   emoji: string
@@ -211,6 +211,7 @@ type FailedItem = {
   videoUrl: string
   errorInfo: string
   attempts?: number
+  reason?: string // fail_reason 코드 (텔레그램 알림 표기용 — 이메일 포맷엔 미사용)
 }
 
 export type DigestTrigger = 'manual' | 'cron' | 'breaking'
