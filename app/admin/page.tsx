@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { PlanBadge, getPlanBadge } from '@/components/PlanBadge'
+import { PlanBadge } from '@/components/PlanBadge'
 import { AdminHeader } from '@/components/AdminHeader'
 
 type AdminStats = {
@@ -34,7 +34,6 @@ type AdminStats = {
     errors24h: number | null
     dbResponseMs: number
   }
-  recentUsers: { email: string; plan: string; joinedAt: string | null }[]
   topChannels: { name: string; category: string | null; subscribers: number }[]
   last7Days: { date: string; gemini: number; youtube: number; supadata: number }[]
 }
@@ -165,6 +164,18 @@ export default function AdminPage() {
 
   const max7d = Math.max(1, ...s.last7Days.map(d => d.gemini + d.youtube + d.supadata))
 
+  // 시스템 상태 카드용 cron 색/문구 (/admin/system에서 대시보드로 복귀)
+  const cronColor =
+    s.system.cronStatus === 'healthy' ? 'var(--success)'
+      : s.system.cronStatus === 'warning' ? 'var(--warning)'
+        : 'var(--danger)'
+  const cronText =
+    s.system.cronStatus === 'healthy' ? t('admin.cronHealthy')
+      : s.system.cronStatus === 'warning' ? t('admin.cronWarning')
+        : t('admin.cronError')
+  const sysRow: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between' }
+  const sysLabel: React.CSSProperties = { fontSize: 12, color: 'var(--text-secondary)' }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
       <AdminHeader activeKey="dashboard" />
@@ -234,34 +245,40 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* 4. 최근 가입 (시스템 상태는 /admin/system, 인기 콘텐츠는 /admin/content로 이동) */}
+          {/* 4. 시스템 상태 (인기 콘텐츠는 /admin/content, 외부 API·고정비·링크는 /admin/system) */}
           <div style={cardStyle}>
-            {sectionLabel(4, `${t('admin.sec5')} (${s.recentUsers.length})`)}
-            {s.recentUsers.length === 0 ? (
-              <div style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-                {t('admin.empty')}
+            {sectionLabel(4, t('admin.sec4'))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={sysRow}>
+                <span style={sysLabel}>{t('admin.cronStatus')}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: cronColor }} />
+                  {cronText}
+                </span>
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {s.recentUsers.slice(0, 6).map((u, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 8px',
-                    borderBottom: i < Math.min(6, s.recentUsers.length) - 1 ? '0.5px solid var(--border-light)' : 'none',
-                  }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
-                    <span style={{
-                      fontSize: 12, color: 'var(--text-primary)',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
-                    }}>{u.email}</span>
-                    <PlanBadge plan={getPlanBadge(u.email, u.plan)} size="sm" />
-                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                      {u.joinedAt ? new Date(u.joinedAt).toLocaleDateString(dateLocale, { month: 'numeric', day: 'numeric' }) : '-'}
-                    </span>
-                  </div>
-                ))}
+              <div style={sysRow}>
+                <span style={sysLabel}>{t('admin.cronLastRun')}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                  {s.system.cronLastRun ? new Date(s.system.cronLastRun).toLocaleString(dateLocale) : t('admin.noData')}
+                </span>
               </div>
-            )}
+              <div style={sysRow}>
+                <span style={sysLabel}>{t('admin.sendSuccess')}</span>
+                <span style={{ fontSize: 12, color: s.system.sendSuccessRate == null ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                  {s.system.sendSuccessRate == null ? t('admin.noData') : `${s.system.sendSuccessRate}%`}
+                </span>
+              </div>
+              <div style={sysRow}>
+                <span style={sysLabel}>{t('admin.errors24h')}</span>
+                <span style={{ fontSize: 12, color: s.system.errors24h == null ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                  {s.system.errors24h == null ? t('admin.noData') : nf.format(s.system.errors24h)}
+                </span>
+              </div>
+              <div style={sysRow}>
+                <span style={sysLabel}>{t('admin.dbResponse')}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{s.system.dbResponseMs}ms</span>
+              </div>
+            </div>
           </div>
 
         </div>

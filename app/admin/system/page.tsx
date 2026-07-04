@@ -9,6 +9,8 @@ import { AdminHeader } from '@/components/AdminHeader'
 // /admin(대시보드)의 "시스템 상태" 섹션을 분리한 페이지.
 // 데이터는 기존 /api/admin/usage 응답의 system/api를 재사용한다.
 // 2단계: 외부 API 현황판 + 고정비 안내 + 바로가기 링크 모음 추가.
+// 시스템 상태(cron·발송 성공률·에러·DB 응답) 블록은 대시보드(/admin)로 복귀했다.
+// 이 페이지는 외부 API 현황 + 고정비 안내 + 바로가기 링크 전용.
 type ApiEntry = { today: { count: number }; limit: number | null }
 type SystemStats = {
   generatedAt: string
@@ -17,13 +19,6 @@ type SystemStats = {
     youtube: ApiEntry
     supadata: ApiEntry
     transcriptapi: ApiEntry
-  }
-  system: {
-    cronLastRun: string | null
-    cronStatus: 'healthy' | 'warning' | 'error'
-    sendSuccessRate: number | null
-    errors24h: number | null
-    dbResponseMs: number
   }
 }
 
@@ -101,15 +96,6 @@ export default function AdminSystemPage() {
 
   const s = stats // 위 가드로 여기서는 non-null이 보장됨
 
-  const cronColor =
-    s.system.cronStatus === 'healthy' ? 'var(--success)'
-      : s.system.cronStatus === 'warning' ? 'var(--warning)'
-        : 'var(--danger)'
-  const cronText =
-    s.system.cronStatus === 'healthy' ? t('admin.cronHealthy')
-      : s.system.cronStatus === 'warning' ? t('admin.cronWarning')
-        : t('admin.cronError')
-
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
       <AdminHeader activeKey="system" />
@@ -121,40 +107,6 @@ export default function AdminSystemPage() {
           </h1>
           <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
             {new Date(s.generatedAt).toLocaleString(dateLocale)} · {t('admin.subtitle')}
-          </div>
-        </div>
-
-        <div style={{ ...cardStyle, maxWidth: 480 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.cronStatus')}</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: cronColor }} />
-                {cronText}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.cronLastRun')}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
-                {s.system.cronLastRun ? new Date(s.system.cronLastRun).toLocaleString(dateLocale) : t('admin.noData')}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.sendSuccess')}</span>
-              <span style={{ fontSize: 12, color: s.system.sendSuccessRate == null ? 'var(--text-muted)' : 'var(--text-primary)' }}>
-                {s.system.sendSuccessRate == null ? t('admin.noData') : `${s.system.sendSuccessRate}%`}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.errors24h')}</span>
-              <span style={{ fontSize: 12, color: s.system.errors24h == null ? 'var(--text-muted)' : 'var(--text-primary)' }}>
-                {s.system.errors24h == null ? t('admin.noData') : nf.format(s.system.errors24h)}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.dbResponse')}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{s.system.dbResponseMs}ms</span>
-            </div>
           </div>
         </div>
 

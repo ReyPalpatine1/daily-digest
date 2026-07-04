@@ -190,16 +190,22 @@ export async function GET() {
     cronStatus = ageHours <= 26 ? 'healthy' : ageHours <= 50 ? 'warning' : 'error'
   }
 
-  // === 최근 가입자 ===
-  const recentUsers = profileRows.slice(0, 10).map(p => {
-    const raw = (p.plan ?? 'free').toString().toLowerCase()
-    const plan = raw === 'pro' || raw === 'vip' ? raw : 'free'
-    return {
-      email: p.email ?? '-',
-      plan,
-      joinedAt: p.created_at ?? null,
-    }
-  })
+  // === 발송 성공률(전체, 최근 30일) + 24시간 에러 수 ===
+  // 발송 성공률: email_logs status='success'/전체 비율(%). users 라우트의 success/total 정의를
+  //   전체 대상(사용자 무관)·최근 30일로 적용. 로그 0건이면 null(화면에서 "데이터 없음").
+  // 24시간 에러: error_log occurred_at >= now-24h 건수. 테이블 없거나 0이면 0(→ "0건" 표시).
+  // count-only(head:true)라 행을 끌어오지 않는다. dbResponseMs 측정창 밖(별도)에서 실행.
+  const thirtyDaysAgoUtc = new Date(Date.now() - 30 * 86_400_000).toISOString()
+  const dayAgoUtc = new Date(Date.now() - 24 * 3_600_000).toISOString()
+  const [emailTotalRes, emailSuccessRes, errors24hRes] = await Promise.all([
+    serviceClient.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', thirtyDaysAgoUtc),
+    serviceClient.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', thirtyDaysAgoUtc).eq('status', 'success'),
+    serviceClient.from('error_log').select('*', { count: 'exact', head: true }).gte('occurred_at', dayAgoUtc),
+  ])
+  const emailTotalCount = emailTotalRes.error ? 0 : (emailTotalRes.count ?? 0)
+  const emailSuccessCount = emailSuccessRes.error ? 0 : (emailSuccessRes.count ?? 0)
+  const sendSuccessRate = emailTotalCount > 0 ? Math.round((emailSuccessCount / emailTotalCount) * 100) : null
+  const errors24h = errors24hRes.error ? 0 : (errors24hRes.count ?? 0)
 
   // === 인기 콘텐츠 (구독자 많은 채널) — DB 집계 RPC ===
   const topChannels = (topChannelsRes.error ? [] : topChannelsRes.data ?? []).map((c: any) => ({
@@ -239,11 +245,10 @@ export async function GET() {
     system: {
       cronLastRun,
       cronStatus,
-      sendSuccessRate: null, // 실패 추적 데이터 없음
-      errors24h: null,       // 에러 추적 데이터 없음
+      sendSuccessRate, // email_logs 최근 30일 성공률(%) — 로그 없으면 null
+      errors24h,       // error_log 최근 24시간 건수 — 없으면 0
       dbResponseMs,
     },
-    recentUsers,
     topChannels,
     last7Days: Array.from(last7DaysMap.values()),
   }
