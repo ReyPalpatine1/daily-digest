@@ -9,6 +9,7 @@ import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delive
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
+import { isDescriptionBasedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
@@ -211,6 +212,7 @@ async function runDigest(
       temporary: 'digest.failTemporary',
       pending: 'digest.failPending',
       live: 'digest.failLive',
+      pro_only: 'digest.proOnly',
     }
 
     // 다이제스트 아이템 구성 (공유 요약 + 사용자별 속보 판정)
@@ -228,7 +230,13 @@ async function runDigest(
         failReason = isLive
           ? 'live'
           : (v.fail_reason ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS ? 'temporary' : 'pending'))
+      } else if (!isPro && isDescriptionBasedSummary(s.summary_basis)) {
+        // 자막 없는 영상(설명 기반 요약)은 Pro 전용 — 무료 사용자에겐 안내 문구만 발송·저장.
+        // 알 수 없는 basis 값은 게이트하지 않음(isDescriptionBasedSummary가 false 반환).
+        failReason = 'pro_only'
       }
+      // pro_only: 요약은 풀에 존재하지만 본문·포인트·타임라인을 이메일/digests에 노출하지 않음
+      const withheld = failReason === 'pro_only'
       const item = {
         channel: meta.alias,
         category: meta.category,
@@ -241,11 +249,11 @@ async function runDigest(
           url,
         },
         summary: {
-          // 요약 없음: 사유별 구분 문구 (텔레그램 등 요약 텍스트를 그대로 쓰는 채널 호환)
-          summary: s?.summary ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
+          // 요약 없음·pro_only: 사유별 구분 문구 (텔레그램 등 요약 텍스트를 그대로 쓰는 채널 호환)
+          summary: (withheld ? null : s?.summary) ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
           // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
-          keyPoints: Array.isArray(s?.key_points) ? s.key_points : [],
-          timeline: Array.isArray(s?.timeline) ? s.timeline : [],
+          keyPoints: !withheld && Array.isArray(s?.key_points) ? s.key_points : [],
+          timeline: !withheld && Array.isArray(s?.timeline) ? s.timeline : [],
           summaryBasis: s?.summary_basis ?? '요약',
           failReason: failReason ?? undefined,
           failDetail: !s ? (v.fail_detail ?? undefined) : undefined,

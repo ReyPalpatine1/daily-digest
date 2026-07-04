@@ -16,7 +16,7 @@ export type EmailDigestItem = {
     timeline: { time: string; content: string }[]
     summaryBasis?: string
     errorInfo?: string
-    failReason?: string // no_source | temporary | pending | live — 실패·대기·라이브 항목 표기용
+    failReason?: string // no_source | temporary | pending | live | pro_only — 실패·대기·라이브·Pro 전용 항목 표기용
   }
 }
 
@@ -112,12 +112,13 @@ function basisTranslationKey(summaryBasis?: string): string | null {
   return null
 }
 
-// fail_reason 코드 → 실패·대기·라이브 문구 번역 키. 매칭 안 되면 null(정상 요약 표기).
+// fail_reason 코드 → 실패·대기·라이브·Pro 전용 문구 번역 키. 매칭 안 되면 null(정상 요약 표기).
 function failReasonTranslationKey(failReason?: string): string | null {
   if (failReason === 'no_source') return 'digest.failNoSource'
   if (failReason === 'temporary') return 'digest.failTemporary'
   if (failReason === 'pending') return 'digest.failPending'
   if (failReason === 'live') return 'digest.failLive'
+  if (failReason === 'pro_only') return 'digest.proOnly'
   return null
 }
 
@@ -163,7 +164,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       <a href="${escapeHtml(item.video.url)}" style="display:inline-block;padding:7px 14px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
         ${et(locale, 'digest.watchVideo')}
       </a>
-      ${basisKey ? `
+      ${basisKey && !failKey ? `
         <div style="font-size:11px;color:#A1A1AA;margin-top:14px;">${escapeHtml(et(locale, basisKey))}</div>` : ''}
     </div>`
 }

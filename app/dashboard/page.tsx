@@ -64,6 +64,7 @@ function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | 
     case 'temporary': return { labelKey: 'history.failTemporaryLabel', noteKey: 'history.failTemporaryNote' }
     case 'pending': return { labelKey: 'history.failPendingLabel', noteKey: 'history.failPendingNote' }
     case 'live': return { labelKey: 'history.failLiveLabel', noteKey: 'history.failLiveNote' }
+    case 'pro_only': return { labelKey: 'history.proOnlyLabel', noteKey: 'history.proOnlyNote' }
   }
   const basis = d.summary_basis ?? ''
   if (basis.includes('자막')) return { labelKey: 'history.basisTranscriptLabel' }
@@ -2461,6 +2462,17 @@ export default function Dashboard() {
                                     }}>
                                       {t(status.noteKey)}
                                     </div>
+                                  )}
+                                  {digest.fail_reason === 'pro_only' && (
+                                    <button onClick={() => router.push('/pricing')}
+                                      style={{
+                                        background: 'none', border: 'none', padding: 0,
+                                        marginTop: 4, fontSize: 11, color: 'var(--accent)',
+                                        cursor: 'pointer', textDecoration: 'underline',
+                                        textUnderlineOffset: 2,
+                                      }}>
+                                      {t('history.proOnlyPricingLink')}
+                                    </button>
                                   )}
                                   {isAdmin && digest.fail_detail && (
                                     <div style={{

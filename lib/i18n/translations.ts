@@ -171,6 +171,9 @@ export const translations = {
       failPendingNote: '다음 자동 실행에서 다시 시도해요. 잠시 후 확인해 보세요.',
       failLiveLabel: '라이브 영상 · 요약 제외',
       failLiveNote: '라이브(또는 예정) 영상은 요약이 제공되지 않아요. 영상 종료 후 다시 수집되면 요약됩니다.',
+      proOnlyLabel: 'Pro 전용 요약',
+      proOnlyNote: '자막이 없는 영상의 AI 요약은 Pro 플랜에서 제공됩니다.',
+      proOnlyPricingLink: '요금제 보기',
     },
     settings: {
       account: '계정',
@@ -697,6 +700,9 @@ export const translations = {
       failPendingNote: 'We will retry on the next automatic run. Please check back shortly.',
       failLiveLabel: 'Live video · Not summarized',
       failLiveNote: 'Live (or upcoming) videos are not summarized. Once the stream ends and the video is collected again, it will be summarized.',
+      proOnlyLabel: 'Pro-only summary',
+      proOnlyNote: 'AI summaries for videos without captions are available on the Pro plan.',
+      proOnlyPricingLink: 'View plans',
     },
     settings: {
       account: 'Account',
@@ -1222,6 +1228,9 @@ export const translations = {
       failPendingNote: '将在下次自动运行时重试，请稍后再查看。',
       failLiveLabel: '直播视频 · 不提供摘要',
       failLiveNote: '直播（或预告）视频不提供摘要。直播结束后再次收集时会生成摘要。',
+      proOnlyLabel: 'Pro 专属摘要',
+      proOnlyNote: '没有字幕的视频的 AI 摘要在 Pro 计划中提供。',
+      proOnlyPricingLink: '查看套餐',
     },
     settings: {
       account: '账户',
@@ -1744,6 +1753,9 @@ export const translations = {
       failPendingNote: '次回の自動実行で再試行します。しばらくしてからご確認ください。',
       failLiveLabel: 'ライブ動画 · 要約対象外',
       failLiveNote: 'ライブ（または配信予定）動画には要約が提供されません。配信終了後に再収集されると要約されます。',
+      proOnlyLabel: 'Pro 限定要約',
+      proOnlyNote: '字幕のない動画のAI要約は Pro プランで提供されます。',
+      proOnlyPricingLink: 'プランを見る',
     },
     settings: {
       account: 'アカウント',
