@@ -375,6 +375,13 @@ export const translations = {
       channelUnit: '개',
       noData: '—',
       adminLabel: '관리자',
+      // 플랜별 하루 평균 카드
+      avgOverallTitle: '전체 하루 평균 요약',
+      avgFreeTitle: 'Free 하루 평균',
+      avgProTitle: 'Pro 하루 평균',
+      avgPeople: '{n}명',
+      avgDescCommon: '최근 30일 기준 · 관리자 제외',
+      avgProNote: '전환 다음날부터 집계',
     },
     adminErrors: {
       title: '오류 로그',
@@ -904,6 +911,13 @@ export const translations = {
       channelUnit: '',
       noData: '—',
       adminLabel: 'Admin',
+      // plan daily-average cards
+      avgOverallTitle: 'Overall daily avg',
+      avgFreeTitle: 'Free daily avg',
+      avgProTitle: 'Pro daily avg',
+      avgPeople: '{n} users',
+      avgDescCommon: 'Last 30 days · admins excluded',
+      avgProNote: 'Counted from day after conversion',
     },
     adminErrors: {
       title: 'Error Log',
@@ -1429,6 +1443,13 @@ export const translations = {
       channelUnit: '',
       noData: '—',
       adminLabel: '管理员',
+      // 各套餐每日平均卡片
+      avgOverallTitle: '整体每日平均摘要',
+      avgFreeTitle: 'Free 每日平均',
+      avgProTitle: 'Pro 每日平均',
+      avgPeople: '{n}人',
+      avgDescCommon: '近30天 · 不含管理员',
+      avgProNote: '自转换次日起统计',
     },
     adminErrors: {
       title: '错误日志',
@@ -1954,6 +1975,13 @@ export const translations = {
       channelUnit: '',
       noData: '—',
       adminLabel: '管理者',
+      // プラン別1日平均カード
+      avgOverallTitle: '全体の1日平均まとめ',
+      avgFreeTitle: 'Free 1日平均',
+      avgProTitle: 'Pro 1日平均',
+      avgPeople: '{n}人',
+      avgDescCommon: '直近30日 · 管理者を除く',
+      avgProNote: '転換の翌日から集計',
     },
     adminErrors: {
       title: 'エラーログ',

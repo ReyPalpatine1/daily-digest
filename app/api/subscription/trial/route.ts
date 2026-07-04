@@ -87,6 +87,7 @@ export async function POST() {
       plan_status: 'trialing',
       trial_used: true,
       plan_expires_at: planExpiresAt,
+      plan_changed_at: new Date().toISOString(), // 체험 시작 = Pro 전환 시각(통계 기준)
     })
     .eq('id', user.id)
 

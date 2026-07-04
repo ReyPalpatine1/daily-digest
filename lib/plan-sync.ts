@@ -81,7 +81,7 @@ export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vi
     if (isExpired) {
       await supabase
         .from('profiles')
-        .update({ plan: 'free', plan_expires_at: null, plan_status: 'none' })
+        .update({ plan: 'free', plan_expires_at: null, plan_status: 'none', plan_changed_at: nowUtc().toISOString() })
         .eq('id', userId)
       await enforceChannelLimit(userId)
       await restoreDeliveryToEmail(userId)

@@ -56,7 +56,7 @@ export async function POST() {
   // Free로 강등 + 채널 정리 (기존 채널은 삭제하지 않고 비활성화만)
   await serviceClient
     .from('profiles')
-    .update({ plan: 'free', plan_expires_at: null })
+    .update({ plan: 'free', plan_expires_at: null, plan_changed_at: new Date().toISOString() })
     .eq('id', user.id)
 
   await enforceChannelLimit(user.id)

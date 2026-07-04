@@ -65,20 +65,27 @@ export async function GET() {
 
   // === 프로필 조회 (신규 컬럼이 없을 수 있어 방어적으로) ===
   // 프로필 조회와 집계 RPC 3개는 서로 의존이 없어 병렬 실행.
-  const fullCols = 'id, email, name, plan, plan_expires_at, vip_granted_by, vip_granted_at, created_at, admin_note, last_active_at'
+  const baseCols = 'id, email, name, plan, plan_expires_at, vip_granted_by, vip_granted_at, created_at, admin_note, last_active_at'
+  const fullCols = `${baseCols}, plan_changed_at`
   const fetchProfiles = async (): Promise<any[]> => {
     const res = await serviceClient
       .from('profiles')
       .select(fullCols)
       .order('created_at', { ascending: false })
-    if (res.error) {
-      // admin_note / last_active_at / created_at 컬럼이 아직 없는 환경 폴백
-      const fallback = await serviceClient
-        .from('profiles')
-        .select('id, email, name, plan, plan_expires_at, vip_granted_by, vip_granted_at')
-      return fallback.data ?? []
-    }
-    return res.data ?? []
+    if (!res.error) return res.data ?? []
+
+    // plan_changed_at 컬럼이 아직 없는 환경(part A SQL 미실행) 폴백 — 나머지 컬럼은 유지.
+    const midRes = await serviceClient
+      .from('profiles')
+      .select(baseCols)
+      .order('created_at', { ascending: false })
+    if (!midRes.error) return midRes.data ?? []
+
+    // admin_note / last_active_at / created_at 컬럼도 없는 더 오래된 환경 폴백
+    const fallback = await serviceClient
+      .from('profiles')
+      .select('id, email, name, plan, plan_expires_at, vip_granted_by, vip_granted_at')
+    return fallback.data ?? []
   }
 
   const [rows, channelStats, digestStats, emailStats] = await Promise.all([
@@ -114,15 +121,38 @@ export async function GET() {
     emailSuccess.set(uid, Number((row as any).success) || 0)
   }
 
+  // === 플랜별 하루 평균 집계용 상수/수집기 ===
+  const MIN_DAYS_FOR_PLAN_AVG = 0 // 신규 전환자 하한(0이면 전환 다음날부터 바로 포함)
+  const PRO_AVG_MAX_WINDOW = 30   // digests 30일 보관 한계
+  const adminEmailSet = new Set(adminEmails) // 평균 집계에서 관리자 계정 제외용
+  // Pro/VIP 그룹 평균은 전환 다음날~오늘 창의 digest 수로 별도 계산 → 후보만 여기 모은다.
+  const proAggRows: { id: string; windowStartIso: string; windowDays: number }[] = []
+
   const users = rows.map(p => {
     const plan = (p.plan as 'free' | 'pro' | 'vip') ?? 'free'
     const createdAt = p.created_at ?? null
     const vipGrantedAt = p.vip_granted_at ?? null
+    const planChangedAt = p.plan_changed_at ?? null
 
     const joinDays = daysSince(createdAt) // 가입 경과일
-    // 플랜 경과일: vip는 지정일 기준, 그 외는 가입일 기준
-    const planBase = plan === 'vip' && vipGrantedAt ? vipGrantedAt : createdAt
+    // 플랜 경과일(=Pro N일째): 전환일 우선 → (vip)지정일 → 가입일 폴백. 전환 당일을 1일째로 표시.
+    const planBase = planChangedAt ?? (plan === 'vip' && vipGrantedAt ? vipGrantedAt : createdAt)
     const planDays = daysSince(planBase)
+
+    // === Pro 그룹 평균 후보 수집 (관리자 제외, 전환 시점 아는 pro/vip만) ===
+    // conversionBase: plan_changed_at 우선, 없으면 vip는 vip_granted_at. 전환 시점 모르는 일반 pro는 제외.
+    const conversionBase = planChangedAt ?? (plan === 'vip' && vipGrantedAt ? vipGrantedAt : null)
+    if ((plan === 'pro' || plan === 'vip') && conversionBase && !adminEmailSet.has((p.email ?? '').toLowerCase())) {
+      // 창 시작 = 전환 다음 날(전환 당일 제외 — 당일 아침 다이제스트는 이전 플랜으로 발송됐을 수 있어 오염 방지)
+      const windowStartMs = new Date(conversionBase).getTime() + DAY_MS
+      if (!Number.isNaN(windowStartMs)) {
+        const windowStartIso = new Date(windowStartMs).toISOString()
+        const windowDays = Math.min(daysSince(windowStartIso), PRO_AVG_MAX_WINDOW)
+        if (windowDays > MIN_DAYS_FOR_PLAN_AVG) {
+          proAggRows.push({ id: p.id, windowStartIso, windowDays })
+        }
+      }
+    }
 
     const totalDigests = digestCount.get(p.id) ?? 0
     // digests는 30일 자동삭제라 분자가 최근 30일치뿐 → 분모도 min(가입경과일, 30)으로
@@ -164,8 +194,36 @@ export async function GET() {
     vip: users.filter(u => u.plan === 'vip').length,
   }
 
+  // === 플랜별 하루 평균 3종 (관리자 제외, "평균의 평균") ===
+  const round1 = (n: number) => Math.round(n * 10) / 10
+  const mean = (vals: number[]) => (vals.length ? round1(vals.reduce((s, v) => s + v, 0) / vals.length) : 0)
+
+  const nonAdminUsers = users.filter(u => !adminEmailSet.has(u.email.toLowerCase()))
+  // 전체·Free는 개별 avgDigestsPerDay(가입경과일 min30 기준) 사용
+  const overallVals = nonAdminUsers.map(u => u.avgDigestsPerDay)
+  const freeVals = nonAdminUsers.filter(u => u.plan === 'free').map(u => u.avgDigestsPerDay)
+
+  // Pro 그룹은 전환 다음날~오늘 창의 digest 수로 개별 하루평균을 다시 구해 평균.
+  // 후보별 count-only 쿼리(head:true)라 행을 끌어오지 않는다.
+  const proVals = await Promise.all(
+    proAggRows.map(async a => {
+      const { count } = await serviceClient
+        .from('digests')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', a.id)
+        .gte('created_at', a.windowStartIso)
+      return a.windowDays > 0 ? round1((count ?? 0) / a.windowDays) : 0
+    })
+  )
+
+  const planAverages = {
+    overall: { avg: mean(overallVals), count: overallVals.length },
+    free: { avg: mean(freeVals), count: freeVals.length },
+    pro: { avg: mean(proVals), count: proVals.length },
+  }
+
   // counts 는 기존 호환을 위해 동일 객체 유지
-  const payload = { users, summary, counts: summary }
+  const payload = { users, summary, counts: summary, planAverages }
   cache = { at: Date.now(), payload }
   return NextResponse.json(payload)
 }

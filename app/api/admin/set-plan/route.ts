@@ -79,13 +79,16 @@ export async function POST(request: Request) {
   // === 플랜 업데이트 ===
   // 관리자 지정 Pro는 만료 없는 Pro(plan_expires_at=null) — 결제 Pro(만료일 있음)와 구분되고
   // syncUserPlan 자동 만료강등 대상도 아님.
+  // plan_changed_at: 현재 플랜으로 바뀐 시각. 세 분기 모두 기록해 통계(Pro N일째·평균)의 기준이 되게 한다.
+  const changedAt = new Date().toISOString()
   const update =
     plan === 'vip'
       ? {
           plan: 'vip',
           vip_granted_by: user.email,
-          vip_granted_at: new Date().toISOString(),
+          vip_granted_at: changedAt,
           plan_expires_at: null,
+          plan_changed_at: changedAt,
         }
       : plan === 'pro'
       ? {
@@ -93,12 +96,14 @@ export async function POST(request: Request) {
           vip_granted_by: null,
           vip_granted_at: null,
           plan_expires_at: null,
+          plan_changed_at: changedAt,
         }
       : {
           plan: 'free',
           vip_granted_by: null,
           vip_granted_at: null,
           plan_expires_at: null,
+          plan_changed_at: changedAt,
         }
 
   const { error: updateError } = await serviceClient

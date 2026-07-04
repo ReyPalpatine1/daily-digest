@@ -26,7 +26,9 @@ type AdminUser = {
 }
 
 type Summary = { total: number; free: number; pro: number; vip: number }
-type UsersResponse = { users: AdminUser[]; summary: Summary }
+type PlanAvg = { avg: number; count: number }
+type PlanAverages = { overall: PlanAvg; free: PlanAvg; pro: PlanAvg }
+type UsersResponse = { users: AdminUser[]; summary: Summary; planAverages?: PlanAverages }
 
 type SortKey = 'email' | 'channels' | 'avg' | 'sendRate' | 'joined'
 type SortDir = 'asc' | 'desc'
@@ -302,6 +304,42 @@ export default function AdminUsersPage() {
             </div>
           )}
         </div>
+
+        {/* 플랜별 하루 평균 카드 3개 (흑백 · CSS 변수) */}
+        {data?.planAverages && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 10, marginBottom: 16,
+          }}>
+            {([
+              { key: 'overall', title: t('adminUsers.avgOverallTitle'), a: data.planAverages.overall, note: null as string | null },
+              { key: 'free', title: t('adminUsers.avgFreeTitle'), a: data.planAverages.free, note: null as string | null },
+              { key: 'pro', title: t('adminUsers.avgProTitle'), a: data.planAverages.pro, note: t('adminUsers.avgProNote') },
+            ]).map(c => (
+              <div key={c.key} style={{
+                background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                borderRadius: 10, padding: '14px 16px',
+              }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
+                  {c.title}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 6 }}>
+                  <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: -0.5 }}>
+                    {c.a.avg.toFixed(1)}
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('adminUsers.perDay')}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
+                    {t('adminUsers.avgPeople', { n: c.a.count })}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>
+                  {t('adminUsers.avgDescCommon')}{c.note ? ` · ${c.note}` : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* 검색 + 필터 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
