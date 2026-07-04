@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
-type Service = 'gemini' | 'youtube' | 'supadata'
+type Service = 'gemini' | 'youtube' | 'supadata' | 'transcriptapi'
 
 // 관리자 통계는 실시간일 필요 없음 → 60초 메모리 캐시(인증 통과 후 집계 결과에만 적용)
 let cache: { at: number; payload: any } | null = null
@@ -129,12 +129,13 @@ export async function GET() {
     gemini: { count: 0, input: 0, output: 0 },
     youtube: { count: 0 },
     supadata: { count: 0 },
+    transcriptapi: { count: 0 },
   }
-  type DailyEntry = { date: string; gemini: number; youtube: number; supadata: number }
+  type DailyEntry = { date: string; gemini: number; youtube: number; supadata: number; transcriptapi: number }
   const last7DaysMap = new Map<string, DailyEntry>()
   for (let i = 6; i >= 0; i--) {
     const d = daysAgoKstDateString(i)
-    last7DaysMap.set(d, { date: d, gemini: 0, youtube: 0, supadata: 0 })
+    last7DaysMap.set(d, { date: d, gemini: 0, youtube: 0, supadata: 0, transcriptapi: 0 })
   }
 
   for (const row of rows ?? []) {
@@ -149,10 +150,12 @@ export async function GET() {
         todayApi.youtube.count += calls
       } else if (service === 'supadata') {
         todayApi.supadata.count += calls
+      } else if (service === 'transcriptapi') {
+        todayApi.transcriptapi.count += calls
       }
     }
     const entry = last7DaysMap.get((row as any).date)
-    if (entry && (service === 'gemini' || service === 'youtube' || service === 'supadata')) {
+    if (entry && (service === 'gemini' || service === 'youtube' || service === 'supadata' || service === 'transcriptapi')) {
       entry[service] += calls
     }
   }
@@ -223,6 +226,8 @@ export async function GET() {
       gemini: { today: todayApi.gemini, limit: 1500 },
       youtube: { today: todayApi.youtube, limit: 10000 },
       supadata: { today: todayApi.supadata, limit: 100 },
+      // TranscriptAPI 무료 한도 정확값 미상 → limit null(화면에서 "대시보드 확인"). 추측 금지.
+      transcriptapi: { today: todayApi.transcriptapi, limit: null as number | null },
     },
     revenue: {
       // 결제 시스템 미연동 — 0 placeholder
