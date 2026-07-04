@@ -125,8 +125,11 @@ export async function GET() {
     const planDays = daysSince(planBase)
 
     const totalDigests = digestCount.get(p.id) ?? 0
-    const avgDigestsPerDay = joinDays > 0
-      ? Math.round((totalDigests / joinDays) * 10) / 10
+    // digests는 30일 자동삭제라 분자가 최근 30일치뿐 → 분모도 min(가입경과일, 30)으로
+    // 제한해야 오래된 계정의 하루 평균이 실제보다 낮게 왜곡되지 않는다.
+    const windowDays = Math.min(joinDays, 30)
+    const avgDigestsPerDay = windowDays > 0
+      ? Math.round((totalDigests / windowDays) * 10) / 10
       : 0
 
     // 발송 성공률: 로그 있으면 % (반올림), 없으면 null

@@ -163,15 +163,6 @@ export default function AdminPage() {
     </div>
   )
 
-  const cronColor =
-    s.system.cronStatus === 'healthy' ? 'var(--success)'
-      : s.system.cronStatus === 'warning' ? 'var(--warning)'
-        : 'var(--danger)'
-  const cronText =
-    s.system.cronStatus === 'healthy' ? t('admin.cronHealthy')
-      : s.system.cronStatus === 'warning' ? t('admin.cronWarning')
-        : t('admin.cronError')
-
   const max7d = Math.max(1, ...s.last7Days.map(d => d.gemini + d.youtube + d.supadata))
 
   return (
@@ -243,45 +234,9 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* 4. 시스템 상태 */}
+          {/* 4. 최근 가입 (시스템 상태는 /admin/system, 인기 콘텐츠는 /admin/content로 이동) */}
           <div style={cardStyle}>
-            {sectionLabel(4, t('admin.sec4'))}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.cronStatus')}</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: cronColor }} />
-                  {cronText}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.cronLastRun')}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
-                  {s.system.cronLastRun ? new Date(s.system.cronLastRun).toLocaleString(dateLocale) : t('admin.noData')}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.sendSuccess')}</span>
-                <span style={{ fontSize: 12, color: s.system.sendSuccessRate == null ? 'var(--text-muted)' : 'var(--text-primary)' }}>
-                  {s.system.sendSuccessRate == null ? t('admin.noData') : `${s.system.sendSuccessRate}%`}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.errors24h')}</span>
-                <span style={{ fontSize: 12, color: s.system.errors24h == null ? 'var(--text-muted)' : 'var(--text-primary)' }}>
-                  {s.system.errors24h == null ? t('admin.noData') : nf.format(s.system.errors24h)}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('admin.dbResponse')}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{s.system.dbResponseMs}ms</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 5. 최근 가입 */}
-          <div style={cardStyle}>
-            {sectionLabel(5, `${t('admin.sec5')} (${s.recentUsers.length})`)}
+            {sectionLabel(4, `${t('admin.sec5')} (${s.recentUsers.length})`)}
             {s.recentUsers.length === 0 ? (
               <div style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
                 {t('admin.empty')}
@@ -309,43 +264,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* 6. 인기 콘텐츠 */}
-          <div style={cardStyle}>
-            {sectionLabel(6, t('admin.sec6'))}
-            {s.topChannels.length === 0 ? (
-              <div style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-                {t('admin.empty')}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {s.topChannels.slice(0, 6).map((ch, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 8px',
-                    borderBottom: i < Math.min(6, s.topChannels.length) - 1 ? '0.5px solid var(--border-light)' : 'none',
-                  }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)',
-                      width: 18, flexShrink: 0,
-                    }}>{i + 1}</span>
-                    <span style={{
-                      fontSize: 12, fontWeight: 500, color: 'var(--text-primary)',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
-                    }}>{ch.name}</span>
-                    {ch.category && (
-                      <span style={{
-                        fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                        background: 'var(--bg-subtle)', color: 'var(--text-tertiary)', flexShrink: 0,
-                      }}>{ch.category}</span>
-                    )}
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                      {t('admin.subscribers', { n: ch.subscribers })}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* 7일 사용량 추이 차트 */}

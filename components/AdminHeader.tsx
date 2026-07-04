@@ -24,8 +24,8 @@ export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
     { key: 'dashboard', label: t('admin.menuDashboard'), href: '/admin' },
     { key: 'users', label: t('admin.menuUsers'), href: '/admin/users' },
     { key: 'errors', label: t('admin.menuErrors'), href: '/admin/errors' },
-    { key: 'content', label: t('admin.menuContent') },
-    { key: 'system', label: t('admin.menuSystem') },
+    { key: 'content', label: t('admin.menuContent'), href: '/admin/content' },
+    { key: 'system', label: t('admin.menuSystem'), href: '/admin/system' },
     { key: 'email', label: '📧 Email', href: '/admin/email-preview' },
   ]
 
