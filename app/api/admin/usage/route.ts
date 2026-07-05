@@ -259,8 +259,8 @@ export async function GET() {
       youtube: { today: todayApi.youtube, monthTotal: monthTotals.youtube, avg30d: dailyAvg('youtube'), limit: 10000, limitPeriod: 'day' as const },
       // Supadata는 무료 100크레딧/월 → 월 한도 기준.
       supadata: { today: todayApi.supadata, monthTotal: monthTotals.supadata, limit: 100, limitPeriod: 'month' as const },
-      // TranscriptAPI 무료 한도 정확값 미상 → limit null(화면에서 "대시보드 확인"). 추측 금지.
-      transcriptapi: { today: todayApi.transcriptapi, monthTotal: monthTotals.transcriptapi, limit: null as number | null, limitPeriod: null as 'day' | 'month' | null },
+      // TranscriptAPI: 무료 100 소진, 유료 전환 시 월 1000개 → 월 한도 1000 기준.
+      transcriptapi: { today: todayApi.transcriptapi, monthTotal: monthTotals.transcriptapi, limit: 1000, limitPeriod: 'month' as const },
     },
     revenue: {
       // 결제 시스템 미연동 — 0 placeholder

@@ -123,10 +123,11 @@ export default function AdminSystemPage() {
             <div style={gridStyle}>
               {([
                 // secondMetric: 'avg30d'=최근 30일 하루평균(gemini/youtube), 'month'=이번 달 누적(supadata/transcriptapi)
-                { key: 'gemini', label: 'Gemini', desc: t('adminSystem.descGemini'), entry: s.api.gemini, secondMetric: 'avg30d' as const, note: null as string | null, noteUrl: null as string | null },
-                { key: 'youtube', label: 'YouTube', desc: t('adminSystem.descYoutube'), entry: s.api.youtube, secondMetric: 'avg30d' as const, note: null, noteUrl: null },
-                { key: 'supadata', label: 'Supadata', desc: t('adminSystem.descSupadata'), entry: s.api.supadata, secondMetric: 'month' as const, note: t('adminSystem.supadataCreditNote'), noteUrl: 'https://supadata.ai' },
-                { key: 'transcriptapi', label: 'TranscriptAPI', desc: t('adminSystem.descTranscript'), entry: s.api.transcriptapi, secondMetric: 'month' as const, note: t('adminSystem.transcriptDashboardNote'), noteUrl: 'https://transcriptapi.com' },
+                // 카드 전체가 각 대시보드로 이동하는 링크 → 인라인 링크·문구는 두지 않는다.
+                { key: 'gemini', label: 'Gemini', desc: t('adminSystem.descGemini'), entry: s.api.gemini, secondMetric: 'avg30d' as const, dashUrl: 'https://aistudio.google.com' },
+                { key: 'youtube', label: 'YouTube', desc: t('adminSystem.descYoutube'), entry: s.api.youtube, secondMetric: 'avg30d' as const, dashUrl: 'https://console.cloud.google.com' },
+                { key: 'supadata', label: 'Supadata', desc: t('adminSystem.descSupadata'), entry: s.api.supadata, secondMetric: 'month' as const, dashUrl: 'https://supadata.ai' },
+                { key: 'transcriptapi', label: 'TranscriptAPI', desc: t('adminSystem.descTranscript'), entry: s.api.transcriptapi, secondMetric: 'month' as const, dashUrl: 'https://transcriptapi.com' },
               ]).map(a => {
                 const todayCount = a.entry?.today?.count ?? 0
                 const monthCount = a.entry?.monthTotal ?? 0
@@ -144,7 +145,8 @@ export default function AdminSystemPage() {
                 const secondValue = a.secondMetric === 'avg30d' ? nf.format(avg30d) : nf.format(monthCount)
                 const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }
                 return (
-                  <div key={a.key} style={cardStyle}>
+                  <a key={a.key} href={a.dashUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ ...cardStyle, display: 'block', textDecoration: 'none', cursor: 'pointer' }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{a.label}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{a.desc}</div>
 
@@ -171,51 +173,31 @@ export default function AdminSystemPage() {
                         </div>
                       </div>
                     )}
-
-                    {a.note && (
-                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.5 }}>
-                        {a.note}
-                        {a.noteUrl && (
-                          <>
-                            {' '}
-                            <a href={a.noteUrl} target="_blank" rel="noopener noreferrer"
-                              style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>
-                              {a.label}
-                            </a>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  </a>
                 )
               })}
             </div>
           </section>
         )}
 
-        {/* ===== 고정비 안내 ===== */}
+        {/* ===== 고정비 안내 (카드 클릭 시 해당 대시보드 이동) ===== */}
         <section style={{ marginTop: 28 }}>
           <h2 style={sectionTitleStyle}>{t('adminSystem.costSectionTitle')}</h2>
           <div style={gridStyle}>
-            <div style={cardStyle}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Cloudflare Workers</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{t('adminSystem.costCloudflareValue')}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('adminSystem.costCloudflareNote')}</div>
-            </div>
-            <div style={cardStyle}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Supabase</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{t('adminSystem.costSupabaseValue')}</div>
-            </div>
-            <div style={cardStyle}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t('adminSystem.costDomainTitle')} (dailyvideodigest.com)</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{t('adminSystem.costDomainValue')}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('adminSystem.costDomainNote')}</div>
-            </div>
-            <div style={cardStyle}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Supadata</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{t('adminSystem.costSupadataValue')}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('adminSystem.costSupadataNote')}</div>
-            </div>
+            {([
+              { key: 'cf', title: 'Cloudflare Workers', value: t('adminSystem.costCloudflareValue'), note: null as string | null, url: 'https://dash.cloudflare.com' },
+              { key: 'supabase', title: 'Supabase', value: t('adminSystem.costSupabaseValue'), note: t('adminSystem.costSupabaseNote'), url: 'https://supabase.com/dashboard/project/rqoztfncbgxofxeyguxm' },
+              { key: 'supadata', title: 'Supadata', value: t('adminSystem.costSupadataValue'), note: null, url: 'https://supadata.ai' },
+              { key: 'transcript', title: 'TranscriptAPI', value: t('adminSystem.costTranscriptValue'), note: null, url: 'https://transcriptapi.com' },
+              { key: 'domain', title: `${t('adminSystem.costDomainTitle')} (dailyvideodigest.com)`, value: t('adminSystem.costDomainValue'), note: null, url: 'https://dash.cloudflare.com' },
+            ]).map(c => (
+              <a key={c.key} href={c.url} target="_blank" rel="noopener noreferrer"
+                style={{ ...cardStyle, display: 'block', textDecoration: 'none', cursor: 'pointer' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c.title}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{c.value}</div>
+                {c.note && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{c.note}</div>}
+              </a>
+            ))}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>{t('adminSystem.costFooter')}</div>
         </section>
@@ -225,12 +207,8 @@ export default function AdminSystemPage() {
           <h2 style={sectionTitleStyle}>{t('adminSystem.linksSectionTitle')}</h2>
           <div style={gridStyle}>
             {([
-              { url: 'https://dash.cloudflare.com', label: t('adminSystem.linkCloudflare'), desc: t('adminSystem.linkCloudflareDesc') },
-              { url: 'https://supabase.com/dashboard/project/rqoztfncbgxofxeyguxm', label: t('adminSystem.linkSupabase'), desc: t('adminSystem.linkSupabaseDesc') },
+              // 카드 클릭으로 대부분 이동 가능 → 카드와 안 겹치는 3개만 유지.
               { url: 'https://console.cloud.google.com', label: t('adminSystem.linkGcp'), desc: t('adminSystem.linkGcpDesc') },
-              { url: 'https://aistudio.google.com', label: t('adminSystem.linkGemini'), desc: t('adminSystem.linkGeminiDesc') },
-              { url: 'https://supadata.ai', label: t('adminSystem.linkSupadata'), desc: t('adminSystem.linkSupadataDesc') },
-              { url: 'https://transcriptapi.com', label: t('adminSystem.linkTranscript'), desc: t('adminSystem.linkTranscriptDesc') },
               { url: 'https://github.com/ReyPalpatine1/daily-digest', label: t('adminSystem.linkGithub'), desc: t('adminSystem.linkGithubDesc') },
               { url: 'https://dailyvideodigest.com', label: t('adminSystem.linkService'), desc: t('adminSystem.linkServiceDesc') },
             ]).map(l => (
