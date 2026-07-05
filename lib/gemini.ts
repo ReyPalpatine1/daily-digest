@@ -301,11 +301,21 @@ async function callGeminiModel(
   return { kind: 'unavailable503', result: failureResult(model, '알 수 없는 오류', maxRetries) }
 }
 
-export async function getTranscript(videoId: string, userId?: string): Promise<{ transcript: string; description: string; unavailable: boolean }> {
+export async function getTranscript(videoId: string, userId?: string): Promise<{
+  transcript: string
+  description: string
+  unavailable: boolean
+  transcriptExhausted?: boolean // 자막 API가 429/402(크레딧 소진) 응답 → "확정 아님"(충전/유료 전환 후 자막 가능)
+  transcriptMissing?: boolean   // 자막 없음이 "확정"(콘텐츠 없음). 소진과 구분해 재시도 축소에 사용
+}> {
   const fnStart = Date.now()
   let transcript = ''
   let description = ''
   let unavailable = false // 비공개/삭제 영상 (YouTube API items 비어있음)
+  let transcriptExhausted = false // 429/402 = 크레딧 소진 (일시적, 재시도 여지 있음)
+  let transcriptMissing = false   // 콘텐츠 없음 확정 (Supadata까지 확인해 자막 없음)
+  // 크레딧 소진으로 볼 상태코드: 429(Too Many Requests) / 402(Payment Required)
+  const isExhaustedStatus = (status: number) => status === 429 || status === 402
 
   // 1차: TranscriptAPI (자막 있는 영상은 싸게 — 성공 요청당 과금). 키가 없으면 통째로 건너뛰고
   // 기존 Supadata 흐름으로 진행(현행 동작 보존). Cloudflare 호환: env는 함수 내부에서 읽는다.
@@ -331,8 +341,12 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
         } else {
           console.log(`❌ TranscriptAPI 자막 비어있음: ${videoId} (${Date.now() - taStart}ms) → Supadata 폴백`)
         }
+      } else if (isExhaustedStatus(res.status)) {
+        // 크레딧 소진(429/402) → "확정 아님". Supadata(Whisper)로 폴백은 시도.
+        transcriptExhausted = true
+        console.log(`⛔ TranscriptAPI 크레딧 소진(status=${res.status}): ${videoId} → Supadata 폴백`)
       } else {
-        // 자막없음(404 등) → 과금 없음. Supadata(Whisper) 폴백.
+        // 자막없음(404 등) → 과금 없음. 단 자막 없음 "확정"은 Whisper까지 본 Supadata에서 판정.
         console.log(`❌ TranscriptAPI 자막 없음: ${videoId} (status=${res.status}, ${Date.now() - taStart}ms) → Supadata 폴백`)
       }
     } catch (e) {
@@ -356,12 +370,26 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
       const data = await res.json()
       transcript = data.content ?? ''
       // 성공(res.ok) 시에만 기록 — 실소비되는 크레딧(성공분)과 카운트를 일치시킨다.
-      // 실패(206/429 등)는 성공/실소비가 아니므로 제외. userId 없으면 시스템 계정 귀속.
+      // 실패(429 등)는 성공/실소비가 아니므로 제외. userId 없으면 시스템 계정 귀속.
       logApiUsage(userId ?? SYSTEM_USER_ID, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
-      console.log(`✅ Supadata 자막 추출 성공: ${videoId} (${Date.now() - supadataStart}ms)`)
+      if (transcript) {
+        console.log(`✅ Supadata 자막 추출 성공: ${videoId} (${Date.now() - supadataStart}ms)`)
+      } else {
+        // res.ok(200/206)인데 content 비어있음 → Whisper까지 봐도 자막 없음 = 확정
+        transcriptMissing = true
+        console.log(`❌ Supadata 자막 비어있음(확정): ${videoId} (status=${res.status}, ${Date.now() - supadataStart}ms)`)
+      }
+    } else if (isExhaustedStatus(res.status)) {
+      // 크레딧 소진(429/402) → "확정 아님"(충전/유료 전환 후 자막 가능). transcript_checked 세우지 않는다.
+      transcriptExhausted = true
+      console.log(`⛔ Supadata 크레딧 소진(status=${res.status}): ${videoId} (${Date.now() - supadataStart}ms)`)
+    } else if (res.status >= 400 && res.status < 500) {
+      // 콘텐츠 없음 확정(404 등, 4xx) → 자막 없음 확정.
+      transcriptMissing = true
+      console.log(`❌ Supadata 자막 없음(확정, status=${res.status}): ${videoId} (${Date.now() - supadataStart}ms)`)
     } else {
-      // 실패 시 추가 호출 없이 바로 설명/제목 폴백으로 진행 (status 코드로 크레딧 소모 추적)
-      console.log(`❌ Supadata 자막 없음: ${videoId} (status=${res.status}, ${Date.now() - supadataStart}ms)`)
+      // 5xx 등 일시 오류 → 확정 아님(다음 주기 재시도).
+      console.log(`❌ Supadata 일시 오류(status=${res.status}): ${videoId} (${Date.now() - supadataStart}ms)`)
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -427,5 +455,5 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
   }
 
   console.log(`⏱ [getTranscript total] ${videoId} ${Date.now() - fnStart}ms (transcriptLen=${transcript.length})`)
-  return { transcript, description, unavailable }
+  return { transcript, description, unavailable, transcriptExhausted, transcriptMissing }
 }

@@ -308,6 +308,7 @@ type PendingVideo = {
   summary_attempts?: number | null
   live_broadcast_content?: string | null
   fail_reason?: string | null
+  transcript_checked?: boolean | null // 자막 없음 확정 → 이후 주기엔 자막 API 재호출 스킵
 }
 
 // 아직 요약이 없는 (쇼츠 아닌, 최근 N일) 영상 목록.
@@ -316,7 +317,7 @@ async function getVideosWithoutSummary(locale: Locale = 'ko', limit: number = SU
   const cutoff = new Date(Date.now() - SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
   const { data: vids } = await supabase
     .from('videos')
-    .select('video_id, title, description, summary_attempts, live_broadcast_content, fail_reason')
+    .select('video_id, title, description, summary_attempts, live_broadcast_content, fail_reason, transcript_checked')
     .eq('is_short', false)
     .gte('published_at', cutoff.toISOString())
     .lt('summary_attempts', MAX_SUMMARY_ATTEMPTS) // 재시도 상한 초과는 영구 제외
@@ -380,8 +381,16 @@ async function bumpSummaryAttempts(video: PendingVideo, cause: 'no_source' | 'te
   }
 }
 
-// 영상 1개 요약 → video_summaries upsert (성공 시 true). 4b 수집·4c 폴백 공용.
-async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Promise<boolean> {
+// 영상 1개 요약 → video_summaries upsert. 4b 수집·4c 폴백 공용.
+// 반환: stored=저장 성공 여부, transcriptExhausted=이번 호출에서 자막 API 크레딧 소진(429/402) 감지 여부.
+// options.skipTranscript=true 이거나 video.transcript_checked=true 이면 자막 API를 건너뛰고
+//   기존 video.description만으로 요약(소진 API를 더 두드리지 않음 / 자막 없음 확정 영상 재호출 방지).
+type StoreResult = { stored: boolean; transcriptExhausted: boolean }
+async function summarizeAndStore(
+  video: PendingVideo,
+  locale: Locale = 'ko',
+  options?: { skipTranscript?: boolean }
+): Promise<StoreResult> {
   // 라이브/예정 영상: 요약 시도 없이 skip. summary_attempts는 소모하지 않는다
   // (라이브 종료 후 일반 영상이 되면 다음 실행에서 정상 요약되도록).
   const markedLive =
@@ -408,7 +417,7 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
         })
       }
       console.log(`📺 라이브/예정 영상 → 요약 제외 (${video.video_id}): liveBroadcastContent=${fresh ?? 'unknown'}`)
-      return false
+      return { stored: false, transcriptExhausted: false }
     }
     // 라이브 종료 → 일반 영상으로 전환 후 요약 진행
     await supabase
@@ -417,14 +426,40 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
       .eq('video_id', video.video_id)
     console.log(`📺 라이브 종료 감지 → 일반 요약 진행 (${video.video_id})`)
   }
-  const { transcript, description, unavailable } = await getTranscript(video.video_id) // userId 없음 (공유)
-  // 비공개/삭제 영상: Gemini 호출 없이 풀에서 제거 (발송 대상에서도 빠짐)
-  if (unavailable) {
-    const { error } = await supabase.from('videos').delete().eq('video_id', video.video_id)
-    if (error) console.error(`❌ 비공개/삭제 영상 제거 실패 (${video.video_id}): ${error.message}`)
-    console.log(`🗑 비공개/삭제 영상 제거: ${video.video_id}`)
-    return false
+
+  // 자막 API 호출 여부 결정:
+  //  - options.skipTranscript: 이번 실행에서 이미 소진(429/402) 감지 → 남은 영상은 자막 API 스킵
+  //  - video.transcript_checked: 과거에 자막 없음이 "확정"된 영상 → 자막 API 재호출 불필요
+  // 둘 중 하나라도 참이면 자막 API를 건너뛰고 기존 video.description만으로 요약한다.
+  const skipTranscript = options?.skipTranscript === true || video.transcript_checked === true
+  let transcript = ''
+  let description = ''
+  let exhausted = false
+  if (skipTranscript) {
+    console.log(
+      `⏭ 자막 API 스킵(${options?.skipTranscript ? '이번 실행 소진' : '자막없음 확정'}) → 설명 기반 처리: ${video.video_id}`
+    )
+  } else {
+    const tr = await getTranscript(video.video_id) // userId 없음 (공유)
+    // 비공개/삭제 영상: Gemini 호출 없이 풀에서 제거 (발송 대상에서도 빠짐)
+    if (tr.unavailable) {
+      const { error } = await supabase.from('videos').delete().eq('video_id', video.video_id)
+      if (error) console.error(`❌ 비공개/삭제 영상 제거 실패 (${video.video_id}): ${error.message}`)
+      console.log(`🗑 비공개/삭제 영상 제거: ${video.video_id}`)
+      return { stored: false, transcriptExhausted: tr.transcriptExhausted === true }
+    }
+    transcript = tr.transcript
+    description = tr.description
+    exhausted = tr.transcriptExhausted === true
+    // 자막 없음이 "확정"(콘텐츠 없음)이고 소진이 아니면 → 이후 주기 자막 재호출 방지 플래그 기록.
+    // 소진(429/402)일 땐 세우지 않는다(충전/유료 전환 후 자막 있을 수 있으므로).
+    if (!transcript && tr.transcriptMissing === true && !exhausted && video.transcript_checked !== true) {
+      const { error } = await supabase.from('videos').update({ transcript_checked: true }).eq('video_id', video.video_id)
+      if (error) console.error(`❌ transcript_checked 기록 실패 (${video.video_id}): ${error.message}`)
+      else console.log(`📝 자막 없음 확정 → transcript_checked=true: ${video.video_id}`)
+    }
   }
+
   // video.description이 빈 문자열('')이면 ??가 통과시켜 getTranscript가 가져온 설명을 못 씀 → trim 검사
   const desc = video.description?.trim() ? video.description : description
   const result = await summarizeVideo(null, video.title, transcript, desc, locale)
@@ -436,7 +471,7 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
     const detail = result.errorInfo ?? result.summaryBasis
     console.error(`❌ 요약 실패 → 저장 생략, 재시도 대기 (${video.video_id}): ${detail}`)
     await bumpSummaryAttempts(video, cause, detail)
-    return false
+    return { stored: false, transcriptExhausted: exhausted }
   }
   const { error } = await supabase.from('video_summaries').upsert(
     {
@@ -453,13 +488,13 @@ async function summarizeAndStore(video: PendingVideo, locale: Locale = 'ko'): Pr
   if (error) {
     console.error(`❌ video_summaries 적재 실패 (${video.video_id}): ${error.message}`)
     await bumpSummaryAttempts(video, 'temporary', `video_summaries upsert: ${error.message}`)
-    return false
+    return { stored: false, transcriptExhausted: exhausted }
   }
   // 요약 성공 → 이전 실패/대기 사유 정리 (fail_reason/fail_detail = null)
   if (video.fail_reason || (video.summary_attempts ?? 0) > 0) {
     await supabase.from('videos').update({ fail_reason: null, fail_detail: null }).eq('video_id', video.video_id)
   }
-  return true
+  return { stored: true, transcriptExhausted: exhausted }
 }
 
 // 미요약 영상 요약 → video_summaries 적재 (영상당 1번, 전역 공유). 요약한 개수 반환.
@@ -474,6 +509,10 @@ export async function summarizePendingVideos(deadlineTs?: number, locale: Locale
 
   let done = 0
   let attempted = 0
+  // 이번 실행 한정 소진 플래그(전역 영구 아님). 자막 API가 429/402를 한 번 반환하면
+  // 이후 영상은 자막 API 호출을 건너뛰고 설명 기반으로만 처리 → 크레딧 폭탄 방지.
+  // 다음 cron에선 다시 false로 시작(충전/유료 전환 대비).
+  let transcriptExhaustedThisRun = false
   for (let i = 0; i < pending.length; i += SUMMARY_CONCURRENCY) {
     if (attempted >= maxSummaries) {
       console.log(`⏱ subrequest 상한(${maxSummaries}) 도달 → 나머지 ${pending.length - i}개는 다음 주기로 이월`)
@@ -484,10 +523,16 @@ export async function summarizePendingVideos(deadlineTs?: number, locale: Locale
       break
     }
     const batch = pending.slice(i, i + SUMMARY_CONCURRENCY)
+    const skipTranscript = transcriptExhaustedThisRun
     await Promise.allSettled(batch.map(async v => {
       attempted++
-      if (await summarizeAndStore(v, locale)) done++
+      const r = await summarizeAndStore(v, locale, { skipTranscript })
+      if (r.stored) done++
+      if (r.transcriptExhausted) transcriptExhaustedThisRun = true
     }))
+    if (transcriptExhaustedThisRun && !skipTranscript) {
+      console.log(`⛔ 자막 API 크레딧 소진 감지 → 이후 영상은 설명 기반으로만 처리(이번 실행 한정)`)
+    }
   }
   console.log(`🤖 요약 완료: ${done}개`)
   return done
@@ -575,7 +620,7 @@ export async function summarizeNow(videoIds: string[], locale: Locale = 'ko'): P
   if (!videoIds.length) return 0
   const { data } = await supabase
     .from('videos')
-    .select('video_id, title, description, summary_attempts, live_broadcast_content, fail_reason')
+    .select('video_id, title, description, summary_attempts, live_broadcast_content, fail_reason, transcript_checked')
     .in('video_id', videoIds)
     .lt('summary_attempts', MAX_SUMMARY_ATTEMPTS) // 재시도 상한 초과는 즉시요약 대상에서도 제외
   const targets = (data ?? []) as PendingVideo[]
@@ -583,7 +628,7 @@ export async function summarizeNow(videoIds: string[], locale: Locale = 'ko'): P
 
   let done = 0
   await processInBatches(targets, SUMMARY_CONCURRENCY, async (video) => {
-    if (await summarizeAndStore(video, locale)) done++
+    if ((await summarizeAndStore(video, locale)).stored) done++
   })
   return done
 }
