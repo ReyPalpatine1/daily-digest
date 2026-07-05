@@ -351,12 +351,13 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
       { headers: { 'x-api-key': process.env.SUPADATA_API_KEY! } },
       SUPADATA_TIMEOUT_MS
     )
-    // userId가 없으면(공유 수집 등) 시스템 계정으로 귀속해 항상 기록
-    logApiUsage(userId ?? SYSTEM_USER_ID, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
 
     if (res.ok) {
       const data = await res.json()
       transcript = data.content ?? ''
+      // 성공(res.ok) 시에만 기록 — 실소비되는 크레딧(성공분)과 카운트를 일치시킨다.
+      // 실패(206/429 등)는 성공/실소비가 아니므로 제외. userId 없으면 시스템 계정 귀속.
+      logApiUsage(userId ?? SYSTEM_USER_ID, 'supadata').catch(e => console.error('[supadata] logApiUsage 실패:', e))
       console.log(`✅ Supadata 자막 추출 성공: ${videoId} (${Date.now() - supadataStart}ms)`)
     } else {
       // 실패 시 추가 호출 없이 바로 설명/제목 폴백으로 진행 (status 코드로 크레딧 소모 추적)

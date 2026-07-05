@@ -88,6 +88,10 @@ export async function GET() {
   const today = todayKstDateString()
   const monthStart = monthStartKstDateString()
   const sevenDaysAgo = daysAgoKstDateString(6)
+  // 최근 30일(오늘 포함) 하루평균용 창 시작일. 월 조회와 한 쿼리로 합치려고
+  // 둘 중 이른 날짜를 쿼리 하한으로 잡는다(YYYY-MM-DD 문자열 비교 = 날짜 비교).
+  const thirtyDaysAgo = daysAgoKstDateString(29)
+  const usageQueryStart = thirtyDaysAgo < monthStart ? thirtyDaysAgo : monthStart
   const todayKstMidnightUtc = new Date(`${today}T00:00:00+09:00`).toISOString()
   const monthStartKstUtc = new Date(`${monthStart}T00:00:00+09:00`).toISOString()
   const weekAgoUtc = new Date(`${daysAgoKstDateString(6)}T00:00:00+09:00`).toISOString()
@@ -118,10 +122,11 @@ export async function GET() {
     serviceClient.rpc('admin_active_users', { since: monthStartKstUtc }),
     serviceClient.rpc('admin_latest_digest'),
     serviceClient.rpc('admin_top_channels'),
-    // === 이번 달 누적(월 1일 KST~지금) — api_usage 직접 조회 후 service별 합산 ===
-    // date 컬럼은 KST 날짜 문자열이라 monthStart(YYYY-MM-01)로 직접 비교 가능.
+    // === 이번 달 누적 + 최근 30일 하루평균용 원천 — api_usage 직접 조회 ===
+    // date 컬럼은 KST 날짜 문자열이라 하한(usageQueryStart)으로 직접 비교 가능.
+    // 월/30일 두 창을 한 쿼리로 덮으려 이른 날짜부터 가져와 JS에서 날짜로 재필터.
     // 소규모 데이터라 range로 상한을 넉넉히 잡아 기본 1000행 캡을 회피(합계 누락 방지).
-    serviceClient.from('api_usage').select('service, api_calls').gte('date', monthStart).range(0, 99999),
+    serviceClient.from('api_usage').select('service, api_calls, date').gte('date', usageQueryStart).range(0, 99999),
   ])
 
   const dbResponseMs = Date.now() - dbStart
@@ -164,14 +169,20 @@ export async function GET() {
     }
   }
 
-  // === 이번 달 누적(service별 api_calls 합) ===
+  // === 이번 달 누적 + 최근 30일 합계(service별 api_calls 합) ===
   const monthTotals: Record<Service, number> = { gemini: 0, youtube: 0, supadata: 0, transcriptapi: 0 }
-  const monthRows = monthUsageRes.error ? [] : (monthUsageRes.data ?? [])
-  for (const row of monthRows) {
+  const thirtyDayTotals: Record<Service, number> = { gemini: 0, youtube: 0, supadata: 0, transcriptapi: 0 }
+  const usageRows = monthUsageRes.error ? [] : (monthUsageRes.data ?? [])
+  for (const row of usageRows) {
     const service = ((row as any).service ?? 'gemini') as Service
+    if (!(service in monthTotals)) continue
     const calls = Number((row as any).api_calls) || 0
-    if (service in monthTotals) monthTotals[service] += calls
+    const date = String((row as any).date ?? '')
+    if (date >= monthStart) monthTotals[service] += calls
+    if (date >= thirtyDaysAgo) thirtyDayTotals[service] += calls
   }
+  // 최근 30일 하루평균(소수 1자리). gemini/youtube 카드에서 사용.
+  const dailyAvg = (service: Service) => Math.round((thirtyDayTotals[service] / 30) * 10) / 10
 
   // === 사용자 통계 ===
   const totalUsers = profileRows.length
@@ -243,8 +254,9 @@ export async function GET() {
     },
     api: {
       // today·limit 필드는 기존 화면 호환용으로 유지. monthTotal·limitPeriod는 신규.
-      gemini: { today: todayApi.gemini, monthTotal: monthTotals.gemini, limit: 1500, limitPeriod: 'day' as const },
-      youtube: { today: todayApi.youtube, monthTotal: monthTotals.youtube, limit: 10000, limitPeriod: 'day' as const },
+      // gemini/youtube는 avg30d(최근 30일 하루평균)도 함께 내려준다.
+      gemini: { today: todayApi.gemini, monthTotal: monthTotals.gemini, avg30d: dailyAvg('gemini'), limit: 1500, limitPeriod: 'day' as const },
+      youtube: { today: todayApi.youtube, monthTotal: monthTotals.youtube, avg30d: dailyAvg('youtube'), limit: 10000, limitPeriod: 'day' as const },
       // Supadata는 무료 100크레딧/월 → 월 한도 기준.
       supadata: { today: todayApi.supadata, monthTotal: monthTotals.supadata, limit: 100, limitPeriod: 'month' as const },
       // TranscriptAPI 무료 한도 정확값 미상 → limit null(화면에서 "대시보드 확인"). 추측 금지.

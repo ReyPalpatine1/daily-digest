@@ -14,6 +14,7 @@ import { AdminHeader } from '@/components/AdminHeader'
 type ApiEntry = {
   today: { count: number }
   monthTotal?: number
+  avg30d?: number // 최근 30일 하루평균 (gemini/youtube만)
   limit: number | null
   limitPeriod?: 'day' | 'month' | null
 }
@@ -121,13 +122,15 @@ export default function AdminSystemPage() {
             <h2 style={sectionTitleStyle}>{t('adminSystem.apiSectionTitle')}</h2>
             <div style={gridStyle}>
               {([
-                { key: 'gemini', label: 'Gemini', desc: t('adminSystem.descGemini'), entry: s.api.gemini, note: null as string | null, noteUrl: null as string | null },
-                { key: 'youtube', label: 'YouTube', desc: t('adminSystem.descYoutube'), entry: s.api.youtube, note: null, noteUrl: null },
-                { key: 'supadata', label: 'Supadata', desc: t('adminSystem.descSupadata'), entry: s.api.supadata, note: t('adminSystem.supadataCreditNote'), noteUrl: 'https://supadata.ai' },
-                { key: 'transcriptapi', label: 'TranscriptAPI', desc: t('adminSystem.descTranscript'), entry: s.api.transcriptapi, note: null, noteUrl: null },
+                // secondMetric: 'avg30d'=최근 30일 하루평균(gemini/youtube), 'month'=이번 달 누적(supadata/transcriptapi)
+                { key: 'gemini', label: 'Gemini', desc: t('adminSystem.descGemini'), entry: s.api.gemini, secondMetric: 'avg30d' as const, note: null as string | null, noteUrl: null as string | null },
+                { key: 'youtube', label: 'YouTube', desc: t('adminSystem.descYoutube'), entry: s.api.youtube, secondMetric: 'avg30d' as const, note: null, noteUrl: null },
+                { key: 'supadata', label: 'Supadata', desc: t('adminSystem.descSupadata'), entry: s.api.supadata, secondMetric: 'month' as const, note: t('adminSystem.supadataCreditNote'), noteUrl: 'https://supadata.ai' },
+                { key: 'transcriptapi', label: 'TranscriptAPI', desc: t('adminSystem.descTranscript'), entry: s.api.transcriptapi, secondMetric: 'month' as const, note: t('adminSystem.transcriptDashboardNote'), noteUrl: 'https://transcriptapi.com' },
               ]).map(a => {
                 const todayCount = a.entry?.today?.count ?? 0
                 const monthCount = a.entry?.monthTotal ?? 0
+                const avg30d = a.entry?.avg30d ?? 0
                 const limit = a.entry?.limit ?? null
                 const period = a.entry?.limitPeriod ?? null
                 // 막대바 기준값: 월 한도면 이번 달 누적, 일일 한도면 오늘 사용량.
@@ -136,23 +139,26 @@ export default function AdminSystemPage() {
                 const overColor = usageColor(pct)
                 const barValueColor = pct >= 80 ? overColor : 'var(--text-primary)'
                 const limitLabel = period === 'month' ? t('adminSystem.apiLimitMonthly') : t('adminSystem.apiLimitDaily')
+                // 둘째 줄: gemini/youtube는 최근 30일 하루평균, 그 외는 이번 달 누적.
+                const secondLabel = a.secondMetric === 'avg30d' ? t('adminSystem.apiUsageAvg30d') : t('adminSystem.apiUsageMonth')
+                const secondValue = a.secondMetric === 'avg30d' ? nf.format(avg30d) : nf.format(monthCount)
                 const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }
                 return (
                   <div key={a.key} style={cardStyle}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{a.label}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{a.desc}</div>
 
-                    {/* 오늘 / 이번 달 사용량 (항상 표시) */}
+                    {/* 오늘 사용량 + (하루평균 또는 이번 달 누적) */}
                     <div style={{ ...rowStyle, marginTop: 12 }}>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.apiUsageToday')}</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nf.format(todayCount)}</span>
                     </div>
                     <div style={rowStyle}>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.apiUsageMonth')}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nf.format(monthCount)}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{secondLabel}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{secondValue}</span>
                     </div>
 
-                    {limit != null ? (
+                    {limit != null && (
                       <div style={{ marginTop: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{limitLabel}</span>
@@ -163,10 +169,6 @@ export default function AdminSystemPage() {
                         <div style={{ height: 6, borderRadius: 999, background: 'var(--bg-subtle)', overflow: 'hidden', marginTop: 6 }}>
                           <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: overColor, borderRadius: 999 }} />
                         </div>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                        {t('adminSystem.apiLimitDashboard')}
                       </div>
                     )}
 
@@ -228,6 +230,7 @@ export default function AdminSystemPage() {
               { url: 'https://console.cloud.google.com', label: t('adminSystem.linkGcp'), desc: t('adminSystem.linkGcpDesc') },
               { url: 'https://aistudio.google.com', label: t('adminSystem.linkGemini'), desc: t('adminSystem.linkGeminiDesc') },
               { url: 'https://supadata.ai', label: t('adminSystem.linkSupadata'), desc: t('adminSystem.linkSupadataDesc') },
+              { url: 'https://transcriptapi.com', label: t('adminSystem.linkTranscript'), desc: t('adminSystem.linkTranscriptDesc') },
               { url: 'https://github.com/ReyPalpatine1/daily-digest', label: t('adminSystem.linkGithub'), desc: t('adminSystem.linkGithubDesc') },
               { url: 'https://dailyvideodigest.com', label: t('adminSystem.linkService'), desc: t('adminSystem.linkServiceDesc') },
             ]).map(l => (
