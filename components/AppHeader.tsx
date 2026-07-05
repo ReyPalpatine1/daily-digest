@@ -11,7 +11,30 @@ import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 // 공통 상단바 — 대시보드 헤더와 동일한 모양/동작을 하위 페이지(profile/pricing)에서 재사용.
 // 대시보드 전용 네비(채널/발송설정/열람기록)는 포함하지 않는다 (A안: 하위 페이지엔 네비 없음).
 // 플랜/언어/테마 상태는 컴포넌트 내부에서 자체 로드.
-export function AppHeader({ showBack = false, onHelpClick }: { showBack?: boolean; onHelpClick?: () => void }) {
+export function AppHeader({
+  showBack = false,
+  onHelpClick,
+  showTabs = false,
+  tabs = [],
+  activeTab,
+  onTabChange,
+  breakingUnread = 0,
+  onOpenSidebar,
+  adminPlanMode: adminPlanModeProp,
+  onAdminPlanModeChange,
+}: {
+  showBack?: boolean
+  onHelpClick?: () => void
+  // 아래는 대시보드 전용(showTabs) 옵션. 미전달 시 프로필/요금제 기존 동작과 100% 동일.
+  showTabs?: boolean
+  tabs?: { key: string; label: string }[]
+  activeTab?: string
+  onTabChange?: (key: string) => void
+  breakingUnread?: number
+  onOpenSidebar?: () => void
+  adminPlanMode?: 'free' | 'pro'
+  onAdminPlanModeChange?: (mode: 'free' | 'pro') => void
+}) {
   const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
 
@@ -27,8 +50,10 @@ export function AppHeader({ showBack = false, onHelpClick }: { showBack?: boolea
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
 
   // 플랜 판정 (대시보드와 동일: 관리자는 미리보기 토글 우선, 일반 사용자는 실제 plan 기반)
+  // showTabs(대시보드) 모드에선 주입된 adminPlanMode를 우선 사용, 아니면 자체 상태(localStorage 기반).
   const realIsPro = checkIsPro(profile, isAdmin)
-  const isPro = isAdmin ? adminPlanMode === 'pro' : realIsPro
+  const effectiveAdminPlanMode = showTabs && adminPlanModeProp ? adminPlanModeProp : adminPlanMode
+  const isPro = isAdmin ? effectiveAdminPlanMode === 'pro' : realIsPro
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
   // 사용자 / 프로필 / 관리자 모드 자체 로드
@@ -144,6 +169,38 @@ export function AppHeader({ showBack = false, onHelpClick }: { showBack?: boolea
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     fontFamily: 'inherit',
   }
+  // 대시보드 탭 네비/업그레이드/속보 뱃지 (대시보드 헤더와 동일 모양) — showTabs 모드에서만 사용
+  const navBtnStyle = (active: boolean): React.CSSProperties => ({
+    padding: '6px 12px',
+    borderRadius: 7,
+    background: active ? 'var(--bg-subtle)' : 'transparent',
+    color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+    fontWeight: active ? 500 : 400,
+    border: 'none',
+    fontSize: 13,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    transition: 'background 0.15s, color 0.15s',
+    fontFamily: 'inherit',
+  })
+  const proUpgradeBtn: React.CSSProperties = {
+    padding: '6px 12px',
+    borderRadius: 7,
+    background: 'linear-gradient(135deg, #18181b 0%, #3f3f46 100%)',
+    color: '#FFFFFF',
+    fontSize: 12, fontWeight: 600,
+    border: 'none', cursor: 'pointer',
+    fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
+  }
+  const breakingBadge: React.CSSProperties = {
+    background: 'var(--danger)', color: '#fff',
+    fontSize: 10, fontWeight: 600,
+    padding: '1px 6px', borderRadius: 999,
+    lineHeight: 1.4,
+  }
 
   // 설정 메뉴 항목 (대시보드 renderSettingsItems 와 동일 항목 재현)
   function renderSettingsItems(closeMenu: () => void) {
@@ -244,7 +301,7 @@ export function AppHeader({ showBack = false, onHelpClick }: { showBack?: boolea
         alignItems: 'center',
         padding: '0 20px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: showTabs && !isMobile ? 18 : 12 }}>
           <button
             onClick={() => router.push('/dashboard')}
             style={{
@@ -268,9 +325,75 @@ export function AppHeader({ showBack = false, onHelpClick }: { showBack?: boolea
               ←
             </button>
           )}
+          {/* 대시보드 탭 네비 (데스크톱만; 모바일은 사이드바에 있음) */}
+          {showTabs && !isMobile && tabs.length > 0 && (
+            <nav style={{ display: 'flex', gap: 2 }}>
+              {tabs.map(tab => (
+                <button key={tab.key} onClick={() => onTabChange?.(tab.key)}
+                  style={navBtnStyle(activeTab === tab.key)}
+                  onMouseEnter={e => { if (activeTab !== tab.key) e.currentTarget.style.background = 'var(--bg-subtle)' }}
+                  onMouseLeave={e => { if (activeTab !== tab.key) e.currentTarget.style.background = 'transparent' }}>
+                  {tab.label}
+                  {tab.key === 'history' && breakingUnread > 0 && (
+                    <span style={breakingBadge}>{breakingUnread}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          )}
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* 대시보드 전용: Free면 Pro 업그레이드 버튼 (데스크톱) */}
+          {showTabs && !isMobile && plan === 'FREE' && (
+            <button onClick={() => router.push('/pricing')} style={proUpgradeBtn}>
+              {t('nav.proUpgrade')}
+            </button>
+          )}
+          {/* 대시보드 전용: 관리자 Free/Pro 미리보기 토글 (데스크톱). 상태는 주입값, 클릭은 콜백 우선 */}
+          {showTabs && !isMobile && isAdmin && (
+            <div title={t('plans.previewHint')}
+              style={{
+                display: 'inline-flex',
+                background: 'var(--bg-subtle)',
+                borderRadius: 7,
+                padding: 2,
+                border: '0.5px dashed var(--border)',
+              }}>
+              {(['free', 'pro'] as const).map(mode => {
+                const active = effectiveAdminPlanMode === mode
+                const label = mode === 'pro' ? 'Pro' : 'Free'
+                return (
+                  <button key={mode}
+                    onClick={() => {
+                      if (onAdminPlanModeChange) onAdminPlanModeChange(mode)
+                      else { setAdminPlanMode(mode); try { localStorage.setItem('admin_plan_mode', mode) } catch {} }
+                    }}
+                    onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)' }}
+                    onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-tertiary)' }}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 5,
+                      background: active ? 'var(--bg-card)' : 'transparent',
+                      color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                      fontWeight: active ? 500 : 400,
+                      boxShadow: active ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                      border: 'none',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'background 0.15s, color 0.15s',
+                    }}>
+                    <span style={{ fontSize: 10, opacity: active ? 1 : 0.6 }}>👁</span>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {/* 빠른 테마 토글 (언어 토글은 설정 드롭다운 안으로 이동) */}
           <button
             onClick={toggleTheme}
@@ -281,16 +404,26 @@ export function AppHeader({ showBack = false, onHelpClick }: { showBack?: boolea
             style={{ ...toolbarIconBtn, fontSize: 14 }}>
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <button ref={settingsBtnRef} onClick={() => setSettingsOpen(o => !o)}
-            aria-label={t('common.settings')}
-            style={gearBtn}>
-            ⚙
-          </button>
+          {/* 모바일 대시보드: 햄버거(사이드바). 그 외: 설정 기어(드롭다운) */}
+          {showTabs && isMobile ? (
+            <button
+              onClick={() => { if (onOpenSidebar) onOpenSidebar() }}
+              aria-label={t('nav.openMenu')}
+              style={{ ...toolbarIconBtn, fontSize: 20, color: 'var(--text-primary)' }}>
+              ☰
+            </button>
+          ) : (
+            <button ref={settingsBtnRef} onClick={() => setSettingsOpen(o => !o)}
+              aria-label={t('common.settings')}
+              style={gearBtn}>
+              ⚙
+            </button>
+          )}
         </div>
       </header>
 
-      {/* 설정 드롭다운 */}
-      {settingsOpen && (
+      {/* 설정 드롭다운 (모바일 대시보드는 사이드바가 대신하므로 미표시) */}
+      {settingsOpen && !(showTabs && isMobile) && (
         <div ref={settingsMenuRef} style={dropdownStyle}>
           {renderSettingsItems(() => setSettingsOpen(false))}
         </div>

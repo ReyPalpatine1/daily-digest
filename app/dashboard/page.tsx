@@ -10,6 +10,7 @@ import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import HelpPopup from '@/components/HelpPopup'
+import { AppHeader } from '@/components/AppHeader'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy } from 'lucide-react'
 
@@ -125,12 +126,9 @@ export default function Dashboard() {
   const telegramExpiryRef = useRef<number>(0)
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
   // 처음 사용자 도움말 팝업: 진입 시 help_seen===false 자동 노출 / 설정에서 재열기
   const [showHelp, setShowHelp] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const settingsMenuRef = useRef<HTMLDivElement>(null)
-  const settingsBtnRef = useRef<HTMLButtonElement>(null)
+  // 헤더(로고·탭·테마·설정 드롭다운)는 공용 AppHeader가 담당. 대시보드는 사이드바만 자체 관리.
   // 실제 구독 상태는 profile.plan(free/pro/vip)에서 판정
   const [profile, setProfile] = useState<Profile | null>(null)
 
@@ -261,36 +259,18 @@ export default function Dashboard() {
     }
   }, [])
 
-  // 테마 초기 동기화 (layout.tsx bootstrap script 가 이미 html.dataset.theme 설정) +
-  // OS 선호도 변경 자동 반영 (사용자가 명시 토글하지 않은 경우에만)
+  // OS 선호도 변경 자동 반영 (사용자가 명시 토글하지 않은 경우에만).
+  // 테마 토글 UI/상태는 AppHeader가 담당하므로 여기선 document.dataset만 직접 갱신한다.
   useEffect(() => {
-    const current = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
-    setTheme(current)
-
     if (typeof window.matchMedia !== 'function') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     function onSystemChange(e: MediaQueryListEvent) {
       try { if (localStorage.getItem('theme')) return } catch { return }
-      const next: 'light' | 'dark' = e.matches ? 'dark' : 'light'
-      setTheme(next)
-      document.documentElement.dataset.theme = next
+      document.documentElement.dataset.theme = e.matches ? 'dark' : 'light'
     }
     mq.addEventListener('change', onSystemChange)
     return () => mq.removeEventListener('change', onSystemChange)
   }, [])
-
-  // 설정 드롭다운 외부 클릭 시 닫기
-  useEffect(() => {
-    if (!settingsOpen) return
-    function onMouseDown(e: MouseEvent) {
-      const target = e.target as Node
-      if (settingsMenuRef.current?.contains(target)) return
-      if (settingsBtnRef.current?.contains(target)) return
-      setSettingsOpen(false)
-    }
-    document.addEventListener('mousedown', onMouseDown)
-    return () => document.removeEventListener('mousedown', onMouseDown)
-  }, [settingsOpen])
 
   const sendTimeOptions = (() => {
     const arr: string[] = []
@@ -614,13 +594,6 @@ export default function Dashboard() {
     window.location.href = '/'
   }
 
-  function toggleTheme() {
-    const next: 'light' | 'dark' = theme === 'light' ? 'dark' : 'light'
-    setTheme(next)
-    document.documentElement.dataset.theme = next
-    try { localStorage.setItem('theme', next) } catch {}
-  }
-
   // 관리자 Free/Pro 토글 — 본인 계정의 실제 DB plan을 변경(일반 강등/승격과 동일 효과).
   // 강등(free) 시 set-plan이 채널 정리 + delivery_method→email 복구까지 수행한다.
   async function switchPlanMode(mode: 'free' | 'pro') {
@@ -690,59 +663,12 @@ export default function Dashboard() {
     color: 'var(--bg-card)', fontSize: 12, fontWeight: 700,
     flexShrink: 0,
   }
-  const navBtnStyle = (active: boolean): React.CSSProperties => ({
-    padding: '6px 12px',
-    borderRadius: 7,
-    background: active ? 'var(--bg-subtle)' : 'transparent',
-    color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
-    fontWeight: active ? 500 : 400,
-    border: 'none',
-    fontSize: 13,
-    cursor: 'pointer',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    transition: 'background 0.15s, color 0.15s',
-    fontFamily: 'inherit',
-  })
-  const gearBtn: React.CSSProperties = {
-    width: 32, height: 32, borderRadius: 8,
-    background: 'transparent', border: '1px solid var(--border)',
-    color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 14,
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  }
-  const proUpgradeBtn: React.CSSProperties = {
-    padding: '6px 12px',
-    borderRadius: 7,
-    background: 'linear-gradient(135deg, #18181b 0%, #3f3f46 100%)',
-    color: '#FFFFFF',
-    fontSize: 12, fontWeight: 600,
-    border: 'none', cursor: 'pointer',
-    fontFamily: 'inherit',
-    whiteSpace: 'nowrap',
-  }
+  // 탭 네비/기어/업그레이드 버튼 스타일은 공용 AppHeader로 이동(대시보드에선 제거).
   const breakingBadge: React.CSSProperties = {
     background: 'var(--danger)', color: '#fff',
     fontSize: 10, fontWeight: 600,
     padding: '1px 6px', borderRadius: 999,
     lineHeight: 1.4,
-  }
-  const dropdownStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 60,
-    right: 16,
-    width: 280,
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    borderRadius: 12,
-    boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-    padding: 6,
-    zIndex: 60,
-  }
-  const dropdownSectionTitle: React.CSSProperties = {
-    fontSize: 10, color: 'var(--text-muted)',
-    letterSpacing: 0.8, textTransform: 'uppercase',
-    padding: '10px 12px 6px', fontWeight: 600,
   }
   const dropdownItemStyle: React.CSSProperties = {
     width: '100%', textAlign: 'left',
@@ -896,196 +822,20 @@ export default function Dashboard() {
       fontFamily: 'var(--font-sans)',
       position: 'relative',
     }}>
-      {/* =============== 상단 헤더 =============== */}
-      <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        height: 56,
-        background: 'var(--bg-card)',
-        borderBottom: '0.5px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        padding: isMobile ? '0 14px' : '0 20px',
-      }}>
-        {isMobile ? (
-          <>
-            <div
-              onClick={() => setActiveTab('channels')}
-              role="button"
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-              style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
-              <div style={logoBox}>D</div>
-              <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</div>
-              <UserPlanBadge plan={plan} size="sm" />
-            </div>
-            <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-              {/* 언어 토글은 설정 드롭다운 안으로 이동 */}
-              <button
-                onClick={toggleTheme}
-                aria-label={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
-                style={{
-                  width: 36, height: 36, borderRadius: 8,
-                  background: 'transparent', border: 'none',
-                  color: 'var(--text-primary)', fontSize: 16, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </button>
-              <button onClick={() => setSidebarOpen(true)}
-                aria-label={t('nav.openMenu')}
-                style={{
-                  width: 36, height: 36, borderRadius: 8,
-                  background: 'transparent', border: 'none',
-                  color: 'var(--text-primary)', fontSize: 20, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                ☰
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-              <div
-                onClick={() => setActiveTab('channels')}
-                role="button"
-                onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-                style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
-                <div style={logoBox}>D</div>
-                <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</div>
-                <UserPlanBadge plan={plan} size="sm" />
-              </div>
-              <nav style={{ display: 'flex', gap: 2 }}>
-                {tabs.map(tab => (
-                  <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                    style={navBtnStyle(activeTab === tab.key)}
-                    onMouseEnter={e => { if (activeTab !== tab.key) e.currentTarget.style.background = 'var(--bg-subtle)' }}
-                    onMouseLeave={e => { if (activeTab !== tab.key) e.currentTarget.style.background = 'transparent' }}>
-                    {tab.label}
-                    {tab.key === 'history' && breakingUnread > 0 && (
-                      <span style={breakingBadge}>{breakingUnread}</span>
-                    )}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-              {plan === 'FREE' && (
-                <button onClick={() => router.push('/pricing')}
-                  style={proUpgradeBtn}>
-                  {t('nav.proUpgrade')}
-                </button>
-              )}
-              {/* 관리자 전용 Free/Pro 임시 모드 토글 */}
-              {isAdmin && (
-                <div title={t('plans.previewHint')}
-                  style={{
-                    display: 'inline-flex',
-                    background: 'var(--bg-subtle)',
-                    borderRadius: 7,
-                    padding: 2,
-                    border: '0.5px dashed var(--border)',
-                  }}>
-                  {(['free', 'pro'] as const).map(mode => {
-                    const active = (isPro ? 'pro' : 'free') === mode
-                    const label = mode === 'pro' ? 'Pro' : 'Free'
-                    return (
-                      <button key={mode}
-                        onClick={() => switchPlanMode(mode)}
-                        onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)' }}
-                        onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-tertiary)' }}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 5,
-                          background: active ? 'var(--bg-card)' : 'transparent',
-                          color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                          fontWeight: active ? 500 : 400,
-                          boxShadow: active ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-                          border: 'none',
-                          fontSize: 11,
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          transition: 'background 0.15s, color 0.15s',
-                        }}>
-                        <span style={{ fontSize: 10, opacity: active ? 1 : 0.6 }}>👁</span>
-                        {label}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              {/* 사용자 / 관리자 모드 토글 (관리자 전용) */}
-              {isAdmin && (
-                <div style={{
-                  display: 'inline-flex',
-                  background: 'var(--bg-subtle)',
-                  borderRadius: 7,
-                  padding: 2,
-                }}>
-                  <button
-                    style={{
-                      padding: '4px 10px', borderRadius: 5, border: 'none',
-                      background: 'var(--bg-card)', color: 'var(--text-primary)',
-                      fontWeight: 500, fontSize: 11, cursor: 'default',
-                      fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                    }}>
-                    {t('admin.userMode')}
-                  </button>
-                  <button
-                    onClick={() => router.push('/admin')}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
-                    style={{
-                      padding: '4px 10px', borderRadius: 5, border: 'none',
-                      background: 'transparent', color: 'var(--text-tertiary)',
-                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                      transition: 'color 0.15s',
-                    }}>
-                    {t('admin.adminMode')}
-                  </button>
-                </div>
-              )}
-              {/* 언어 토글은 설정 드롭다운 안으로 이동 / 빠른 테마 토글 */}
-              <button
-                onClick={toggleTheme}
-                aria-label={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
-                title={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                style={{
-                  width: 32, height: 32, borderRadius: 6,
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer', fontSize: 14,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'inherit',
-                }}>
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </button>
-              <button ref={settingsBtnRef} onClick={() => setSettingsOpen(o => !o)}
-                aria-label={t('common.settings')}
-                style={gearBtn}>
-                ⚙
-              </button>
-            </div>
-          </>
-        )}
-      </header>
-
-      {/* =============== 설정 드롭다운 (데스크탑) =============== */}
-      {settingsOpen && !isMobile && (
-        <div ref={settingsMenuRef} style={dropdownStyle}>
-          {renderSettingsItems(() => setSettingsOpen(false))}
-        </div>
-      )}
+      {/* =============== 상단 헤더 (공용 AppHeader 사용) =============== */}
+      {/* 대시보드 전용 요소(탭·업그레이드·관리자 토글·모바일 사이드바 열기·도움말)는 prop 주입.
+          설정 드롭다운/테마 토글은 AppHeader가 담당. 모바일 사이드바는 아래 대시보드 고유 패널 유지. */}
+      <AppHeader
+        showTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={(k) => setActiveTab(k as typeof activeTab)}
+        breakingUnread={breakingUnread}
+        onOpenSidebar={() => setSidebarOpen(true)}
+        adminPlanMode={isPro ? 'pro' : 'free'}
+        onAdminPlanModeChange={(mode) => switchPlanMode(mode)}
+        onHelpClick={() => setShowHelp(true)}
+      />
 
       {/* =============== 모바일 우측 슬라이드 시트 =============== */}
       {isMobile && (
