@@ -11,7 +11,7 @@ import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 // 공통 상단바 — 대시보드 헤더와 동일한 모양/동작을 하위 페이지(profile/pricing)에서 재사용.
 // 대시보드 전용 네비(채널/발송설정/열람기록)는 포함하지 않는다 (A안: 하위 페이지엔 네비 없음).
 // 플랜/언어/테마 상태는 컴포넌트 내부에서 자체 로드.
-export function AppHeader({ showBack = false }: { showBack?: boolean }) {
+export function AppHeader({ showBack = false, onHelpClick }: { showBack?: boolean; onHelpClick?: () => void }) {
   const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
 
@@ -176,11 +176,17 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
           onSelect={(l) => { closeMenu(); changeLocale(l) }}
         />
 
-        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/profile?tab=help') }}>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); if (onHelpClick) onHelpClick(); else router.push('/dashboard') }}>
           {t('settings.help')}
         </button>
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>
           {t('settings.terms')}
+        </button>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/privacy') }}>
+          {t('settings.privacy')}
+        </button>
+        <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/refund') }}>
+          {t('settings.refund')}
         </button>
 
         {isAdmin && (
@@ -247,7 +253,7 @@ export function AppHeader({ showBack = false }: { showBack?: boolean }) {
               padding: 0, fontFamily: 'inherit', color: 'var(--text-primary)',
             }}>
             <div style={logoBox}>D</div>
-            <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
+            <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</div>
           </button>
           <UserPlanBadge plan={plan} size="sm" />
           {/* 뒤로가기 (로고 그룹 오른쪽 끝) */}

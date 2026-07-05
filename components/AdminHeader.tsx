@@ -51,7 +51,7 @@ export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
             fontSize: 12, fontWeight: 700, flexShrink: 0,
           }}>D</div>
           <span style={{ fontSize: 15, fontWeight: 600, color: ADMIN_BAR_FG, letterSpacing: -0.2 }}>
-            Daily Digest
+            Daily Video Digest
           </span>
         </div>
         <span style={{

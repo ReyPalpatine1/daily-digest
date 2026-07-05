@@ -9,6 +9,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import UserPlanBadge from '@/components/UserPlanBadge'
+import HelpPopup from '@/components/HelpPopup'
 import { AlertTriangle } from 'lucide-react'
 
 export default function ProfilePage() {
@@ -24,6 +25,10 @@ export default function ProfilePage() {
   const [showDelete, setShowDelete] = useState(false)
   const [deleteAgree, setDeleteAgree] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // 도움말 팝업 (설정 메뉴에서 열기). help_seen 저장은 대시보드와 동일 방식.
+  const [showHelp, setShowHelp] = useState(false)
+  const [settings, setSettings] = useState<{ help_seen: boolean } | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -48,10 +53,37 @@ export default function ProfilePage() {
       if (cancelled) return
 
       setProfile(profileRow as Profile | null)
+
+      // 도움말 팝업 체크박스 초기값(help_seen)만 로드 (대시보드와 동일 컬럼).
+      const { data: settingsRow } = await supabase
+        .from('settings')
+        .select('help_seen')
+        .eq('user_id', data.user.id)
+        .maybeSingle()
+      if (cancelled) return
+      setSettings({ help_seen: (settingsRow as { help_seen?: boolean } | null)?.help_seen ?? false })
+
       setReady(true)
     })
     return () => { cancelled = true }
   }, [router])
+
+  // HelpPopup 반응형 분기용 (대시보드와 동일 브레이크포인트)
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // 도움말 닫기: "다시 보지 않기" 체크 상태(true/false)를 help_seen에 양방향 저장 (대시보드와 동일).
+  async function closeHelp(dontShowAgain: boolean) {
+    setShowHelp(false)
+    if (!user) return
+    if ((settings?.help_seen ?? false) === dontShowAgain) return // 변경 없으면 저장 생략
+    setSettings((prev) => (prev ? { ...prev, help_seen: dontShowAgain } : { help_seen: dontShowAgain }))
+    await supabase.from('settings').update({ help_seen: dontShowAgain }).eq('user_id', user.id)
+  }
 
   const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
 
@@ -136,7 +168,7 @@ export default function ProfilePage() {
       minHeight: '100vh', background: 'var(--bg-primary)',
       color: 'var(--text-primary)', fontFamily: 'var(--font-sans)',
     }}>
-      <AppHeader showBack />
+      <AppHeader showBack onHelpClick={() => setShowHelp(true)} />
 
       <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 20px 56px' }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 18px', letterSpacing: -0.4 }}>
@@ -276,6 +308,11 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* === 도움말 팝업 (설정 메뉴에서 열기) === */}
+      {showHelp && (
+        <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} onClose={closeHelp} />
       )}
 
       {/* === 토스트 === */}
