@@ -45,6 +45,10 @@ export default function Home() {
     { channel: t('landing.item4.channel'), title: t('landing.item4.title'), summary: t('landing.item4.summary') },
   ]
 
+  // 동의 문구 링크 / 푸터 링크 (내부 페이지 → 일반 앵커, 흑백·CSS 변수)
+  const consentLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'underline' }
+  const footerLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'none' }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -162,6 +166,14 @@ export default function Home() {
                 {googleSvg}
                 {t('landing.cta')}
               </button>
+              {/* 동의 문구 (로그인 진입 버튼 바로 아래) */}
+              <p style={{ maxWidth: 340, margin: '14px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+                {t('landing.consentNotice').split(/(\{terms\}|\{privacy\})/).map((part, i) => {
+                  if (part === '{terms}') return <a key={i} href="/terms" style={consentLinkStyle}>{t('settings.terms')}</a>
+                  if (part === '{privacy}') return <a key={i} href="/privacy" style={consentLinkStyle}>{t('settings.privacy')}</a>
+                  return <span key={i}>{part}</span>
+                })}
+              </p>
             </div>
           </div>
 
@@ -233,6 +245,22 @@ export default function Home() {
             }} />
           </div>
         </section>
+
+        {/* 하단 푸터 (약관 링크 + 저작권) */}
+        <footer style={{
+          borderTop: '0.5px solid var(--border)',
+          padding: '24px 0 32px',
+          display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+            <a href="/terms" style={footerLinkStyle}>{t('settings.terms')}</a>
+            <span aria-hidden="true">·</span>
+            <a href="/privacy" style={footerLinkStyle}>{t('settings.privacy')}</a>
+            <span aria-hidden="true">·</span>
+            <a href="/refund" style={footerLinkStyle}>{t('settings.refund')}</a>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>© 2026 Daily Video Digest</div>
+        </footer>
       </div>
     </div>
   )
