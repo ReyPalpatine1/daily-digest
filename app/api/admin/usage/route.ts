@@ -110,7 +110,7 @@ export async function GET() {
     return { profileRows: res.data ?? [], hasCreatedAt: true }
   }
 
-  const [apiUsageRes, profilesRes, dauRes, mauRes, latestDigestRes, topChannelsRes] = await Promise.all([
+  const [apiUsageRes, profilesRes, dauRes, mauRes, latestDigestRes, topChannelsRes, monthUsageRes] = await Promise.all([
     // === API 사용량 (오늘+최근7일만 DB 집계 RPC) ===
     serviceClient.rpc('admin_usage_summary', { today_date: today, week_start: sevenDaysAgo }),
     fetchProfiles(),
@@ -118,6 +118,10 @@ export async function GET() {
     serviceClient.rpc('admin_active_users', { since: monthStartKstUtc }),
     serviceClient.rpc('admin_latest_digest'),
     serviceClient.rpc('admin_top_channels'),
+    // === 이번 달 누적(월 1일 KST~지금) — api_usage 직접 조회 후 service별 합산 ===
+    // date 컬럼은 KST 날짜 문자열이라 monthStart(YYYY-MM-01)로 직접 비교 가능.
+    // 소규모 데이터라 range로 상한을 넉넉히 잡아 기본 1000행 캡을 회피(합계 누락 방지).
+    serviceClient.from('api_usage').select('service, api_calls').gte('date', monthStart).range(0, 99999),
   ])
 
   const dbResponseMs = Date.now() - dbStart
@@ -158,6 +162,15 @@ export async function GET() {
     if (entry && (service === 'gemini' || service === 'youtube' || service === 'supadata' || service === 'transcriptapi')) {
       entry[service] += calls
     }
+  }
+
+  // === 이번 달 누적(service별 api_calls 합) ===
+  const monthTotals: Record<Service, number> = { gemini: 0, youtube: 0, supadata: 0, transcriptapi: 0 }
+  const monthRows = monthUsageRes.error ? [] : (monthUsageRes.data ?? [])
+  for (const row of monthRows) {
+    const service = ((row as any).service ?? 'gemini') as Service
+    const calls = Number((row as any).api_calls) || 0
+    if (service in monthTotals) monthTotals[service] += calls
   }
 
   // === 사용자 통계 ===
@@ -229,11 +242,13 @@ export async function GET() {
       hasCreatedAt,
     },
     api: {
-      gemini: { today: todayApi.gemini, limit: 1500 },
-      youtube: { today: todayApi.youtube, limit: 10000 },
-      supadata: { today: todayApi.supadata, limit: 100 },
+      // today·limit 필드는 기존 화면 호환용으로 유지. monthTotal·limitPeriod는 신규.
+      gemini: { today: todayApi.gemini, monthTotal: monthTotals.gemini, limit: 1500, limitPeriod: 'day' as const },
+      youtube: { today: todayApi.youtube, monthTotal: monthTotals.youtube, limit: 10000, limitPeriod: 'day' as const },
+      // Supadata는 무료 100크레딧/월 → 월 한도 기준.
+      supadata: { today: todayApi.supadata, monthTotal: monthTotals.supadata, limit: 100, limitPeriod: 'month' as const },
       // TranscriptAPI 무료 한도 정확값 미상 → limit null(화면에서 "대시보드 확인"). 추측 금지.
-      transcriptapi: { today: todayApi.transcriptapi, limit: null as number | null },
+      transcriptapi: { today: todayApi.transcriptapi, monthTotal: monthTotals.transcriptapi, limit: null as number | null, limitPeriod: null as 'day' | 'month' | null },
     },
     revenue: {
       // 결제 시스템 미연동 — 0 placeholder

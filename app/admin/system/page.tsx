@@ -11,7 +11,12 @@ import { AdminHeader } from '@/components/AdminHeader'
 // 2단계: 외부 API 현황판 + 고정비 안내 + 바로가기 링크 모음 추가.
 // 시스템 상태(cron·발송 성공률·에러·DB 응답) 블록은 대시보드(/admin)로 복귀했다.
 // 이 페이지는 외부 API 현황 + 고정비 안내 + 바로가기 링크 전용.
-type ApiEntry = { today: { count: number }; limit: number | null }
+type ApiEntry = {
+  today: { count: number }
+  monthTotal?: number
+  limit: number | null
+  limitPeriod?: 'day' | 'month' | null
+}
 type SystemStats = {
   generatedAt: string
   api?: {
@@ -121,31 +126,47 @@ export default function AdminSystemPage() {
                 { key: 'supadata', label: 'Supadata', desc: t('adminSystem.descSupadata'), entry: s.api.supadata, note: t('adminSystem.supadataCreditNote'), noteUrl: 'https://supadata.ai' },
                 { key: 'transcriptapi', label: 'TranscriptAPI', desc: t('adminSystem.descTranscript'), entry: s.api.transcriptapi, note: null, noteUrl: null },
               ]).map(a => {
-                const count = a.entry?.today?.count ?? 0
+                const todayCount = a.entry?.today?.count ?? 0
+                const monthCount = a.entry?.monthTotal ?? 0
                 const limit = a.entry?.limit ?? null
-                const pct = limit && limit > 0 ? Math.round((count / limit) * 100) : 0
+                const period = a.entry?.limitPeriod ?? null
+                // 막대바 기준값: 월 한도면 이번 달 누적, 일일 한도면 오늘 사용량.
+                const barCount = period === 'month' ? monthCount : todayCount
+                const pct = limit && limit > 0 ? Math.round((barCount / limit) * 100) : 0
                 const overColor = usageColor(pct)
-                const valueColor = pct >= 80 ? overColor : 'var(--text-primary)'
+                const barValueColor = pct >= 80 ? overColor : 'var(--text-primary)'
+                const limitLabel = period === 'month' ? t('adminSystem.apiLimitMonthly') : t('adminSystem.apiLimitDaily')
+                const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }
                 return (
                   <div key={a.key} style={cardStyle}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{a.label}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{a.desc}</div>
 
+                    {/* 오늘 / 이번 달 사용량 (항상 표시) */}
+                    <div style={{ ...rowStyle, marginTop: 12 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.apiUsageToday')}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nf.format(todayCount)}</span>
+                    </div>
+                    <div style={rowStyle}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.apiUsageMonth')}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nf.format(monthCount)}</span>
+                    </div>
+
                     {limit != null ? (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.apiUsageToday')}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: valueColor }}>
-                            {nf.format(count)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>/ {nf.format(limit)}</span>
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{limitLabel}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: barValueColor }}>
+                            {nf.format(barCount)} <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 400 }}>/ {nf.format(limit)}</span>
                           </span>
                         </div>
-                        <div style={{ height: 6, borderRadius: 999, background: 'var(--bg-subtle)', overflow: 'hidden', marginTop: 8 }}>
+                        <div style={{ height: 6, borderRadius: 999, background: 'var(--bg-subtle)', overflow: 'hidden', marginTop: 6 }}>
                           <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: overColor, borderRadius: 999 }} />
                         </div>
-                      </>
+                      </div>
                     ) : (
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 12 }}>
-                        {t('adminSystem.apiUsageCountOnly', { n: nf.format(count) })}
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+                        {t('adminSystem.apiLimitDashboard')}
                       </div>
                     )}
 
@@ -182,6 +203,16 @@ export default function AdminSystemPage() {
             <div style={cardStyle}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Supabase</div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{t('adminSystem.costSupabaseValue')}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t('adminSystem.costDomainTitle')} (dailyvideodigest.com)</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{t('adminSystem.costDomainValue')}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('adminSystem.costDomainNote')}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Supadata</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{t('adminSystem.costSupadataValue')}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('adminSystem.costSupadataNote')}</div>
             </div>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>{t('adminSystem.costFooter')}</div>
