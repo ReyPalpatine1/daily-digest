@@ -94,7 +94,7 @@ function shell(title: string, locale: EmailLocale, inner: string, footer: string
 function footerBlock(locale: EmailLocale, email?: string): string {
   return `
     <div style="text-align:center;padding:20px 0 8px;border-top:1px solid #E5E5E5;margin-top:24px;">
-      <div style="font-size:13px;font-weight:600;color:#0A0A0A;letter-spacing:-0.01em;">Daily Digest</div>
+      <div style="font-size:13px;font-weight:600;color:#0A0A0A;letter-spacing:-0.01em;">Daily Video Digest</div>
       <div style="font-size:11px;color:#A1A1AA;margin-top:4px;">${et(locale, 'digest.tagline')}</div>
       <div style="margin-top:14px;font-size:11px;">
         <a href="${APP_URL}/dashboard" style="color:#525252;text-decoration:underline;">${et(locale, 'digest.manageLink')}</a>
@@ -182,7 +182,7 @@ export function buildDigestHtml(
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="font-size:13px;font-weight:600;color:#0A0A0A;">
-            <span style="display:inline-block;width:20px;height:20px;background:#0A0A0A;border-radius:6px;vertical-align:middle;margin-right:7px;"></span>Daily Digest
+            <span style="display:inline-block;width:20px;height:20px;background:#0A0A0A;border-radius:6px;vertical-align:middle;margin-right:7px;"></span>Daily Video Digest
           </td>
           <td style="font-size:11px;color:#71717A;text-align:right;">${escapeHtml(date)}</td>
         </tr>

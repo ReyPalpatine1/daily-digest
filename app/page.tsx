@@ -76,7 +76,7 @@ export default function Home() {
               color: 'var(--bg-primary)',
               fontSize: 16, fontWeight: 700,
             }}>D</div>
-            <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</span>
+            <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</span>
           </div>
           <button
             onClick={loginWithGoogle}
@@ -195,7 +195,7 @@ export default function Home() {
                 flexShrink: 0,
               }}>D</div>
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Daily Digest</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Daily Video Digest</span>
                 <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>{t('landing.previewMeta')}</span>
               </div>
               <Mail size={16} style={{ marginLeft: 'auto', color: 'var(--text-tertiary)', flexShrink: 0 }} />

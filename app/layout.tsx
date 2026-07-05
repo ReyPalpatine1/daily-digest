@@ -20,13 +20,13 @@ const jetbrainsMono = JetBrains_Mono({
 // 한글 본문 폰트 Pretendard 는 globals.css 의 CDN @import 로 로드됨
 
 export const metadata: Metadata = {
-  title: "Daily Digest",
+  title: "Daily Video Digest",
   description: "유튜브 AI 요약 에이전트 / YouTube AI Summary Agent",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Daily Digest",
+    title: "Daily Video Digest",
   },
   icons: {
     icon: [

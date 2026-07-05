@@ -917,7 +917,7 @@ export default function Dashboard() {
               onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
               style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
               <div style={logoBox}>D</div>
-              <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
+              <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</div>
               <UserPlanBadge plan={plan} size="sm" />
             </div>
             <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
@@ -955,7 +955,7 @@ export default function Dashboard() {
                 onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
                 style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
                 <div style={logoBox}>D</div>
-                <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Digest</div>
+                <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</div>
                 <UserPlanBadge plan={plan} size="sm" />
               </div>
               <nav style={{ display: 'flex', gap: 2 }}>
@@ -1120,7 +1120,7 @@ export default function Dashboard() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <div style={logoBox}>D</div>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>Daily Digest</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Daily Video Digest</div>
                 <UserPlanBadge plan={plan} size="sm" />
               </div>
               <button onClick={() => setSidebarOpen(false)}

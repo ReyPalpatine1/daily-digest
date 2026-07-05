@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
   if (!code) {
     if (botToken) {
-      await sendTelegramMessage(botToken, chatId, '안녕하세요! Daily Digest 봇입니다.\n앱에서 연결 버튼을 누른 후 다시 시작해주세요.')
+      await sendTelegramMessage(botToken, chatId, '안녕하세요! Daily Video Digest 봇입니다.\n앱에서 연결 버튼을 누른 후 다시 시작해주세요.')
     }
     return NextResponse.json({ ok: true })
   }
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     await sendTelegramMessage(
       botToken,
       chatId,
-      `${name}님, Daily Digest 텔레그램 연결이 완료되었습니다!\n이제 이 채널로 다이제스트를 받아보실 수 있습니다. 🎉`,
+      `${name}님, Daily Video Digest 텔레그램 연결이 완료되었습니다!\n이제 이 채널로 다이제스트를 받아보실 수 있습니다. 🎉`,
     )
   }
 

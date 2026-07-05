@@ -45,8 +45,8 @@ export default function EmailPreviewPage() {
   }
 
   const html =
-    type === 'digest' ? buildDigestHtml(dummyDigestItems(emailLocale), 'Daily Digest', emailLocale)
-      : type === 'breaking' ? buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Digest', emailLocale)
+    type === 'digest' ? buildDigestHtml(dummyDigestItems(emailLocale), 'Daily Video Digest', emailLocale)
+      : type === 'breaking' ? buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Video Digest', emailLocale)
         : type === 'welcome' ? buildWelcomeHtml(emailLocale)
           : buildErrorPreviewHtml(emailLocale)
 

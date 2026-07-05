@@ -260,7 +260,7 @@ export const translations = {
       digestTimeout: '⏱ 처리 시간이 초과됐어요. 영상이 많으면 시간이 걸릴 수 있어요. 잠시 후 이메일을 확인해주세요.',
     },
     auth: {
-      loginTitle: 'Daily Digest',
+      loginTitle: 'Daily Video Digest',
       loginSubtitle: '유튜브 AI 요약 에이전트',
       loginGoogle: 'Google 계정으로 로그인',
       familyOnly: '가족 공유용 · 초대받은 분만 사용 가능',
@@ -841,7 +841,7 @@ export const translations = {
       digestTimeout: '⏱ Processing took too long. With many videos this can take a while — check your email shortly.',
     },
     auth: {
-      loginTitle: 'Daily Digest',
+      loginTitle: 'Daily Video Digest',
       loginSubtitle: 'YouTube AI Summary Agent',
       loginGoogle: 'Sign in with Google',
       familyOnly: 'Family share · Invite only',
@@ -1418,7 +1418,7 @@ export const translations = {
       digestTimeout: '⏱ 处理时间过长。视频较多时可能需要一些时间 — 请稍后查看邮箱。',
     },
     auth: {
-      loginTitle: 'Daily Digest',
+      loginTitle: 'Daily Video Digest',
       loginSubtitle: 'YouTube AI 摘要助手',
       loginGoogle: '使用 Google 登录',
       familyOnly: '家庭共享 · 仅限邀请',
@@ -1992,7 +1992,7 @@ export const translations = {
       digestTimeout: '⏱ 処理に時間がかかっています。動画が多いと時間がかかる場合があります — まもなくメールをご確認ください。',
     },
     auth: {
-      loginTitle: 'Daily Digest',
+      loginTitle: 'Daily Video Digest',
       loginSubtitle: 'YouTube AI 要約エージェント',
       loginGoogle: 'Googleでログイン',
       familyOnly: '家族共有 · 招待制',

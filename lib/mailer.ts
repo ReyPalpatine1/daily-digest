@@ -116,7 +116,7 @@ export async function sendDigestEmail(
 
   try {
     await transporter.sendMail({
-      from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'digest.subject', { date }),
       html: buildDigestHtml(items, userName, lc, to),
@@ -156,7 +156,7 @@ export async function sendEmptyDigestEmail(
 
   try {
     await transporter.sendMail({
-      from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'digest.emptySubject', { date }),
       html,
@@ -178,7 +178,7 @@ export async function sendBreakingAlert(
   const lc = normalizeLocale(locale)
   try {
     await transporter.sendMail({
-      from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'breaking.subject', { title: item.video.title }),
       html: buildBreakingHtml(item, userName, lc, to),
@@ -196,7 +196,7 @@ export async function sendWelcomeEmail(
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   await transporter.sendMail({
-    from: `"Daily Digest" <${process.env.GMAIL_USER}>`,
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'welcome.subject'),
     html: buildWelcomeHtml(lc),
@@ -267,13 +267,13 @@ export async function sendAdminBulkErrorEmail(
   `).join('')
 
   await transporter.sendMail({
-    from: `"Daily Digest 오류 알림" <${process.env.GMAIL_USER}>`,
+    from: `"Daily Video Digest 오류 알림" <${process.env.GMAIL_USER}>`,
     to: recipients.join(','),
-    subject: `❗ [Daily Digest] 요약 실패 알림 — ${failedItems.length}개 (${triggerLabel[trigger]})`,
+    subject: `❗ [Daily Video Digest] 요약 실패 알림 — ${failedItems.length}개 (${triggerLabel[trigger]})`,
     html: `
       <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:0 auto;padding:24px">
         <div style="background:#fff7f7;border:1px solid #ff4757;border-radius:12px;padding:24px;margin-bottom:24px">
-          <h1 style="font-size:22px;color:#b00000;margin:0 0 12px">Daily Digest 관리자 오류 알림</h1>
+          <h1 style="font-size:22px;color:#b00000;margin:0 0 12px">Daily Video Digest 관리자 오류 알림</h1>
           <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:20px">
             <p>발송 시점: ${today}</p>
             <p>발송 경로: <strong>${triggerLabel[trigger]}</strong></p>
