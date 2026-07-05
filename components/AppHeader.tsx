@@ -38,7 +38,8 @@ export function AppHeader({
   const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
 
-  const [user, setUser] = useState<any>(null)
+  // undefined = 로딩 중, null = 비로그인 확정, 객체 = 로그인. (약관 문서 등 비로그인 접근 대비)
+  const [user, setUser] = useState<any>(undefined)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminPlanMode, setAdminPlanMode] = useState<'free' | 'pro'>('free')
@@ -56,11 +57,17 @@ export function AppHeader({
   const isPro = isAdmin ? effectiveAdminPlanMode === 'pro' : realIsPro
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
+  // 로그인 상태 분기. isLoggedIn=계정/플랜 UI 노출, isLoggedOut(=null)=로그인 버튼 노출.
+  // 로딩 중(undefined)엔 둘 다 false → 계정 영역을 비워둔다(PRO 깜빡임·오표시 방지).
+  const isLoggedIn = !!user
+  const isLoggedOut = user === null
+
   // 사용자 / 프로필 / 관리자 모드 자체 로드
   useEffect(() => {
     let cancelled = false
     supabase.auth.getUser().then(async ({ data }) => {
-      if (cancelled || !data.user) return
+      if (cancelled) return
+      if (!data.user) { setUser(null); return } // 비로그인 확정 (undefined=로딩과 구분)
       setUser(data.user)
 
       const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
@@ -207,24 +214,27 @@ export function AppHeader({
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '사용자'
     return (
       <>
-        {/* 사용자 헤더 */}
-        <button
-          style={{ ...dropdownItemStyle, padding: '10px 12px' }}
-          onClick={() => { closeMenu(); router.push('/profile') }}>
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {userName}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.email}
-            </span>
-          </div>
-          <UserPlanBadge plan={plan} size="sm" />
-        </button>
+        {/* 사용자 헤더 (로그인 시에만) */}
+        {isLoggedIn && (
+          <>
+            <button
+              style={{ ...dropdownItemStyle, padding: '10px 12px' }}
+              onClick={() => { closeMenu(); router.push('/profile') }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {userName}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user?.email}
+                </span>
+              </div>
+              <UserPlanBadge plan={plan} size="sm" />
+            </button>
+            <div style={dropdownDivider} />
+          </>
+        )}
 
-        <div style={dropdownDivider} />
-
-        {/* 언어 (하위 메뉴: 데스크탑=플라이아웃 / 모바일=아코디언) */}
+        {/* 언어 (하위 메뉴: 데스크탑=플라이아웃 / 모바일=아코디언) — 로그인 무관 */}
         <LanguageSubmenu
           locale={locale}
           label={t('settings.language')}
@@ -233,9 +243,13 @@ export function AppHeader({
           onSelect={(l) => { closeMenu(); changeLocale(l) }}
         />
 
-        <button style={dropdownItemStyle} onClick={() => { closeMenu(); if (onHelpClick) onHelpClick(); else router.push('/dashboard') }}>
-          {t('settings.help')}
-        </button>
+        {/* 도움말은 로그인(온보딩) 전용 → 비로그인 숨김 */}
+        {isLoggedIn && (
+          <button style={dropdownItemStyle} onClick={() => { closeMenu(); if (onHelpClick) onHelpClick(); else router.push('/dashboard') }}>
+            {t('settings.help')}
+          </button>
+        )}
+        {/* 약관/개인정보/환불은 문서라 비로그인도 접근 가능 → 항상 노출 */}
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>
           {t('settings.terms')}
         </button>
@@ -255,7 +269,7 @@ export function AppHeader({
           </>
         )}
 
-        {plan === 'FREE' && (
+        {isLoggedIn && plan === 'FREE' && (
           <>
             <div style={dropdownDivider} />
             <div style={{ padding: '4px 6px 6px' }}>
@@ -279,11 +293,23 @@ export function AppHeader({
           </>
         )}
 
-        <div style={dropdownDivider} />
-
-        <button style={dropdownItemStyle} onClick={() => { closeMenu(); logout() }}>
-          {t('settings.logout')}
-        </button>
+        {/* 로그인 시 로그아웃 / 비로그인 확정 시 로그인. 로딩 중(undefined)엔 둘 다 숨김. */}
+        {isLoggedIn && (
+          <>
+            <div style={dropdownDivider} />
+            <button style={dropdownItemStyle} onClick={() => { closeMenu(); logout() }}>
+              {t('settings.logout')}
+            </button>
+          </>
+        )}
+        {isLoggedOut && (
+          <>
+            <div style={dropdownDivider} />
+            <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/') }}>
+              {t('landing.loginShort')}
+            </button>
+          </>
+        )}
       </>
     )
   }
@@ -312,11 +338,11 @@ export function AppHeader({
             <div style={logoBox}>D</div>
             <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</div>
           </button>
-          <UserPlanBadge plan={plan} size="sm" />
+          {isLoggedIn && <UserPlanBadge plan={plan} size="sm" />}
           {/* 뒤로가기 (로고 그룹 오른쪽 끝) */}
           {showBack && (
             <button
-              onClick={() => router.back()}
+              onClick={() => { if (typeof window !== 'undefined' && window.history.length > 1) router.back(); else router.push('/') }}
               aria-label={t('subscribe.back')}
               title={t('subscribe.back')}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
@@ -345,13 +371,13 @@ export function AppHeader({
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* 대시보드 전용: Free면 Pro 업그레이드 버튼 (데스크톱) */}
-          {showTabs && !isMobile && plan === 'FREE' && (
+          {showTabs && !isMobile && isLoggedIn && plan === 'FREE' && (
             <button onClick={() => router.push('/pricing')} style={proUpgradeBtn}>
               {t('nav.proUpgrade')}
             </button>
           )}
           {/* 대시보드 전용: 관리자 Free/Pro 미리보기 토글 (데스크톱). 상태는 주입값, 클릭은 콜백 우선 */}
-          {showTabs && !isMobile && isAdmin && (
+          {showTabs && !isMobile && isLoggedIn && isAdmin && (
             <div title={t('plans.previewHint')}
               style={{
                 display: 'inline-flex',

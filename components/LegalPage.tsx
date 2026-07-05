@@ -1,13 +1,11 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { AppHeader } from '@/components/AppHeader'
 
 // 법률 문서 공통 렌더 컴포넌트.
 // content 는 lib/legal/content.ts 의 마크다운형 문자열(줄바꿈 기준 문단).
-// 흑백 톤, CSS 변수만 사용. AppHeader 없이 단순 문서 레이아웃.
+// 흑백 톤, CSS 변수만 사용. 상단은 공용 AppHeader(showBack) — 비로그인 접근에도 안전.
 export default function LegalPage({ title, content }: { title: string; content: string }) {
-  const router = useRouter()
-
   // 줄바꿈(빈 줄 포함) 기준으로 문단 분리 후, 빈 문단 제거.
   const blocks = content.split('\n').map(l => l.trim()).filter(Boolean)
 
@@ -18,26 +16,13 @@ export default function LegalPage({ title, content }: { title: string; content: 
       color: 'var(--text-primary)',
       fontFamily: 'var(--font-sans)',
     }}>
+      <AppHeader showBack />
+
       <div style={{
         maxWidth: 720,
         margin: '0 auto',
         padding: '24px 20px 80px',
       }}>
-        <button
-          onClick={() => router.push('/dashboard')}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-secondary)',
-            fontSize: 13,
-            cursor: 'pointer',
-            padding: '4px 0',
-            fontFamily: 'inherit',
-            marginBottom: 20,
-          }}>
-          ← 대시보드로 돌아가기
-        </button>
-
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24, letterSpacing: -0.3 }}>
           {title}
         </h1>
