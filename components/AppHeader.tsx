@@ -420,6 +420,16 @@ export function AppHeader({
               })}
             </div>
           )}
+          {/* 대시보드 전용: 관리자 페이지 이동 (데스크톱, 관리자만). 모바일은 설정 드롭다운의 /admin 사용 */}
+          {showTabs && !isMobile && isLoggedIn && isAdmin && (
+            <button
+              onClick={() => router.push('/admin')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              style={navBtnStyle(false)}>
+              {t('nav.admin')}
+            </button>
+          )}
           {/* 빠른 테마 토글 (언어 토글은 설정 드롭다운 안으로 이동) */}
           <button
             onClick={toggleTheme}
