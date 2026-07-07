@@ -217,8 +217,8 @@ export default function PricingPage() {
         {/* 요약 한계 고지 */}
         <div style={{
           display: 'flex', gap: 10, alignItems: 'flex-start',
-          background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
-          borderRadius: 8, padding: '12px 14px', marginTop: 24, marginBottom: 28,
+          background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+          borderRadius: 14, padding: '14px 16px', marginTop: 24, marginBottom: 28,
         }}>
           <Info size={18} style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
