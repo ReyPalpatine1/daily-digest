@@ -8,7 +8,7 @@ import { supabase, getPlanView } from '@/lib/supabase'
 import type { Profile, PlanView } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
-import { Check, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { Check, X, ChevronUp, ChevronDown, Info } from 'lucide-react'
 
 const PRICE_MONTHLY = 4900
 
@@ -214,6 +214,18 @@ export default function PricingPage() {
           </div>
         </div>
 
+        {/* 요약 한계 고지 */}
+        <div style={{
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+          background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
+          borderRadius: 8, padding: '12px 14px', marginTop: 24, marginBottom: 28,
+        }}>
+          <Info size={18} style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            {pricing.limitNotice}
+          </div>
+        </div>
+
         {/* FAQ */}
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 14 }}>{pricing.faqTitle}</h2>
@@ -248,13 +260,6 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* 요약 한계 고지 */}
-        <div style={{
-          marginTop: 20, fontSize: 12, color: 'var(--text-muted)',
-          textAlign: 'center', lineHeight: 1.6,
-        }}>
-          {pricing.limitNotice}
-        </div>
       </main>
     </div>
   )
