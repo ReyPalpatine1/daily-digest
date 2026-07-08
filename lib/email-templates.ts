@@ -98,6 +98,8 @@ function footerBlock(locale: EmailLocale, email?: string): string {
       <div style="font-size:11px;color:#A1A1AA;margin-top:4px;">${et(locale, 'digest.tagline')}</div>
       <div style="margin-top:14px;font-size:11px;">
         <a href="${APP_URL}/dashboard" style="color:#525252;text-decoration:underline;">${et(locale, 'digest.manageLink')}</a>
+        &nbsp;·&nbsp;
+        <a href="${APP_URL}/feedback" style="color:#525252;text-decoration:underline;">${et(locale, 'digest.feedbackLink')}</a>
       </div>
       ${email ? `<div style="font-size:11px;color:#A1A1AA;margin-top:14px;">${escapeHtml(et(locale, 'digest.sentTo', { email }))}</div>` : ''}
     </div>`

@@ -243,11 +243,16 @@ export function AppHeader({
           onSelect={(l) => { closeMenu(); changeLocale(l) }}
         />
 
-        {/* 도움말은 로그인(온보딩) 전용 → 비로그인 숨김 */}
+        {/* 도움말·의견 보내기는 로그인(온보딩) 전용 → 비로그인 숨김 */}
         {isLoggedIn && (
-          <button style={dropdownItemStyle} onClick={() => { closeMenu(); if (onHelpClick) onHelpClick(); else router.push('/dashboard') }}>
-            {t('settings.help')}
-          </button>
+          <>
+            <button style={dropdownItemStyle} onClick={() => { closeMenu(); if (onHelpClick) onHelpClick(); else router.push('/dashboard') }}>
+              {t('settings.help')}
+            </button>
+            <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/feedback') }}>
+              {t('feedback.title')}
+            </button>
+          </>
         )}
         {/* 약관/개인정보/환불은 문서라 비로그인도 접근 가능 → 항상 노출 */}
         <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/terms') }}>

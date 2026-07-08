@@ -2329,6 +2329,20 @@ export default function Dashboard() {
             </div>
           )
         })()}
+
+        {/* 의견 보내기 스트립 — 모든 탭에서 상시 노출 */}
+        <div style={{
+          marginTop: 24, marginBottom: 8, padding: '14px 16px',
+          background: 'var(--bg-card)', border: '0.5px solid var(--border)', borderRadius: 12,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('feedback.dashboardPrompt')}</span>
+          <button onClick={() => router.push('/feedback')} style={{
+            padding: '8px 14px', borderRadius: 8, border: '0.5px solid var(--border)',
+            background: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 500,
+            fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>{t('feedback.title')}</button>
+        </div>
       </main>
 
       {/* 열람 기록 "맨 위로" 버튼 (히스토리 탭 + 일정량 스크롤 시) */}
