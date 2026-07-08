@@ -524,7 +524,9 @@ export const translations = {
       messagePlaceholder: '자유롭게 의견을 남겨 주세요.',
       submit: '보내기',
       submitting: '보내는 중…',
-      successToast: '의견 감사합니다. 잘 반영하겠습니다.',
+      successTitle: '의견이 전송되었습니다.',
+      successBody: '보내주신 의견은 서비스를 개선하는 데 참고합니다.',
+      close: '닫기',
       errorToast: '전송에 실패했어요. 잠시 후 다시 시도해 주세요.',
     },
     subscribeSuccess: {
@@ -1127,7 +1129,9 @@ export const translations = {
       messagePlaceholder: 'Share your thoughts freely.',
       submit: 'Send',
       submitting: 'Sending…',
-      successToast: 'Thanks for your feedback. We’ll take it to heart.',
+      successTitle: 'Your feedback has been sent.',
+      successBody: 'We’ll use your input as a reference to improve the service.',
+      close: 'Close',
       errorToast: 'Failed to send. Please try again in a moment.',
     },
     subscribeSuccess: {
@@ -1726,7 +1730,9 @@ export const translations = {
       messagePlaceholder: '欢迎自由留言。',
       submit: '发送',
       submitting: '发送中…',
-      successToast: '感谢你的反馈，我们会认真对待。',
+      successTitle: '你的反馈已发送。',
+      successBody: '我们会参考你的意见来改进服务。',
+      close: '关闭',
       errorToast: '发送失败，请稍后再试。',
     },
     subscribeSuccess: {
@@ -2325,7 +2331,9 @@ export const translations = {
       messagePlaceholder: '自由にご記入ください。',
       submit: '送信',
       submitting: '送信中…',
-      successToast: 'ご意見ありがとうございます。しっかり反映します。',
+      successTitle: 'ご意見を送信しました。',
+      successBody: 'いただいたご意見はサービス改善の参考にします。',
+      close: '閉じる',
       errorToast: '送信に失敗しました。しばらくして再度お試しください。',
     },
     subscribeSuccess: {

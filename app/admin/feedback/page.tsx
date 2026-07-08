@@ -134,31 +134,35 @@ export default function AdminFeedbackPage() {
     )
   }
 
-  const statusOptions: FeedbackStatus[] = ['new', 'read', 'resolved']
   const statusLabel: Record<FeedbackStatus, string> = {
     new: t('admin.statusNew'),
     read: t('admin.statusRead'),
     resolved: t('admin.statusResolved'),
   }
 
-  // 상태별 강조 스타일 (선택된 상태만 색 강조, 나머지는 서브톤)
-  const statusButtonStyle = (opt: FeedbackStatus, active: boolean): React.CSSProperties => {
+  // 현재 상태 표시용 읽기 전용 뱃지 스타일
+  const statusBadgeStyle = (status: string): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap',
+    }
+    if (status === 'new') return { ...base, background: 'var(--warning)', color: 'var(--bg-card)' }
+    if (status === 'resolved') return { ...base, background: 'var(--success)', color: 'var(--bg-card)' }
+    // read
+    return { ...base, background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '0.5px solid var(--border)' }
+  }
+
+  // 관리자 액션 버튼(확인/완료) 스타일 — 현재 상태와 일치하면 채운(활성) 표시.
+  const actionButtonStyle = (target: FeedbackStatus, active: boolean): React.CSSProperties => {
     const base: React.CSSProperties = {
       padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-      cursor: 'pointer', fontFamily: 'inherit', border: 'none',
+      fontFamily: 'inherit', border: 'none',
+      cursor: active ? 'default' : 'pointer',
     }
-    if (!active) {
-      return {
-        ...base,
-        background: 'var(--bg-subtle)',
-        color: 'var(--text-tertiary)',
-        border: '0.5px solid var(--border)',
-      }
+    if (active) {
+      if (target === 'resolved') return { ...base, background: 'var(--success)', color: 'var(--bg-card)' }
+      return { ...base, background: 'var(--bg-subtle)', color: 'var(--text-primary)', border: '0.5px solid var(--border)' }
     }
-    if (opt === 'new') return { ...base, background: 'var(--warning)', color: 'var(--bg-card)' }
-    if (opt === 'resolved') return { ...base, background: 'var(--success)', color: 'var(--bg-card)' }
-    // read
-    return { ...base, background: 'var(--bg-subtle)', color: 'var(--text-primary)', border: '0.5px solid var(--border)' }
+    return { ...base, background: 'var(--bg-subtle)', color: 'var(--text-tertiary)', border: '0.5px solid var(--border)' }
   }
 
   const submitter = (row: FeedbackRow) => {
@@ -224,18 +228,29 @@ export default function AdminFeedbackPage() {
                   {row.message}
                 </div>
 
-                {/* 상태 컨트롤 */}
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {statusOptions.map(opt => (
+                {/* 상태 컨트롤: 현재 상태 뱃지(읽기 전용) + 확인/완료 액션 버튼 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={statusBadgeStyle(row.status)}>
+                    {statusLabel[(row.status as FeedbackStatus)] ?? row.status}
+                  </span>
+                  <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
                     <button
-                      key={opt}
                       type="button"
-                      onClick={() => { if (row.status !== opt) changeStatus(row.id, opt) }}
-                      style={statusButtonStyle(opt, row.status === opt)}
+                      disabled={row.status === 'read'}
+                      onClick={() => { if (row.status !== 'read') changeStatus(row.id, 'read') }}
+                      style={actionButtonStyle('read', row.status === 'read')}
                     >
-                      {statusLabel[opt]}
+                      {statusLabel.read}
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      disabled={row.status === 'resolved'}
+                      onClick={() => { if (row.status !== 'resolved') changeStatus(row.id, 'resolved') }}
+                      style={actionButtonStyle('resolved', row.status === 'resolved')}
+                    >
+                      {statusLabel.resolved}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

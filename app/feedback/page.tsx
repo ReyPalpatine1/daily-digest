@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { supabase } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
-import { Star } from 'lucide-react'
+import { Star, CheckCircle } from 'lucide-react'
 
 type FeedbackType = 'general' | 'bug' | 'feature'
 
@@ -18,6 +18,7 @@ export default function FeedbackPage() {
   const [type, setType] = useState<FeedbackType>('general')
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
 
   // 로그인 필수 — 세션 없으면 홈으로.
@@ -71,10 +72,7 @@ export default function FeedbackPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.ok) {
-        showToast('feedback.successToast')
-        setRating(0)
-        setType('general')
-        setMessage('')
+        setSubmitted(true)
         return
       }
       showToast('feedback.errorToast')
@@ -99,6 +97,33 @@ export default function FeedbackPage() {
       <AppHeader showBack />
 
       <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 20px 64px' }}>
+        {submitted ? (
+          <div style={{ ...card, padding: '40px 24px', textAlign: 'center' }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%', background: 'var(--bg-subtle)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+            }}>
+              <CheckCircle size={30} style={{ color: 'var(--accent)' }} />
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+              {t('feedback.successTitle')}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 24 }}>
+              {t('feedback.successBody')}
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              style={{
+                minWidth: 120, height: 42, borderRadius: 8, border: '0.5px solid var(--border)',
+                background: 'transparent', color: 'var(--text-primary)', fontWeight: 500,
+                fontSize: 14, fontFamily: 'inherit', cursor: 'pointer',
+              }}
+            >
+              {t('feedback.close')}
+            </button>
+          </div>
+        ) : (
         <div style={card}>
           <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 6px', letterSpacing: -0.3 }}>
             {t('feedback.title')}
@@ -200,6 +225,7 @@ export default function FeedbackPage() {
             {submitting ? t('feedback.submitting') : t('feedback.submit')}
           </button>
         </div>
+        )}
       </main>
 
       {/* 토스트 */}
