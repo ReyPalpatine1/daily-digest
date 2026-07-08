@@ -171,3 +171,25 @@ export async function logManualSend(userId: string): Promise<void> {
     console.error('[send-guard] manual 로그 기록 실패:', e)
   }
 }
+
+// 오늘(KST) 이 유저에게 다이제스트가 실제 발송(성공)됐는지 email_logs로 확인.
+// send_log 'sending' 재선점 복구가 "발송 후 마킹 전 사망" 케이스에서 중복 발송하는 것을 막는 교차 확인용.
+// 이메일/텔레그램 다이제스트 모두 email_logs에 type='digest'로 기록되므로 이 한 쿼리로 둘 다 잡는다(속보 'breaking'은 제외).
+export async function hasDigestSentToday(userId: string): Promise<boolean> {
+  const todayKst = dateKey(nowUtc())                       // "YYYY-MM-DD" (KST)
+  const kstMidnightIso = new Date(`${todayKst}T00:00:00+09:00`).toISOString()
+  const { data, error } = await getSupabase()
+    .from('email_logs')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('type', 'digest')
+    .eq('status', 'success')
+    .gte('created_at', kstMidnightIso)
+    .limit(1)
+  if (error) {
+    // 조회 실패 시 false(발송 진행) — 이 가드는 보강 장치이므로 조회 장애가 발송 자체를 막으면 안 됨.
+    console.error('[send-guard] hasDigestSentToday 조회 실패(발송 진행):', error)
+    return false
+  }
+  return (data?.length ?? 0) > 0
+}

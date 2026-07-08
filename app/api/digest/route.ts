@@ -7,7 +7,7 @@ import { sendAdminFailureAlert } from '@/lib/admin-alert'
 import { logErrorEvent, cleanupOldErrorLogs } from '@/lib/error-log'
 import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
-import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
+import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed, hasDigestSentToday } from '@/lib/send-guard'
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
 import { isDescriptionBasedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
@@ -275,8 +275,14 @@ async function runDigest(
     }
 
     // 다이제스트 이메일 발송
+    // (cron 한정) 오늘 이미 실제 발송됐으면 스킵 — send_log 재선점 복구의 중복 발송 방지 교차 확인.
     if (digestItems.length > 0) {
-      await deliverDigest(settings, userName, digestItems, userLocale, userId, isPro)
+      const alreadySent = trigger === 'cron' && (await hasDigestSentToday(userId))
+      if (alreadySent) {
+        console.log(`[digest] 오늘 이미 발송됨(email_logs) → 발송 스킵, sent 마킹만 진행 user=${userId}`)
+      } else {
+        await deliverDigest(settings, userName, digestItems, userLocale, userId, isPro)
+      }
     }
 
     // 속보 표시 영상은 속보 메일도 (Pro & breaking_alert 켜짐) — 사용자별 키워드 기준.
