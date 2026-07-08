@@ -305,3 +305,68 @@ export async function sendAdminBulkErrorEmail(
     `,
   })
 }
+
+// 관리자 피드백 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
+export async function sendAdminFeedbackEmail(feedback: {
+  userEmail: string
+  rating: number | null
+  type: string
+  message: string
+}): Promise<void> {
+  const recipients = resolveAdminRecipients()
+  if (recipients.length === 0) {
+    console.log('⚠️ ADMIN_EMAILS/ADMIN_EMAIL 미설정 — 피드백 알림 메일 발송 건너뜀')
+    return
+  }
+
+  // APP_URL은 기존 email-templates 방식과 동일하게 함수 내부에서 읽는다(Cloudflare 호환).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.com').replace(/\/+$/, '')
+
+  const now = new Date().toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  const typeLabel: Record<string, string> = {
+    general: '일반 의견',
+    bug: '불편/버그',
+    feature: '기능 제안',
+  }
+  const ratingLabel = feedback.rating ? `${feedback.rating} / 5` : '-'
+
+  // 사용자 입력은 HTML 이스케이프 후 줄바꿈만 <br>로.
+  const safeMessage = feedback.message
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+
+  await transporter.sendMail({
+    from: `"Daily Video Digest 피드백" <${process.env.GMAIL_USER}>`,
+    to: recipients.join(','),
+    subject: '[피드백] 새 의견이 도착했습니다',
+    html: `
+      <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <div style="background:#f8f9fb;border:1px solid #e2e5ea;border-radius:12px;padding:24px">
+          <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px">새 피드백이 도착했습니다</h1>
+          <div style="font-size:14px;color:#333;line-height:1.7;margin-bottom:20px">
+            <p style="margin:0 0 6px">접수 시각: ${now}</p>
+            <p style="margin:0 0 6px">유형: <strong>${typeLabel[feedback.type] ?? feedback.type}</strong></p>
+            <p style="margin:0 0 6px">별점: <strong>${ratingLabel}</strong></p>
+            <p style="margin:0 0 6px">작성자: ${feedback.userEmail || '(알 수 없음)'}</p>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e5ea;border-radius:8px;padding:16px;font-size:14px;color:#333;line-height:1.7">
+            ${safeMessage}
+          </div>
+          <div style="margin-top:20px">
+            <a href="${appUrl}/admin/feedback" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600">관리자 페이지에서 확인</a>
+          </div>
+        </div>
+      </div>
+    `,
+  })
+}

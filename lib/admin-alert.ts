@@ -3,7 +3,7 @@
 // 알림 실패가 주 흐름을 막지 않도록 모든 경로 try-catch.
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버에서만 import.
 import { createClient } from '@supabase/supabase-js'
-import { sendAdminBulkErrorEmail, type FailedItem, type DigestTrigger } from './mailer'
+import { sendAdminBulkErrorEmail, sendAdminFeedbackEmail, type FailedItem, type DigestTrigger } from './mailer'
 import { sendTelegramMessage } from './telegram'
 
 // Cloudflare Workers 호환: process.env는 요청 처리 시점에 채워지므로 lazy 생성.
@@ -125,5 +125,57 @@ export async function sendAdminFailureAlert(
     }
   } catch (e) {
     console.error('[admin-alert] 알림 처리 예외:', e)
+  }
+}
+
+export type FeedbackAlert = {
+  userEmail: string
+  rating: number | null
+  type: string
+  message: string
+}
+
+// 관리자 피드백 알림 — 설정에 따라 이메일/텔레그램(중복 가능) 발송. 둘 다 꺼져 있으면 발송 생략.
+// 어떤 실패도 throw하지 않는다 (제출 주 흐름 보호).
+export async function sendAdminFeedbackAlert(feedback: FeedbackAlert): Promise<void> {
+  try {
+    const alertSettings = await getAdminAlertSettings()
+    if (!alertSettings.notify_email && !alertSettings.notify_telegram) {
+      console.log('[admin-alert] 이메일/텔레그램 알림 모두 꺼짐 → 피드백 알림 발송 생략')
+      return
+    }
+
+    if (alertSettings.notify_email) {
+      try {
+        await sendAdminFeedbackEmail(feedback)
+      } catch (e) {
+        console.error('[admin-alert] 피드백 이메일 알림 실패:', e)
+      }
+    }
+
+    if (alertSettings.notify_telegram) {
+      try {
+        const chatId = await findAdminTelegramChatId()
+        if (!chatId) {
+          console.log('[admin-alert] 관리자 telegram_chat_id 미연결 → 피드백 텔레그램 알림 skip')
+          return
+        }
+        const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+        const ratingLabel = feedback.rating ? `${feedback.rating}★` : '-'
+        const preview = feedback.message.length > 300 ? feedback.message.slice(0, 300) + '…' : feedback.message
+        const lines: string[] = [
+          '💬 새 피드백이 도착했습니다',
+          escapeTg(`유형: ${feedback.type} · 별점: ${ratingLabel}`),
+          escapeTg(`작성자: ${feedback.userEmail || '(알 수 없음)'}`),
+          escapeTg(preview),
+        ]
+        lines.push(appUrl ? `관리자 페이지에서 확인: ${appUrl}/admin/feedback` : '관리자 페이지에서 확인')
+        await sendTelegramMessage(chatId, lines.join('\n'))
+      } catch (e) {
+        console.error('[admin-alert] 피드백 텔레그램 알림 실패:', e)
+      }
+    }
+  } catch (e) {
+    console.error('[admin-alert] 피드백 알림 처리 예외:', e)
   }
 }
