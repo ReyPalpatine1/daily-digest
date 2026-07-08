@@ -48,9 +48,9 @@ export async function POST(req: Request) {
     locale?: string
   }
 
-  // message: 필수, trim 후 1~2000자
+  // message: 필수, trim 후 2~500자
   const message = typeof body.message === 'string' ? body.message.trim() : ''
-  if (!message || message.length > 2000) {
+  if (!message || message.length < 2 || message.length > 500) {
     return NextResponse.json({ error: 'invalid_message' }, { status: 400 })
   }
 

@@ -48,7 +48,7 @@ export default function FeedbackPage() {
     fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, display: 'block',
   }
 
-  const canSubmit = message.trim().length > 0 && !submitting
+  const canSubmit = message.trim().length >= 2 && message.trim().length <= 500 && !submitting
 
   const typeOptions: { value: FeedbackType; labelKey: string }[] = [
     { value: 'general', labelKey: 'feedback.typeGeneral' },
@@ -199,7 +199,7 @@ export default function FeedbackPage() {
               value={message}
               onChange={e => setMessage(e.target.value)}
               placeholder={t('feedback.messagePlaceholder')}
-              maxLength={2000}
+              maxLength={500}
               style={{
                 width: '100%', minHeight: 96, resize: 'vertical', boxSizing: 'border-box',
                 background: 'var(--bg-card)', border: '0.5px solid var(--border)', borderRadius: 8,
@@ -207,6 +207,9 @@ export default function FeedbackPage() {
                 fontFamily: 'inherit', outline: 'none',
               }}
             />
+            <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              {message.length}/500
+            </div>
           </div>
 
           {/* 보내기 */}
