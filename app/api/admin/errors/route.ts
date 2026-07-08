@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 
   let query = serviceClient
     .from('error_log')
-    .select('id, occurred_at, source, video_id, video_title, channel_name, fail_reason, fail_detail')
+    .select('id, occurred_at, source, video_id, video_title, channel_name, fail_reason, fail_detail, is_read')
     .order('occurred_at', { ascending: false })
     .limit(PAGE_SIZE + 1) // hasMore 판별용 +1
   if (before) query = query.lt('occurred_at', before)
@@ -63,4 +63,60 @@ export async function GET(request: Request) {
   const rows = data ?? []
   const hasMore = rows.length > PAGE_SIZE
   return NextResponse.json({ errors: rows.slice(0, PAGE_SIZE), hasMore })
+}
+
+// 오류 읽음 처리 (단방향 — 되돌리기/토글 없음)
+export async function PATCH(request: Request) {
+  // 관리자 권한 확인 — 기존 admin 라우트와 동일 패턴.
+  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로 핸들러 안에서 읽는다.
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
+
+  const cookieStore = await cookies()
+  const authClient = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        } catch {
+          // 무시
+        }
+      },
+    },
+  })
+  const { data: { user }, error: userError } = await authClient.auth.getUser()
+
+  if (userError || !user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!adminEmails.includes(user.email.toLowerCase())) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
+
+  const body = await request.json().catch(() => ({})) as { id?: string }
+  const { id } = body
+  if (!id) {
+    return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  }
+
+  const { error } = await serviceClient
+    .from('error_log')
+    .update({ is_read: true })
+    .eq('id', id)
+
+  if (error) {
+    console.error('[admin/errors] 읽음 처리 실패:', error.message)
+    return NextResponse.json({ error: '읽음 처리 실패' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
 }
