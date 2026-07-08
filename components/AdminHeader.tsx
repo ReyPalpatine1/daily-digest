@@ -16,7 +16,7 @@ const ADMIN_BAR_SUBTLE = '#1F1F1F'
 
 export type AdminNavKey = 'dashboard' | 'users' | 'errors' | 'feedback' | 'content' | 'system' | 'email'
 
-export function AdminHeader({ activeKey, feedbackNewCount }: { activeKey: AdminNavKey; feedbackNewCount?: number }) {
+export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread }: { activeKey: AdminNavKey; feedbackNewCount?: number; errorsUnread?: number }) {
   const router = useRouter()
   const { t } = useTranslation()
 
@@ -34,6 +34,20 @@ export function AdminHeader({ activeKey, feedbackNewCount }: { activeKey: AdminN
   }, [feedbackNewCount])
 
   const feedbackBadgeCount = feedbackNewCount !== undefined ? feedbackNewCount : newCount
+
+  // 안 읽은 오류 개수 — feedback와 동일 패턴(페이지가 내려주면 자체 fetch 생략).
+  const [errorsCount, setErrorsCount] = useState(0)
+  useEffect(() => {
+    if (errorsUnread !== undefined) return
+    let cancelled = false
+    fetch('/api/admin/errors/count')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (!cancelled && data) setErrorsCount(data.unreadCount ?? 0) })
+      .catch(() => { /* 무시 */ })
+    return () => { cancelled = true }
+  }, [errorsUnread])
+
+  const errorsBadgeCount = errorsUnread !== undefined ? errorsUnread : errorsCount
 
   const navItems: { key: AdminNavKey; label: string; href?: string }[] = [
     { key: 'dashboard', label: t('admin.menuDashboard'), href: '/admin' },
@@ -99,6 +113,13 @@ export function AdminHeader({ activeKey, feedbackNewCount }: { activeKey: AdminN
                   fontSize: 10, fontWeight: 600,
                   padding: '1px 6px', borderRadius: 999,
                 }}>{feedbackBadgeCount}</span>
+              )}
+              {item.key === 'errors' && errorsBadgeCount > 0 && (
+                <span style={{
+                  background: 'var(--danger)', color: '#fff',
+                  fontSize: 10, fontWeight: 600,
+                  padding: '1px 6px', borderRadius: 999,
+                }}>{errorsBadgeCount}</span>
               )}
             </button>
           )

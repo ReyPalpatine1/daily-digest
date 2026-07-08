@@ -18,6 +18,7 @@ type ErrorRow = {
   channel_name: string | null
   fail_reason: string | null
   fail_detail: string | null
+  is_read: boolean
 }
 
 type AlertSettings = {
@@ -39,6 +40,8 @@ export default function AdminErrorsPage() {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // 안 읽은 오류 개수 — 헤더 뱃지에 실시간 반영(초기값은 count API 권위값).
+  const [unreadCount, setUnreadCount] = useState(0)
 
   const loadErrors = useCallback(async (before?: string) => {
     const url = before ? `/api/admin/errors?before=${encodeURIComponent(before)}` : '/api/admin/errors'
@@ -74,6 +77,14 @@ export default function AdminErrorsPage() {
       } finally {
         if (!cancelled) setLoading(false)
       }
+      // 안 읽은 개수 권위값 — 실패 시 조용히 0 유지.
+      try {
+        const res = await fetch('/api/admin/errors/count')
+        if (!cancelled && res.ok) {
+          const data = await res.json()
+          setUnreadCount(data.unreadCount ?? 0)
+        }
+      } catch { /* 무시 */ }
     }
     checkAdminAndLoad()
     return () => { cancelled = true }
@@ -114,6 +125,24 @@ export default function AdminErrorsPage() {
       alert(t('adminErrors.loadFailed'))
     } finally {
       setLoadingMore(false)
+    }
+  }
+
+  // 읽음 처리 — 낙관적 업데이트 후 실패 시 롤백(카운트 복구 포함).
+  async function markRead(id: string) {
+    const prev = errors
+    setErrors(list => list.map(r => (r.id === id ? { ...r, is_read: true } : r)))
+    setUnreadCount(c => Math.max(0, c - 1))
+    try {
+      const res = await fetch('/api/admin/errors', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      if (!res.ok) throw new Error(`mark read failed (${res.status})`)
+    } catch {
+      setErrors(prev)                 // 롤백
+      setUnreadCount(c => c + 1)      // 카운트 복구
     }
   }
 
@@ -187,7 +216,7 @@ export default function AdminErrorsPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
-      <AdminHeader activeKey="errors" />
+      <AdminHeader activeKey="errors" errorsUnread={unreadCount} />
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: '0 0 20px', color: 'var(--text-primary)', letterSpacing: -0.3 }}>
@@ -235,8 +264,8 @@ export default function AdminErrorsPage() {
                 {errors.map(row => {
                   const expanded = expandedId === row.id
                   return (
-                    <tr key={row.id}>
-                      <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: 'var(--text-tertiary)' }}>
+                    <tr key={row.id} onClick={() => { if (!row.is_read) markRead(row.id) }} style={{ cursor: row.is_read ? 'default' : 'pointer' }}>
+                      <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: 'var(--text-tertiary)', borderLeft: row.is_read ? '3px solid transparent' : '3px solid var(--warning)' }}>
                         {formatKst(row.occurred_at)}
                       </td>
                       <td style={tdStyle}>
