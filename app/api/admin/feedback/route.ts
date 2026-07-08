@@ -56,6 +56,7 @@ export async function GET(request: Request) {
   // before(ISO) 이전 것만 — "더 보기" 커서
   const { searchParams } = new URL(request.url)
   const before = searchParams.get('before')
+  const type = searchParams.get('type') // all|general|bug|feature
 
   // user_id 가 profiles(id) 를 참조하므로 profiles 가 중첩으로 온다(탈퇴로 user_id=null이면 profiles=null).
   let query = serviceClient
@@ -64,6 +65,7 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .limit(PAGE_SIZE + 1) // hasMore 판별용 +1
   if (before) query = query.lt('created_at', before)
+  if (type && type !== 'all') query = query.eq('type', type)
 
   const { data, error } = await query
   if (error) {

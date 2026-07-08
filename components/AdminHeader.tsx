@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
@@ -19,6 +19,17 @@ export type AdminNavKey = 'dashboard' | 'users' | 'errors' | 'feedback' | 'conte
 export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
   const router = useRouter()
   const { t } = useTranslation()
+
+  // 미확인(new) 피드백 개수 — 실패 시 0으로 조용히 무시.
+  const [newCount, setNewCount] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/admin/feedback/count')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (!cancelled && data) setNewCount(data.newCount ?? 0) })
+      .catch(() => { /* 무시 */ })
+    return () => { cancelled = true }
+  }, [])
 
   const navItems: { key: AdminNavKey; label: string; href?: string }[] = [
     { key: 'dashboard', label: t('admin.menuDashboard'), href: '/admin' },
@@ -75,8 +86,16 @@ export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
                 color: active ? ADMIN_BAR_FG : ADMIN_BAR_MUTED,
                 fontWeight: active ? 500 : 400,
                 fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
               }}>
               {item.label}
+              {item.key === 'feedback' && newCount > 0 && (
+                <span style={{
+                  background: 'var(--danger)', color: '#fff',
+                  fontSize: 10, fontWeight: 600,
+                  padding: '1px 6px', borderRadius: 999,
+                }}>{newCount}</span>
+              )}
             </button>
           )
         })}

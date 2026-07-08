@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { AdminHeader } from '@/components/AdminHeader'
-import { Star } from 'lucide-react'
+import { Star, Check } from 'lucide-react'
 
-// 관리자 사용자 의견 탭 — feedback 목록 조회 + 상태 변경(new/read/resolved).
+// 관리자 사용자 의견 탭 — 유형 필터 + 목록. 카드 클릭=읽음(new→read), 완료 체크박스=resolved 토글.
 
 type FeedbackRow = {
   id: string
@@ -23,6 +23,7 @@ type FeedbackRow = {
 }
 
 type FeedbackStatus = 'new' | 'read' | 'resolved'
+type FilterType = 'all' | 'general' | 'bug' | 'feature'
 
 export default function AdminFeedbackPage() {
   const router = useRouter()
@@ -33,10 +34,15 @@ export default function AdminFeedbackPage() {
   const [rows, setRows] = useState<FeedbackRow[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [filterType, setFilterType] = useState<FilterType>('all')
 
-  const loadRows = useCallback(async (before?: string) => {
-    const url = before ? `/api/admin/feedback?before=${encodeURIComponent(before)}` : '/api/admin/feedback'
-    const res = await fetch(url)
+  // type/before 를 반영한 목록 조회.
+  const loadRows = useCallback(async (type: FilterType, before?: string) => {
+    const params = new URLSearchParams()
+    if (type !== 'all') params.set('type', type)
+    if (before) params.set('before', before)
+    const qs = params.toString()
+    const res = await fetch(`/api/admin/feedback${qs ? `?${qs}` : ''}`)
     if (!res.ok) throw new Error(`feedback fetch failed (${res.status})`)
     return (await res.json()) as { rows: FeedbackRow[]; hasMore: boolean }
   }, [])
@@ -55,7 +61,7 @@ export default function AdminFeedbackPage() {
       }
       setIsAdmin(true)
       try {
-        const data = await loadRows()
+        const data = await loadRows('all')
         if (cancelled) return
         setRows(data.rows)
         setHasMore(data.hasMore)
@@ -69,12 +75,25 @@ export default function AdminFeedbackPage() {
     return () => { cancelled = true }
   }, [router, loadRows])
 
+  // 유형 필터 변경 — 목록을 처음부터 다시 로드(before 커서 초기화).
+  async function applyFilter(next: FilterType) {
+    if (next === filterType) return
+    setFilterType(next)
+    try {
+      const data = await loadRows(next)
+      setRows(data.rows)
+      setHasMore(data.hasMore)
+    } catch (e) {
+      console.error('[admin/feedback] 필터 로드 실패:', e)
+    }
+  }
+
   async function loadMore() {
     if (!rows.length || loadingMore) return
     setLoadingMore(true)
     try {
       const last = rows[rows.length - 1]
-      const data = await loadRows(last.created_at)
+      const data = await loadRows(filterType, last.created_at)
       setRows(prev => [...prev, ...data.rows])
       setHasMore(data.hasMore)
     } catch (e) {
@@ -134,42 +153,26 @@ export default function AdminFeedbackPage() {
     )
   }
 
-  const statusLabel: Record<FeedbackStatus, string> = {
-    new: t('admin.statusNew'),
-    read: t('admin.statusRead'),
-    resolved: t('admin.statusResolved'),
-  }
-
-  // 현재 상태 표시용 읽기 전용 뱃지 스타일
-  const statusBadgeStyle = (status: string): React.CSSProperties => {
-    const base: React.CSSProperties = {
-      fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap',
-    }
-    if (status === 'new') return { ...base, background: 'var(--warning)', color: 'var(--bg-card)' }
-    if (status === 'resolved') return { ...base, background: 'var(--success)', color: 'var(--bg-card)' }
-    // read
-    return { ...base, background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '0.5px solid var(--border)' }
-  }
-
-  // 관리자 액션 버튼(확인/완료) 스타일 — 현재 상태와 일치하면 채운(활성) 표시.
-  const actionButtonStyle = (target: FeedbackStatus, active: boolean): React.CSSProperties => {
-    const base: React.CSSProperties = {
-      padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-      fontFamily: 'inherit', border: 'none',
-      cursor: active ? 'default' : 'pointer',
-    }
-    if (active) {
-      if (target === 'resolved') return { ...base, background: 'var(--success)', color: 'var(--bg-card)' }
-      return { ...base, background: 'var(--bg-subtle)', color: 'var(--text-primary)', border: '0.5px solid var(--border)' }
-    }
-    return { ...base, background: 'var(--bg-subtle)', color: 'var(--text-tertiary)', border: '0.5px solid var(--border)' }
-  }
-
   const submitter = (row: FeedbackRow) => {
     if (!row.email && !row.name) return t('admin.feedbackAnon')
     if (row.email && row.name) return `${row.email} (${row.name})`
     return row.email ?? row.name ?? t('admin.feedbackAnon')
   }
+
+  const filterOptions: { value: FilterType; label: string }[] = [
+    { value: 'all', label: t('admin.filterAll') },
+    { value: 'general', label: t('feedback.typeGeneral') },
+    { value: 'bug', label: t('feedback.typeBug') },
+    { value: 'feature', label: t('feedback.typeFeature') },
+  ]
+
+  const filterButtonStyle = (selected: boolean): React.CSSProperties => ({
+    padding: '6px 13px', borderRadius: 7, fontSize: 13, fontWeight: 500,
+    cursor: selected ? 'default' : 'pointer', fontFamily: 'inherit',
+    background: selected ? 'var(--text-primary)' : 'var(--bg-subtle)',
+    color: selected ? 'var(--bg-card)' : 'var(--text-secondary)',
+    border: selected ? 'none' : '0.5px solid var(--border)',
+  })
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
@@ -180,80 +183,107 @@ export default function AdminFeedbackPage() {
           {t('admin.feedbackTitle')}
         </h1>
 
+        {/* 유형 필터 바 */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          {filterOptions.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => applyFilter(opt.value)}
+              style={filterButtonStyle(filterType === opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         {rows.length === 0 ? (
           <div style={{ ...cardStyle, padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
             {t('admin.feedbackEmpty')}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {rows.map(row => (
-              <div key={row.id} style={cardStyle}>
-                {/* 상단 줄: 유형 뱃지 + 별점 + 제출자 + 작성일 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5,
-                    background: 'var(--bg-subtle)', color: 'var(--text-secondary)', whiteSpace: 'nowrap',
-                  }}>
-                    {typeLabel(row.type)}
-                  </span>
-
-                  {row.rating ? (
-                    <span style={{ display: 'inline-flex', gap: 1 }}>
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <Star
-                          key={n}
-                          size={14}
-                          strokeWidth={1.75}
-                          style={{ color: n <= row.rating! ? 'var(--accent)' : 'var(--text-muted)' }}
-                          fill={n <= row.rating! ? 'var(--accent)' : 'none'}
-                        />
-                      ))}
+            {rows.map(row => {
+              const isNew = row.status === 'new'
+              const isResolved = row.status === 'resolved'
+              return (
+                <div
+                  key={row.id}
+                  onClick={() => { if (isNew) changeStatus(row.id, 'read') }}
+                  style={{
+                    ...cardStyle,
+                    ...(isNew
+                      ? { border: '0.5px solid var(--warning)', borderLeft: '3px solid var(--warning)' }
+                      : {}),
+                    opacity: isResolved ? 0.72 : 1,
+                    cursor: isNew ? 'pointer' : 'default',
+                  }}
+                >
+                  {/* 상단 줄: 유형 뱃지 + 별점 + 제출자 + 작성일 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5,
+                      background: 'var(--bg-subtle)', color: 'var(--text-secondary)', whiteSpace: 'nowrap',
+                    }}>
+                      {typeLabel(row.type)}
                     </span>
-                  ) : null}
 
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
-                    {submitter(row)}
-                  </span>
+                    {row.rating ? (
+                      <span style={{ display: 'inline-flex', gap: 1 }}>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <Star
+                            key={n}
+                            size={14}
+                            strokeWidth={1.75}
+                            style={{ color: n <= row.rating! ? 'var(--accent)' : 'var(--text-muted)' }}
+                            fill={n <= row.rating! ? 'var(--accent)' : 'none'}
+                          />
+                        ))}
+                      </span>
+                    ) : null}
 
-                  <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-                    {formatKst(row.created_at)}
-                  </span>
-                </div>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                      {submitter(row)}
+                    </span>
 
-                {/* 본문 */}
-                <div style={{
-                  fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.6,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: 12,
-                }}>
-                  {row.message}
-                </div>
-
-                {/* 상태 컨트롤: 현재 상태 뱃지(읽기 전용) + 확인/완료 액션 버튼 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={statusBadgeStyle(row.status)}>
-                    {statusLabel[(row.status as FeedbackStatus)] ?? row.status}
-                  </span>
-                  <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-                    <button
-                      type="button"
-                      disabled={row.status === 'read'}
-                      onClick={() => { if (row.status !== 'read') changeStatus(row.id, 'read') }}
-                      style={actionButtonStyle('read', row.status === 'read')}
-                    >
-                      {statusLabel.read}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={row.status === 'resolved'}
-                      onClick={() => { if (row.status !== 'resolved') changeStatus(row.id, 'resolved') }}
-                      style={actionButtonStyle('resolved', row.status === 'resolved')}
-                    >
-                      {statusLabel.resolved}
-                    </button>
+                    <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                      {formatKst(row.created_at)}
+                    </span>
                   </div>
+
+                  {/* 본문 */}
+                  <div style={{
+                    fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: 12,
+                  }}>
+                    {row.message}
+                  </div>
+
+                  {/* 완료 체크박스 (유일한 액션) */}
+                  <label
+                    onClick={e => {
+                      e.stopPropagation()
+                      changeStatus(row.id, isResolved ? 'read' : 'resolved')
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      cursor: 'pointer', userSelect: 'none',
+                      fontSize: 13, color: 'var(--text-secondary)',
+                    }}
+                  >
+                    <span style={{
+                      width: 18, height: 18, borderRadius: 4,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      background: isResolved ? 'var(--text-primary)' : 'transparent',
+                      border: `0.5px solid ${isResolved ? 'var(--text-primary)' : 'var(--border)'}`,
+                    }}>
+                      {isResolved && <Check size={13} style={{ color: 'var(--bg-card)' }} />}
+                    </span>
+                    {t('admin.statusResolved')}
+                  </label>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
