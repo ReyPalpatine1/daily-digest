@@ -16,20 +16,24 @@ const ADMIN_BAR_SUBTLE = '#1F1F1F'
 
 export type AdminNavKey = 'dashboard' | 'users' | 'errors' | 'feedback' | 'content' | 'system' | 'email'
 
-export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
+export function AdminHeader({ activeKey, feedbackNewCount }: { activeKey: AdminNavKey; feedbackNewCount?: number }) {
   const router = useRouter()
   const { t } = useTranslation()
 
   // 미확인(new) 피드백 개수 — 실패 시 0으로 조용히 무시.
+  // 페이지가 feedbackNewCount를 내려주면(실시간 반영) 자체 fetch는 생략(폴백용).
   const [newCount, setNewCount] = useState(0)
   useEffect(() => {
+    if (feedbackNewCount !== undefined) return
     let cancelled = false
     fetch('/api/admin/feedback/count')
       .then(res => (res.ok ? res.json() : null))
       .then(data => { if (!cancelled && data) setNewCount(data.newCount ?? 0) })
       .catch(() => { /* 무시 */ })
     return () => { cancelled = true }
-  }, [])
+  }, [feedbackNewCount])
+
+  const feedbackBadgeCount = feedbackNewCount !== undefined ? feedbackNewCount : newCount
 
   const navItems: { key: AdminNavKey; label: string; href?: string }[] = [
     { key: 'dashboard', label: t('admin.menuDashboard'), href: '/admin' },
@@ -89,12 +93,12 @@ export function AdminHeader({ activeKey }: { activeKey: AdminNavKey }) {
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}>
               {item.label}
-              {item.key === 'feedback' && newCount > 0 && (
+              {item.key === 'feedback' && feedbackBadgeCount > 0 && (
                 <span style={{
                   background: 'var(--danger)', color: '#fff',
                   fontSize: 10, fontWeight: 600,
                   padding: '1px 6px', borderRadius: 999,
-                }}>{newCount}</span>
+                }}>{feedbackBadgeCount}</span>
               )}
             </button>
           )

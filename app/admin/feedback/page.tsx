@@ -35,6 +35,8 @@ export default function AdminFeedbackPage() {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [filterType, setFilterType] = useState<FilterType>('all')
+  // 미확인(new) 카운트 — 헤더 뱃지에 실시간 반영(초기값은 count API 권위값).
+  const [newCount, setNewCount] = useState(0)
 
   // type/before 를 반영한 목록 조회.
   const loadRows = useCallback(async (type: FilterType, before?: string) => {
@@ -70,6 +72,14 @@ export default function AdminFeedbackPage() {
       } finally {
         if (!cancelled) setLoading(false)
       }
+      // new 카운트 권위값 — 실패 시 조용히 0 유지.
+      try {
+        const res = await fetch('/api/admin/feedback/count')
+        if (!cancelled && res.ok) {
+          const data = await res.json()
+          setNewCount(data.newCount ?? 0)
+        }
+      } catch { /* 무시 */ }
     }
     checkAdminAndLoad()
     return () => { cancelled = true }
@@ -104,9 +114,12 @@ export default function AdminFeedbackPage() {
     }
   }
 
-  // 상태 변경 — 낙관적 업데이트 후 실패 시 롤백.
+  // 상태 변경 — 낙관적 업데이트 후 실패 시 롤백. new에서 빠지면 헤더 뱃지 카운트도 즉시 보정.
   async function changeStatus(id: string, status: FeedbackStatus) {
     const prev = rows
+    const oldStatus = rows.find(r => r.id === id)?.status
+    const decremented = oldStatus === 'new' && status !== 'new'
+    if (decremented) setNewCount(c => Math.max(0, c - 1))
     setRows(list => list.map(r => (r.id === id ? { ...r, status } : r)))
     try {
       const res = await fetch('/api/admin/feedback', {
@@ -118,6 +131,7 @@ export default function AdminFeedbackPage() {
     } catch (e) {
       console.error('[admin/feedback] 상태 변경 실패:', e)
       setRows(prev)
+      if (decremented) setNewCount(c => c + 1)
     }
   }
 
@@ -176,7 +190,7 @@ export default function AdminFeedbackPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
-      <AdminHeader activeKey="feedback" />
+      <AdminHeader activeKey="feedback" feedbackNewCount={newCount} />
 
       <main style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: '0 0 20px', color: 'var(--text-primary)', letterSpacing: -0.3 }}>
