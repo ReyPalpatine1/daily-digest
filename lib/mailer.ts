@@ -370,3 +370,34 @@ export async function sendAdminFeedbackEmail(feedback: {
     `,
   })
 }
+
+// 관리자 신규 오류 집계 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
+export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
+  const recipients = resolveAdminRecipients()
+  if (recipients.length === 0) {
+    console.log('⚠️ ADMIN_EMAILS/ADMIN_EMAIL 미설정 — 신규 오류 알림 메일 발송 건너뜀')
+    return
+  }
+
+  // APP_URL은 기존 email-templates 방식과 동일하게 함수 내부에서 읽는다(Cloudflare 호환).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.com').replace(/\/+$/, '')
+
+  await transporter.sendMail({
+    from: `"Daily Video Digest 오류 알림" <${process.env.GMAIL_USER}>`,
+    to: recipients.join(','),
+    subject: `[오류] 새 오류 ${count}건`,
+    html: `
+      <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <div style="background:#fff7f7;border:1px solid #ff4757;border-radius:12px;padding:24px">
+          <h1 style="font-size:20px;color:#b00000;margin:0 0 16px">새 오류가 쌓였습니다</h1>
+          <div style="font-size:14px;color:#333;line-height:1.7;margin-bottom:20px">
+            <p style="margin:0">관리자 오류 페이지에 새 오류가 <strong>${count}건</strong> 쌓였습니다.</p>
+          </div>
+          <div>
+            <a href="${appUrl}/admin/errors" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600">관리자 오류 페이지에서 확인</a>
+          </div>
+        </div>
+      </div>
+    `,
+  })
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { runCollection } from '@/lib/video-pool'
 import { nowUtc, toZoned } from '@/lib/time'
+import { sendAdminNewErrorsAlert } from '@/lib/admin-alert'
 
 export const maxDuration = 60
 
@@ -22,6 +23,8 @@ export async function GET(req: Request) {
     }
 
     const result = await runCollection()
+    // 이번 run(now 이후) 새로 쌓인 오류를 1회 집계 알림 (도배 방지)
+    try { await sendAdminNewErrorsAlert(now.toISOString()) } catch (e) { console.error('[collect] 신규 오류 알림 실패(무시):', e) }
     return NextResponse.json({ success: true, ...result })
   } catch (error) {
     console.error('[collect] error:', error)

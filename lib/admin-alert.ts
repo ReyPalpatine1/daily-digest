@@ -3,7 +3,7 @@
 // 알림 실패가 주 흐름을 막지 않도록 모든 경로 try-catch.
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버에서만 import.
 import { createClient } from '@supabase/supabase-js'
-import { sendAdminBulkErrorEmail, sendAdminFeedbackEmail, type FailedItem, type DigestTrigger } from './mailer'
+import { sendAdminBulkErrorEmail, sendAdminFeedbackEmail, sendAdminNewErrorsEmail, type FailedItem, type DigestTrigger } from './mailer'
 import { sendTelegramMessage } from './telegram'
 
 // Cloudflare Workers 호환: process.env는 요청 처리 시점에 채워지므로 lazy 생성.
@@ -177,5 +177,53 @@ export async function sendAdminFeedbackAlert(feedback: FeedbackAlert): Promise<v
     }
   } catch (e) {
     console.error('[admin-alert] 피드백 알림 처리 예외:', e)
+  }
+}
+
+// 신규 오류 집계 알림 — sinceIso 이후 error_log에 쌓인 오류 수를 세어 1회만 알린다(도배 방지).
+// 수집/요약 run 종료 지점(collect 라우트)에서 호출. 어떤 실패도 throw하지 않는다.
+export async function sendAdminNewErrorsAlert(sinceIso: string): Promise<void> {
+  try {
+    const { count, error } = await getSupabase()
+      .from('error_log')
+      .select('*', { count: 'exact', head: true })
+      .gte('occurred_at', sinceIso)
+    if (error) {
+      console.error('[admin-alert] 신규 오류 카운트 조회 실패:', error.message)
+      return
+    }
+    if (!count) return // 새 오류 없으면 무음
+
+    const alertSettings = await getAdminAlertSettings()
+    if (!alertSettings.notify_email && !alertSettings.notify_telegram) {
+      console.log('[admin-alert] 이메일/텔레그램 알림 모두 꺼짐 → 신규 오류 알림 발송 생략')
+      return
+    }
+
+    if (alertSettings.notify_email) {
+      try {
+        await sendAdminNewErrorsEmail(count)
+      } catch (e) {
+        console.error('[admin-alert] 신규 오류 이메일 알림 실패:', e)
+      }
+    }
+
+    if (alertSettings.notify_telegram) {
+      try {
+        const chatId = await findAdminTelegramChatId()
+        if (!chatId) {
+          console.log('[admin-alert] 관리자 telegram_chat_id 미연결 → 신규 오류 텔레그램 알림 skip')
+          return
+        }
+        const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+        const lines: string[] = [escapeTg(`⚠️ 새 오류 ${count}건`)]
+        lines.push(appUrl ? `관리자 오류 페이지 확인: ${appUrl}/admin/errors` : '관리자 오류 페이지 확인')
+        await sendTelegramMessage(chatId, lines.join('\n'))
+      } catch (e) {
+        console.error('[admin-alert] 신규 오류 텔레그램 알림 실패:', e)
+      }
+    }
+  } catch (e) {
+    console.error('[admin-alert] 신규 오류 알림 처리 예외:', e)
   }
 }
