@@ -188,7 +188,7 @@ function SubscribeContent() {
           <div style={{ ...card, marginBottom: 16 }}>
             <div style={sectionTitle}>{subscribe.firstWeekFree}</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {t('subscribe.billingStarts', { date: billingDateLabel })}
+              {t('subscribe.trialEnds', { date: billingDateLabel })}
             </div>
           </div>
         ) : (
