@@ -22,9 +22,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const result = await runCollection()
-    // 이번 run(now 이후) 새로 쌓인 오류를 1회 집계 알림 (도배 방지)
+    // 지난 알림 이후 쌓인 오류를 run 시작 전에 먼저 알림 (run이 CPU 한도로 죽어도 이전 오류 알림은 보존)
     try { await sendAdminNewErrorsAlert(now.toISOString()) } catch (e) { console.error('[collect] 신규 오류 알림 실패(무시):', e) }
+    const result = await runCollection()
     return NextResponse.json({ success: true, ...result })
   } catch (error) {
     console.error('[collect] error:', error)
