@@ -56,14 +56,14 @@ export const emailTranslations = {
     },
     trialEnding: {
       subject: 'Pro 체험이 내일 종료됩니다',
-      heading: '체험이 곧 끝나요',
-      desc: '{date}에 Pro 체험이 종료됩니다.<br>자동 결제는 되지 않아요.',
+      heading: 'Pro 체험이 내일 종료됩니다',
+      desc: '{date}까지 이용할 수 있어요.<br>자동 결제는 되지 않습니다.',
       cta: 'Pro 구독하기',
     },
     trialEnded: {
       subject: '무료 플랜으로 전환되었습니다',
-      heading: '체험이 종료되었어요',
-      desc: 'Pro 체험이 종료되었습니다.<br>무료 플랜으로 전환되었어요.',
+      heading: 'Pro 체험이 종료되었습니다',
+      desc: '계정이 무료 플랜으로 전환되었어요.<br>Pro 기능은 언제든지 구독으로 다시 사용할 수 있습니다.',
       cta: 'Pro 구독하기',
     },
     channels: {
@@ -128,14 +128,14 @@ export const emailTranslations = {
     },
     trialEnding: {
       subject: 'Your Pro trial ends tomorrow',
-      heading: 'Your trial is ending soon',
-      desc: 'Your Pro trial ends on {date}.<br>You will not be charged automatically.',
+      heading: 'Your Pro trial ends tomorrow',
+      desc: 'You can use Pro until {date}.<br>You will not be charged automatically.',
       cta: 'Subscribe to Pro',
     },
     trialEnded: {
       subject: "You're now on the Free plan",
-      heading: 'Your trial has ended',
-      desc: 'Your Pro trial has ended.<br>Your account is now on the free plan.',
+      heading: 'Your Pro trial has ended',
+      desc: 'Your account is now on the free plan.<br>You can subscribe anytime to keep using Pro features.',
       cta: 'Subscribe to Pro',
     },
     channels: {
@@ -200,14 +200,14 @@ export const emailTranslations = {
     },
     trialEnding: {
       subject: 'Pro 试用将于明天结束',
-      heading: '试用即将结束',
-      desc: '您的 Pro 试用将于 {date} 结束。<br>不会自动扣款。',
+      heading: 'Pro 试用将于明天结束',
+      desc: '您可以使用 Pro 至 {date}。<br>不会自动扣款。',
       cta: '订阅 Pro',
     },
     trialEnded: {
       subject: '已切换到免费方案',
-      heading: '试用已结束',
-      desc: 'Pro 试用已结束。<br>您的账户已转为免费方案。',
+      heading: 'Pro 试用已结束',
+      desc: '您的账户已转为免费方案。<br>随时订阅即可继续使用 Pro 功能。',
       cta: '订阅 Pro',
     },
     channels: {
@@ -272,14 +272,14 @@ export const emailTranslations = {
     },
     trialEnding: {
       subject: 'Proトライアルは明日終了します',
-      heading: 'トライアルがまもなく終了します',
-      desc: 'Proトライアルは{date}に終了します。<br>自動課金はありません。',
+      heading: 'Proトライアルは明日終了します',
+      desc: '{date}までご利用いただけます。<br>自動課金はありません。',
       cta: 'Proを購読する',
     },
     trialEnded: {
       subject: '無料プランに切り替わりました',
-      heading: 'トライアルが終了しました',
-      desc: 'Proトライアルが終了しました。<br>無料プランに切り替わりました。',
+      heading: 'Proトライアルが終了しました',
+      desc: 'アカウントは無料プランに切り替わりました。<br>Pro機能はいつでも購読で再開できます。',
       cta: 'Proを購読する',
     },
     channels: {
