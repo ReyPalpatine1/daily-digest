@@ -54,6 +54,18 @@ export const emailTranslations = {
       desc: '매일 아침 구독한 유튜브 채널의 영상을 요약해서 보내드릴게요',
       startCta: '채널 추가하러 가기',
     },
+    trialEnding: {
+      subject: '무료 체험이 내일 종료됩니다',
+      heading: '체험이 곧 끝나요',
+      desc: '{date}에 7일 무료 체험이 종료됩니다. 계속 Pro 기능을 쓰려면 아래에서 구독할 수 있어요. 자동 결제는 되지 않습니다.',
+      cta: 'Pro 구독하기',
+    },
+    trialEnded: {
+      subject: '무료 플랜으로 전환되었습니다',
+      heading: '체험이 종료되었어요',
+      desc: '7일 무료 체험이 끝나 무료 플랜으로 전환되었습니다. Pro 기능을 계속 쓰려면 아래에서 구독할 수 있어요.',
+      cta: 'Pro 구독하기',
+    },
     channels: {
       email: '이메일',
       telegram: '텔레그램',
@@ -113,6 +125,18 @@ export const emailTranslations = {
       heading: 'Welcome!',
       desc: 'Every morning, we summarize videos from your subscribed YouTube channels',
       startCta: 'Add Channels',
+    },
+    trialEnding: {
+      subject: 'Your free trial ends tomorrow',
+      heading: 'Your trial is ending soon',
+      desc: 'Your 7-day free trial ends on {date}. To keep using Pro features, you can subscribe below. You will not be charged automatically.',
+      cta: 'Subscribe to Pro',
+    },
+    trialEnded: {
+      subject: "You're now on the Free plan",
+      heading: 'Your trial has ended',
+      desc: 'Your 7-day free trial has ended and your account moved to the Free plan. To keep using Pro features, you can subscribe below.',
+      cta: 'Subscribe to Pro',
     },
     channels: {
       email: 'Email',
@@ -174,6 +198,18 @@ export const emailTranslations = {
       desc: '每天早上，我们会把你订阅的 YouTube 频道视频总结后发送给你',
       startCta: '去添加频道',
     },
+    trialEnding: {
+      subject: '免费试用将于明天结束',
+      heading: '试用即将结束',
+      desc: '你的 7 天免费试用将于 {date} 结束。若想继续使用 Pro 功能，可在下方订阅。我们不会自动扣费。',
+      cta: '订阅 Pro',
+    },
+    trialEnded: {
+      subject: '已切换到免费方案',
+      heading: '试用已结束',
+      desc: '7 天免费试用已结束，你的账号已切换到免费方案。若想继续使用 Pro 功能，可在下方订阅。',
+      cta: '订阅 Pro',
+    },
     channels: {
       email: '邮件',
       telegram: 'Telegram',
@@ -233,6 +269,18 @@ export const emailTranslations = {
       heading: 'ようこそ！',
       desc: '毎朝、購読中のYouTubeチャンネルの動画を要約してお届けします',
       startCta: 'チャンネルを追加する',
+    },
+    trialEnding: {
+      subject: '無料トライアルは明日終了します',
+      heading: 'トライアルがまもなく終了します',
+      desc: '7日間の無料トライアルは{date}に終了します。Pro機能を引き続きご利用いただくには、下のボタンから購読できます。自動で課金されることはありません。',
+      cta: 'Proを購読する',
+    },
+    trialEnded: {
+      subject: '無料プランに切り替わりました',
+      heading: 'トライアルが終了しました',
+      desc: '7日間の無料トライアルが終了し、無料プランに切り替わりました。Pro機能を引き続きご利用いただくには、下のボタンから購読できます。',
+      cta: 'Proを購読する',
     },
     channels: {
       email: 'メール',
