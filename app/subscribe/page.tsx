@@ -6,7 +6,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
 import { supabase } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
-import { CreditCard, Lock } from 'lucide-react'
+import { CreditCard, Lock, Ban } from 'lucide-react'
 
 const PRICE_MONTHLY = 4900
 
@@ -173,22 +173,42 @@ function SubscribeContent() {
           {subscribe.title}
         </h1>
 
-        {/* 선택한 플랜 */}
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ ...label, marginBottom: 8 }}>{subscribe.selectedPlan}</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span style={{ fontSize: 17, fontWeight: 600 }}>{pricing.pro}</span>
-            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5 }}>{won(PRICE_MONTHLY)}</span>
-            <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{pricing.perMonth}</span>
+        {/* 선택한 플랜 (실결제 모드에서만 — 체험은 아래 통합 카드가 대신함) */}
+        {mode === 'pay' && (
+          <div style={{ ...card, marginBottom: 16 }}>
+            <div style={{ ...label, marginBottom: 8 }}>{subscribe.selectedPlan}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 17, fontWeight: 600 }}>{pricing.pro}</span>
+              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5 }}>{won(PRICE_MONTHLY)}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{pricing.perMonth}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {mode === 'trial' ? (
-          /* 체험 안내 (카드 없이 시작) */
-          <div style={{ ...card, marginBottom: 16 }}>
-            <div style={sectionTitle}>{subscribe.firstWeekFree}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          /* 체험 통합 카드 (플랜 · 무료체험 · 종료 후 가격을 한 장으로) */
+          <div style={{ ...card, marginBottom: 16, padding: 20 }}>
+            {/* 플랜 라벨 */}
+            <div style={{ ...label, marginBottom: 8 }}>
+              {subscribe.selectedPlan} · {pricing.pro}
+            </div>
+            {/* 무료 체험 강조(가장 큰 위계) */}
+            <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, marginBottom: 10 }}>
+              {subscribe.firstWeekFree}
+            </div>
+            {/* 종료일 */}
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>
               {t('subscribe.trialEnds', { date: billingDateLabel })}
+            </div>
+            {/* 구분선 */}
+            <div style={{ height: 1, background: 'var(--border-light)', margin: '14px 0' }} />
+            {/* 종료 후 가격 + 자동결제 없음 (두 줄) */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <Ban size={15} style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: 2 }} />
+              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+                <div>{t('subscribe.afterTrialPrice', { price: `${won(PRICE_MONTHLY)}${pricing.perMonth}` })}</div>
+                <div>{subscribe.noAutoCharge}</div>
+              </div>
             </div>
           </div>
         ) : (
@@ -282,8 +302,8 @@ function SubscribeContent() {
           marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           fontSize: 12, color: 'var(--text-muted)',
         }}>
-          <Lock size={12} />
-          {subscribe.secureNote}
+          {mode === 'trial' ? <Ban size={13} /> : <Lock size={13} />}
+          {mode === 'trial' ? subscribe.noCardNote : subscribe.secureNote}
         </div>
       </main>
 
