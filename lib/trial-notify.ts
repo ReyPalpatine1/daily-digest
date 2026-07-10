@@ -29,17 +29,19 @@ const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// 발송 로케일. settings 조회가 실패해도 발송을 막지 않는다.
-async function resolveLocale(userId: string): Promise<string> {
+// 발송 로케일·수신 주소. settings 조회가 실패해도 발송을 막지 않는다.
+async function resolveSettings(
+  userId: string
+): Promise<{ locale: string | null; email: string | null } | null> {
   try {
     const { data } = await supabase
       .from('settings')
-      .select('locale')
+      .select('locale, email')
       .eq('user_id', userId)
       .single()
-    return data?.locale ?? 'ko'
+    return data
   } catch {
-    return 'ko'
+    return null
   }
 }
 
@@ -64,17 +66,22 @@ export async function runTrialNotifications(): Promise<void> {
 
     for (const p of profiles) {
       try {
-        if (!p.email) continue
-
         const expires = new Date(p.plan_expires_at)
-        const locale = await resolveLocale(p.id)
+        const settingsRow = await resolveSettings(p.id)
+        const locale = settingsRow?.locale ?? 'ko'
+        // 다이제스트와 동일하게 settings.email 우선, 없으면 profiles.email 폴백
+        const to = settingsRow?.email || p.email
+        if (!to) {
+          console.warn(`[trial-notify] 수신 주소 없음 skip user=${p.id}`)
+          continue
+        }
 
         // (가) 종료 당일 — 이미 만료
         if (expires <= now && !p.trial_ended_notified_at) {
           await syncUserPlan(p.id) // free 강등 + 채널/발송 정리
           // 발송이 예외 없이 끝난 경우에만 아래(로그·플래그)가 실행된다.
           // 실패 시 바깥 catch로 빠져 플래그가 안 남고, 다음 run에서 재시도된다.
-          await sendTrialEndedEmail(p.email, locale)
+          await sendTrialEndedEmail(to, locale)
           console.log(`[trial-notify] 종료 안내 발송 완료: ${p.id}`)
           const { error: flagError } = await supabase
             .from('profiles')
@@ -95,7 +102,7 @@ export async function runTrialNotifications(): Promise<void> {
         ) {
           const endDate = dateKey(expires) // KST 'YYYY-MM-DD'
           // (가)와 동일 — 발송 성공 후에만 로그·플래그 기록, 실패 시 다음 run에서 재시도.
-          await sendTrialEndingEmail(p.email, endDate, locale)
+          await sendTrialEndingEmail(to, endDate, locale)
           console.log(`[trial-notify] 종료 예고 발송 완료: ${p.id}`)
           const { error: flagError } = await supabase
             .from('profiles')
