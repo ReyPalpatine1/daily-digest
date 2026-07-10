@@ -10,6 +10,7 @@ import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import HelpPopup from '@/components/HelpPopup'
+import TrialPopup from '@/components/TrialPopup'
 import { AppHeader } from '@/components/AppHeader'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy } from 'lucide-react'
@@ -132,6 +133,16 @@ export default function Dashboard() {
   // 실제 구독 상태는 profile.plan(free/pro/vip)에서 판정
   const [profile, setProfile] = useState<Profile | null>(null)
 
+  // Pro 체험 종료 안내 팝업(전날 ending / 당일 ended). 메일 발송 플래그(notified)가 있고
+  // 팝업 확인(seen) 전이면 노출. Profile 타입에 없는 플래그 4종은 프로필 원본 행에서 따로 보관.
+  const [trialPopup, setTrialPopup] = useState<'ending' | 'ended' | null>(null)
+  const [trialFlags, setTrialFlags] = useState<{
+    trial_ending_notified_at: string | null
+    trial_ended_notified_at: string | null
+    trial_ending_popup_seen_at: string | null
+    trial_ended_popup_seen_at: string | null
+  } | null>(null)
+
   // isPro는 항상 실제 profile.plan 기준(관리자도 동일). 관리자 Free/Pro 토글이
   // 실제 DB plan을 바꾸므로 별도 미리보기 플래그(adminPlanMode)를 두지 않는다.
   // checkIsPro의 2번째 인자(isAdmin)를 false로 고정해 "관리자=무조건 Pro" 단축을 끈다.
@@ -196,6 +207,13 @@ export default function Dashboard() {
         ])
       } else {
         setProfile(profileRow as Profile)
+        const row = profileRow as Record<string, any>
+        setTrialFlags({
+          trial_ending_notified_at: row.trial_ending_notified_at ?? null,
+          trial_ended_notified_at: row.trial_ended_notified_at ?? null,
+          trial_ending_popup_seen_at: row.trial_ending_popup_seen_at ?? null,
+          trial_ended_popup_seen_at: row.trial_ended_popup_seen_at ?? null,
+        })
       }
 
       // 마지막 접속 기록 (실패해도 무시 - 통계용)
@@ -240,6 +258,23 @@ export default function Dashboard() {
       setShowHelp(true)
     }
   }, [settings])
+
+  // 체험 종료 안내 팝업 자동 노출 (프로필·설정 로드 후 1회).
+  // 도움말 팝업이 뜨는 조건(help_seen===false)이면 이번 진입엔 띄우지 않음(동시 노출 방지).
+  const trialPopupCheckedRef = useRef(false)
+  useEffect(() => {
+    if (trialPopupCheckedRef.current || !profile || !trialFlags || !settings) return
+    trialPopupCheckedRef.current = true
+    if (settings.help_seen === false) return
+    if (trialFlags.trial_ended_notified_at != null && trialFlags.trial_ended_popup_seen_at == null) {
+      setTrialPopup('ended')
+    } else if (
+      trialFlags.trial_ending_notified_at != null && trialFlags.trial_ending_popup_seen_at == null &&
+      profile.plan_status === 'trialing'
+    ) {
+      setTrialPopup('ending')
+    }
+  }, [profile, trialFlags, settings])
 
   // 텔레그램 연결 완료 감지 → 폴링 중단
   useEffect(() => {
@@ -503,6 +538,14 @@ export default function Dashboard() {
     if ((settings?.help_seen ?? false) === dontShowAgain) return // 변경 없으면 저장 생략
     setSettings((prev) => (prev ? { ...prev, help_seen: dontShowAgain } : prev))
     await supabase.from('settings').update({ help_seen: dontShowAgain }).eq('user_id', user.id)
+  }
+
+  // 체험 팝업 닫기/구독 이동. 확인 시각을 seen 컬럼에 기록해 재노출 방지(기록 실패해도 UI 진행).
+  async function closeTrialPopup(goSubscribe: boolean) {
+    const col = trialPopup === 'ended' ? 'trial_ended_popup_seen_at' : 'trial_ending_popup_seen_at'
+    setTrialPopup(null)
+    try { await supabase.from('profiles').update({ [col]: new Date().toISOString() }).eq('id', user.id) } catch {}
+    if (goSubscribe) router.push('/subscribe?mode=pay')
   }
 
   async function saveSettings(updated: Partial<Settings>) {
@@ -2367,6 +2410,19 @@ export default function Dashboard() {
       {/* 처음 사용자 도움말 팝업 (자동 노출 + 설정에서 재열기) */}
       {showHelp && (
         <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} onClose={closeHelp} />
+      )}
+
+      {/* Pro 체험 종료 안내 팝업 (전날 ending / 당일 ended) */}
+      {trialPopup && (
+        <TrialPopup
+          variant={trialPopup}
+          endDateLabel={profile?.plan_expires_at
+            ? new Date(profile.plan_expires_at).toLocaleDateString(dateLocale, { month: 'numeric', day: 'numeric' })
+            : ''}
+          t={t}
+          onClose={() => closeTrialPopup(false)}
+          onSubscribe={() => closeTrialPopup(true)}
+        />
       )}
     </div>
   )
