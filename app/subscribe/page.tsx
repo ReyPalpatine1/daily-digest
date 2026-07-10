@@ -173,25 +173,19 @@ function SubscribeContent() {
           {subscribe.title}
         </h1>
 
-        {/* 선택한 플랜 (실결제 모드에서만 — 체험은 아래 통합 카드가 대신함) */}
+        {/* 가격 (실결제 모드에서만 — 체험은 아래 통합 카드가 대신함) */}
         {mode === 'pay' && (
-          <div style={{ ...card, marginBottom: 16 }}>
-            <div style={{ ...label, marginBottom: 8 }}>{subscribe.selectedPlan}</div>
+          <div style={{ ...card, marginBottom: 16, padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ fontSize: 17, fontWeight: 600 }}>{pricing.pro}</span>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5 }}>{won(PRICE_MONTHLY)}</span>
+              <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5 }}>{won(PRICE_MONTHLY)}</span>
               <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{pricing.perMonth}</span>
             </div>
           </div>
         )}
 
         {mode === 'trial' ? (
-          /* 체험 통합 카드 (플랜 · 무료체험 · 종료 후 가격을 한 장으로) */
+          /* 체험 통합 카드 (무료체험 · 종료 후 가격을 한 장으로) */
           <div style={{ ...card, marginBottom: 16, padding: 20 }}>
-            {/* 플랜 라벨 */}
-            <div style={{ ...label, marginBottom: 8 }}>
-              {subscribe.selectedPlan} · {pricing.pro}
-            </div>
             {/* 무료 체험 강조(가장 큰 위계) */}
             <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, marginBottom: 10 }}>
               {subscribe.firstWeekFree}
