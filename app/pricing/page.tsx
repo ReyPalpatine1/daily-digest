@@ -14,8 +14,9 @@ const PRICE_MONTHLY = 4900
 
 export default function PricingPage() {
   const router = useRouter()
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const [planView, setPlanView] = useState<PlanView>('free')
+  const [trialExpiresAt, setTrialExpiresAt] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
@@ -58,6 +59,7 @@ export default function PricingPage() {
       }
 
       setPlanView(view)
+      setTrialExpiresAt(profile?.plan_expires_at ?? null)
       setReady(true)
     })
     return () => { cancelled = true }
@@ -65,6 +67,11 @@ export default function PricingPage() {
 
   const won = (n: number) => `₩${n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US')}`
   const pricing = (((translations as Record<string, any>)[locale]?.pricing) ?? translations.en.pricing) as typeof translations.ko.pricing
+
+  // 체험 중 캡션에 표기할 종료일(월/일). 종료일을 못 얻으면 빈 문자열 → trialActive 폴백.
+  const trialEndLabel = trialExpiresAt
+    ? new Date(trialExpiresAt).toLocaleDateString(locale === 'ko' ? 'ko-KR' : locale === 'ja' ? 'ja-JP' : locale === 'zh' ? 'zh-CN' : 'en-US', { month: 'numeric', day: 'numeric' })
+    : ''
 
   const card: React.CSSProperties = {
     background: 'var(--bg-card)',
@@ -119,8 +126,8 @@ export default function PricingPage() {
     )
     if (planView === 'trialing') return (
       <>
-        <button style={disabledBtn} disabled>{pricing.payComingSoon}</button>
-        <div style={captionSlot}>{pricing.trialActive}</div>
+        <UpgradeButton label={pricing.subscribePro} onClick={() => router.push('/subscribe?mode=pay')} style={{ ...primaryBtn }} />
+        <div style={captionSlot}>{trialEndLabel ? t('pricing.trialActiveUntil', { date: trialEndLabel }) : pricing.trialActive}</div>
       </>
     )
     if (planView === 'trial_expired') return (
