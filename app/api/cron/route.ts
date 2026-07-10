@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { nowUtc, toZoned, dateKey, isSendTimePassed, isTooLateToSend } from '@/lib/time'
 import { tryStartScheduled } from '@/lib/send-guard'
+import { runTrialNotifications } from '@/lib/trial-notify'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워진다. 최상단에서 createClient를 호출하면 키가 undefined가 되어
@@ -59,6 +60,9 @@ export async function GET(req: Request) {
     const zoned = toZoned(now)                               // 로그/표시용 KST 시:분
     const currentHour = String(zoned.hour).padStart(2, '0')
     const currentMinute = String(zoned.minute).padStart(2, '0')
+
+    // 체험 종료 알림(전날/당일) — 실패해도 다이제스트 발송을 막지 않는다
+    try { await runTrialNotifications() } catch (e) { console.error('[cron] 체험 알림 실패(무시):', e) }
 
     const { data: allSettings, error } = await supabase
       .from('settings')
