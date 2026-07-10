@@ -66,6 +66,18 @@ export const emailTranslations = {
       desc: '계정이 무료 플랜으로 전환되었어요.<br>Pro 기능은 언제든지 구독으로 다시 사용할 수 있습니다.',
       cta: 'Pro 구독하기',
     },
+    passEnding: {
+      subject: 'Pro 이용권이 내일 만료됩니다',
+      heading: 'Pro 이용권이 내일 만료됩니다',
+      desc: '{date}까지 이용할 수 있어요.<br>자동 결제는 되지 않습니다.',
+      cta: 'Pro 구독하기',
+    },
+    passEnded: {
+      subject: '무료 플랜으로 전환되었습니다',
+      heading: 'Pro 이용 기간이 끝났습니다',
+      desc: '계정이 무료 플랜으로 전환되었어요.<br>Pro 기능은 언제든지 구독으로 다시 사용할 수 있습니다.',
+      cta: 'Pro 구독하기',
+    },
     channels: {
       email: '이메일',
       telegram: '텔레그램',
@@ -135,6 +147,18 @@ export const emailTranslations = {
     trialEnded: {
       subject: "You're now on the Free plan",
       heading: 'Your Pro trial has ended',
+      desc: 'Your account is now on the free plan.<br>You can subscribe anytime to keep using Pro features.',
+      cta: 'Subscribe to Pro',
+    },
+    passEnding: {
+      subject: 'Your Pro pass expires tomorrow',
+      heading: 'Your Pro pass expires tomorrow',
+      desc: 'You can use Pro until {date}.<br>You will not be charged automatically.',
+      cta: 'Subscribe to Pro',
+    },
+    passEnded: {
+      subject: "You're now on the Free plan",
+      heading: 'Your Pro access has ended',
       desc: 'Your account is now on the free plan.<br>You can subscribe anytime to keep using Pro features.',
       cta: 'Subscribe to Pro',
     },
@@ -210,6 +234,18 @@ export const emailTranslations = {
       desc: '您的账户已转为免费方案。<br>随时订阅即可继续使用 Pro 功能。',
       cta: '订阅 Pro',
     },
+    passEnding: {
+      subject: 'Pro 使用券将于明天到期',
+      heading: 'Pro 使用券将于明天到期',
+      desc: '您可以使用 Pro 至 {date}。<br>不会自动扣款。',
+      cta: '订阅 Pro',
+    },
+    passEnded: {
+      subject: '已切换到免费方案',
+      heading: 'Pro 使用期已结束',
+      desc: '您的账户已转为免费方案。<br>随时订阅即可继续使用 Pro 功能。',
+      cta: '订阅 Pro',
+    },
     channels: {
       email: '邮件',
       telegram: 'Telegram',
@@ -279,6 +315,18 @@ export const emailTranslations = {
     trialEnded: {
       subject: '無料プランに切り替わりました',
       heading: 'Proトライアルが終了しました',
+      desc: 'アカウントは無料プランに切り替わりました。<br>Pro機能はいつでも購読で再開できます。',
+      cta: 'Proを購読する',
+    },
+    passEnding: {
+      subject: 'Proパスは明日で期限が切れます',
+      heading: 'Proパスは明日で期限が切れます',
+      desc: '{date}までご利用いただけます。<br>自動課金はありません。',
+      cta: 'Proを購読する',
+    },
+    passEnded: {
+      subject: '無料プランに切り替わりました',
+      heading: 'Proの利用期間が終了しました',
       desc: 'アカウントは無料プランに切り替わりました。<br>Pro機能はいつでも購読で再開できます。',
       cta: 'Proを購読する',
     },

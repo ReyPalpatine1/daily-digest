@@ -7,17 +7,26 @@ type TFn = (key: string, params?: Record<string, string | number>) => string
 type Props = {
   variant: 'ending' | 'ended'
   endDateLabel?: string
+  // trial(체험) / onetime(1개월권) — 제목·본문 문구만 분기, 손실 목록·버튼·아이콘은 공용.
+  planKind?: 'trial' | 'onetime'
   t: TFn
   onClose: () => void
   onSubscribe: () => void
 }
 
-// Pro 체험 종료 안내 팝업 — 전날(ending) / 종료 당일(ended) 2종.
+// Pro 체험·1개월권 종료 안내 팝업 — 전날(ending) / 종료 당일(ended) 2종.
 // 모달 뼈대(오버레이·그림자·카드 톤)는 HelpPopup을 미러링. 카드가 좁아(maxWidth 400)
 // 모바일 분기 없이 HelpPopup 모바일 처리(width 100% + dvh 제한 + 오버레이 패딩 14)를 항상 적용.
 // 자동 결제 안내는 endingBody 본문에 포함되므로 별도 하단 캡션은 두지 않는다(중복 방지).
-export default function TrialPopup({ variant, endDateLabel, t, onClose, onSubscribe }: Props) {
+export default function TrialPopup({ variant, endDateLabel, planKind = 'trial', t, onClose, onSubscribe }: Props) {
   const Icon = variant === 'ending' ? Clock : Mail
+  const isOnetime = planKind === 'onetime'
+  const titleKey = variant === 'ending'
+    ? (isOnetime ? 'trialPopup.passEndingTitle' : 'trialPopup.endingTitle')
+    : (isOnetime ? 'trialPopup.passEndedTitle' : 'trialPopup.endedTitle')
+  const bodyKey = variant === 'ending'
+    ? (isOnetime ? 'trialPopup.passEndingBody' : 'trialPopup.endingBody')
+    : (isOnetime ? 'trialPopup.passEndedBody' : 'trialPopup.endedBody')
 
   const subBtn: React.CSSProperties = {
     flex: 1, height: 42, borderRadius: 9,
@@ -65,7 +74,7 @@ export default function TrialPopup({ variant, endDateLabel, t, onClose, onSubscr
         </div>
 
         <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-          {variant === 'ending' ? t('trialPopup.endingTitle') : t('trialPopup.endedTitle')}
+          {t(titleKey)}
         </div>
 
         <div style={{
@@ -73,8 +82,8 @@ export default function TrialPopup({ variant, endDateLabel, t, onClose, onSubscr
           marginBottom: 18, whiteSpace: 'pre-line',
         }}>
           {variant === 'ending'
-            ? t('trialPopup.endingBody', { date: endDateLabel ?? '' })
-            : t('trialPopup.endedBody')}
+            ? t(bodyKey, { date: endDateLabel ?? '' })
+            : t(bodyKey)}
         </div>
 
         {variant === 'ended' && (

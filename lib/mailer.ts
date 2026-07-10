@@ -9,6 +9,8 @@ import {
   buildWelcomeHtml,
   buildTrialEndingHtml,
   buildTrialEndedHtml,
+  buildPassEndingHtml,
+  buildPassEndedHtml,
 } from './email-templates'
 
 // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
@@ -231,6 +233,35 @@ export async function sendTrialEndedEmail(
     to,
     subject: et(lc, 'trialEnded.subject'),
     html: buildTrialEndedHtml(lc),
+  })
+}
+
+// 1개월권(일회성 결제) 만료 전날 예고 메일. endDate는 호출 측에서 로케일에 맞게 포맷한 문자열.
+export async function sendPassEndingEmail(
+  to: string,
+  endDate: string,
+  locale: string | null = 'ko'
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  await getTransporter().sendMail({
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: et(lc, 'passEnding.subject'),
+    html: buildPassEndingHtml(lc, endDate),
+  })
+}
+
+// 1개월권(일회성 결제) 만료 당일 무료 플랜 전환 안내 메일.
+export async function sendPassEndedEmail(
+  to: string,
+  locale: string | null = 'ko'
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  await getTransporter().sendMail({
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: et(lc, 'passEnded.subject'),
+    html: buildPassEndedHtml(lc),
   })
 }
 

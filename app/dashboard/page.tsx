@@ -270,7 +270,7 @@ export default function Dashboard() {
       setTrialPopup('ended')
     } else if (
       trialFlags.trial_ending_notified_at != null && trialFlags.trial_ending_popup_seen_at == null &&
-      profile.plan_status === 'trialing'
+      (profile.plan_status === 'trialing' || profile.plan_status === 'onetime')
     ) {
       setTrialPopup('ending')
     }
@@ -2412,10 +2412,11 @@ export default function Dashboard() {
         <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} onClose={closeHelp} />
       )}
 
-      {/* Pro 체험 종료 안내 팝업 (전날 ending / 당일 ended) */}
+      {/* Pro 체험·1개월권 종료 안내 팝업 (전날 ending / 당일 ended) */}
       {trialPopup && (
         <TrialPopup
           variant={trialPopup}
+          planKind={profile?.plan_status === 'onetime' ? 'onetime' : 'trial'}
           endDateLabel={profile?.plan_expires_at
             ? new Date(profile.plan_expires_at).toLocaleDateString(dateLocale, { month: 'numeric', day: 'numeric' })
             : ''}

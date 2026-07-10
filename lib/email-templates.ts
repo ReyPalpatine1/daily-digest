@@ -266,6 +266,34 @@ export function buildTrialEndedHtml(locale: EmailLocale = 'ko'): string {
   return shell(et(locale, 'trialEnded.subject'), locale, inner, footerBlock(locale))
 }
 
+// 1개월권(일회성 결제) 만료 전날 예고 메일. 일회성 결제라 자동 갱신이 없다.
+export function buildPassEndingHtml(locale: EmailLocale = 'ko', endDate: string): string {
+  const inner = `
+    <div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;">
+      <div style="width:56px;height:56px;background:#F4F4F5;border-radius:50%;display:inline-block;line-height:56px;font-size:26px;margin-bottom:16px;">⏳</div>
+      <div style="font-size:20px;font-weight:600;color:#0A0A0A;margin-bottom:8px;">${et(locale, 'passEnding.heading')}</div>
+      <div style="font-size:13px;color:#71717A;line-height:1.7;margin-bottom:20px;">${et(locale, 'passEnding.desc', { date: endDate })}</div>
+      <a href="${APP_URL}/subscribe?mode=pay" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;">
+        ${et(locale, 'passEnding.cta')}
+      </a>
+    </div>`
+  return shell(et(locale, 'passEnding.subject'), locale, inner, footerBlock(locale))
+}
+
+// 1개월권(일회성 결제) 만료 당일 무료 플랜 전환 안내 메일.
+export function buildPassEndedHtml(locale: EmailLocale = 'ko'): string {
+  const inner = `
+    <div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;">
+      <div style="width:56px;height:56px;background:#F4F4F5;border-radius:50%;display:inline-block;line-height:56px;font-size:26px;margin-bottom:16px;">📩</div>
+      <div style="font-size:20px;font-weight:600;color:#0A0A0A;margin-bottom:8px;">${et(locale, 'passEnded.heading')}</div>
+      <div style="font-size:13px;color:#71717A;line-height:1.7;margin-bottom:20px;">${et(locale, 'passEnded.desc')}</div>
+      <a href="${APP_URL}/subscribe?mode=pay" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;">
+        ${et(locale, 'passEnded.cta')}
+      </a>
+    </div>`
+  return shell(et(locale, 'passEnded.subject'), locale, inner, footerBlock(locale))
+}
+
 // 미리보기 전용 — 시스템 알림 메일 모양
 export function buildErrorPreviewHtml(locale: EmailLocale = 'ko'): string {
   const now = formatTime(new Date().toISOString(), locale)

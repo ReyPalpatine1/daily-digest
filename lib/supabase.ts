@@ -35,7 +35,7 @@ export type Profile = {
   plan_expires_at: string | null
   vip_granted_by: string | null
   vip_granted_at: string | null
-  plan_status: 'none' | 'trialing' | 'active' | 'canceled'
+  plan_status: 'none' | 'trialing' | 'active' | 'canceled' | 'onetime'
   trial_used: boolean
 }
 
