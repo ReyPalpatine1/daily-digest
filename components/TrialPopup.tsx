@@ -100,7 +100,7 @@ export default function TrialPopup({ variant, endDateLabel, planKind = 'trial', 
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onClose} style={subBtn}>
-            {variant === 'ending' ? t('trialPopup.later') : t('trialPopup.close')}
+            {t('trialPopup.close')}
           </button>
           <button onClick={onSubscribe} style={mainBtn}>
             {t('trialPopup.subscribe')}
