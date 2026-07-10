@@ -212,7 +212,7 @@ export async function sendTrialEndingEmail(
   locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await transporter.sendMail({
+  await getTransporter().sendMail({
     from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'trialEnding.subject'),
@@ -226,7 +226,7 @@ export async function sendTrialEndedEmail(
   locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await transporter.sendMail({
+  await getTransporter().sendMail({
     from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'trialEnded.subject'),
