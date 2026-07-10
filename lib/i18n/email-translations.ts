@@ -55,15 +55,15 @@ export const emailTranslations = {
       startCta: '채널 추가하러 가기',
     },
     trialEnding: {
-      subject: '무료 체험이 내일 종료됩니다',
+      subject: 'Pro 체험이 내일 종료됩니다',
       heading: '체험이 곧 끝나요',
-      desc: '{date}에 7일 무료 체험이 종료됩니다. 계속 Pro 기능을 쓰려면 아래에서 구독할 수 있어요. 자동 결제는 되지 않습니다.',
+      desc: '{date}에 Pro 체험이 종료됩니다.<br>자동 결제는 되지 않아요.',
       cta: 'Pro 구독하기',
     },
     trialEnded: {
       subject: '무료 플랜으로 전환되었습니다',
       heading: '체험이 종료되었어요',
-      desc: '7일 무료 체험이 끝나 무료 플랜으로 전환되었습니다. Pro 기능을 계속 쓰려면 아래에서 구독할 수 있어요.',
+      desc: 'Pro 체험이 종료되었습니다.<br>무료 플랜으로 전환되었어요.',
       cta: 'Pro 구독하기',
     },
     channels: {
@@ -127,15 +127,15 @@ export const emailTranslations = {
       startCta: 'Add Channels',
     },
     trialEnding: {
-      subject: 'Your free trial ends tomorrow',
+      subject: 'Your Pro trial ends tomorrow',
       heading: 'Your trial is ending soon',
-      desc: 'Your 7-day free trial ends on {date}. To keep using Pro features, you can subscribe below. You will not be charged automatically.',
+      desc: 'Your Pro trial ends on {date}.<br>You will not be charged automatically.',
       cta: 'Subscribe to Pro',
     },
     trialEnded: {
       subject: "You're now on the Free plan",
       heading: 'Your trial has ended',
-      desc: 'Your 7-day free trial has ended and your account moved to the Free plan. To keep using Pro features, you can subscribe below.',
+      desc: 'Your Pro trial has ended.<br>Your account is now on the free plan.',
       cta: 'Subscribe to Pro',
     },
     channels: {
@@ -199,15 +199,15 @@ export const emailTranslations = {
       startCta: '去添加频道',
     },
     trialEnding: {
-      subject: '免费试用将于明天结束',
+      subject: 'Pro 试用将于明天结束',
       heading: '试用即将结束',
-      desc: '你的 7 天免费试用将于 {date} 结束。若想继续使用 Pro 功能，可在下方订阅。我们不会自动扣费。',
+      desc: '您的 Pro 试用将于 {date} 结束。<br>不会自动扣款。',
       cta: '订阅 Pro',
     },
     trialEnded: {
       subject: '已切换到免费方案',
       heading: '试用已结束',
-      desc: '7 天免费试用已结束，你的账号已切换到免费方案。若想继续使用 Pro 功能，可在下方订阅。',
+      desc: 'Pro 试用已结束。<br>您的账户已转为免费方案。',
       cta: '订阅 Pro',
     },
     channels: {
@@ -271,15 +271,15 @@ export const emailTranslations = {
       startCta: 'チャンネルを追加する',
     },
     trialEnding: {
-      subject: '無料トライアルは明日終了します',
+      subject: 'Proトライアルは明日終了します',
       heading: 'トライアルがまもなく終了します',
-      desc: '7日間の無料トライアルは{date}に終了します。Pro機能を引き続きご利用いただくには、下のボタンから購読できます。自動で課金されることはありません。',
+      desc: 'Proトライアルは{date}に終了します。<br>自動課金はありません。',
       cta: 'Proを購読する',
     },
     trialEnded: {
       subject: '無料プランに切り替わりました',
       heading: 'トライアルが終了しました',
-      desc: '7日間の無料トライアルが終了し、無料プランに切り替わりました。Pro機能を引き続きご利用いただくには、下のボタンから購読できます。',
+      desc: 'Proトライアルが終了しました。<br>無料プランに切り替わりました。',
       cta: 'Proを購読する',
     },
     channels: {
