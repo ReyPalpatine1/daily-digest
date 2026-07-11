@@ -13,6 +13,8 @@ import {
   sendPassEndingEmail,
   sendPassEndedEmail,
 } from '@/lib/mailer'
+import { sendTelegramMessage } from '@/lib/telegram'
+import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 
 // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
 // service client를 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
@@ -37,14 +39,19 @@ const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// 발송 로케일·수신 주소. settings 조회가 실패해도 발송을 막지 않는다.
+// 발송 로케일·수신 주소·텔레그램 보강용 채널 정보. settings 조회가 실패해도 발송을 막지 않는다.
 async function resolveSettings(
   userId: string
-): Promise<{ locale: string | null; email: string | null } | null> {
+): Promise<{
+  locale: string | null
+  email: string | null
+  delivery_method: string | null
+  telegram_chat_id: string | null
+} | null> {
   try {
     const { data } = await supabase
       .from('settings')
-      .select('locale, email')
+      .select('locale, email, delivery_method, telegram_chat_id')
       .eq('user_id', userId)
       .single()
     return data
@@ -115,6 +122,26 @@ export async function runTrialNotifications(): Promise<void> {
           // (가)와 동일 — 발송 성공 후에만 로그·플래그 기록, 실패 시 다음 run에서 재시도.
           await (isOnetime ? sendPassEndingEmail(to, endDate, locale) : sendTrialEndingEmail(to, endDate, locale))
           console.log(`[trial-notify] 종료 예고 발송 완료: ${p.id}`)
+          // 텔레그램 보강(선택자 한정, best-effort — 실패해도 플래그·흐름에 영향 없음).
+          // 당일 알림은 이메일만 유지(만료 시 텔레그램 채널이 닫히므로) — 전날에만 추가.
+          try {
+            const chatId = settingsRow?.telegram_chat_id
+            // delivery.ts effectiveMethod(m, isPro)와 동일 기준. 전날 대상자(trialing/onetime)는
+            // Pro 유효 상태(isPro=true)라 effectiveMethod === 'telegram' ⇔ delivery_method === 'telegram'.
+            const wantsTg = settingsRow?.delivery_method === 'telegram'
+            if (wantsTg && chatId) {
+              const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://dailyvideodigest.com').replace(/\/$/, '')
+              const tgLocale: EmailLocale =
+                locale === 'en' || locale === 'zh' || locale === 'ja' ? locale : 'ko'
+              const tgText = et(tgLocale, isOnetime ? 'passEnding.tg' : 'trialEnding.tg', {
+                date: endDate,
+                link: `${appUrl}/subscribe?mode=pay`,
+              })
+              await sendTelegramMessage(chatId, tgText)
+            }
+          } catch (e) {
+            console.error(`[trial-notify] 전날 텔레그램 보강 실패(무시) user=${p.id}:`, e)
+          }
           const { error: flagError } = await supabase
             .from('profiles')
             .update({ trial_ending_notified_at: now.toISOString() })

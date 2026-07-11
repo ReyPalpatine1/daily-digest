@@ -59,6 +59,7 @@ export const emailTranslations = {
       heading: 'Pro 체험이 곧 종료됩니다',
       desc: '{date}까지 이용할 수 있어요.<br>자동 결제는 되지 않습니다.',
       cta: 'Pro 구독하기',
+      tg: '⏳ Pro 체험이 곧 종료됩니다\n{date}까지 이용할 수 있어요. 자동 결제는 되지 않습니다.\n계속 쓰려면: {link}',
     },
     trialEnded: {
       subject: '무료 플랜으로 전환되었습니다',
@@ -71,6 +72,7 @@ export const emailTranslations = {
       heading: 'Pro 이용권이 곧 만료됩니다',
       desc: '{date}까지 이용할 수 있어요.<br>자동 결제는 되지 않습니다.',
       cta: 'Pro 구독하기',
+      tg: '⏳ Pro 이용권이 곧 만료됩니다\n{date}까지 이용할 수 있어요. 자동 결제는 되지 않습니다.\n계속 쓰려면: {link}',
     },
     passEnded: {
       subject: '무료 플랜으로 전환되었습니다',
@@ -143,6 +145,7 @@ export const emailTranslations = {
       heading: 'Your Pro trial is ending soon',
       desc: 'You can use Pro until {date}.<br>You will not be charged automatically.',
       cta: 'Subscribe to Pro',
+      tg: '⏳ Your Pro trial is ending soon\nYou can use Pro until {date}. You will not be charged automatically.\nKeep using Pro: {link}',
     },
     trialEnded: {
       subject: "You're now on the Free plan",
@@ -155,6 +158,7 @@ export const emailTranslations = {
       heading: 'Your Pro pass is expiring soon',
       desc: 'You can use Pro until {date}.<br>You will not be charged automatically.',
       cta: 'Subscribe to Pro',
+      tg: '⏳ Your Pro pass is expiring soon\nYou can use Pro until {date}. You will not be charged automatically.\nKeep using Pro: {link}',
     },
     passEnded: {
       subject: "You're now on the Free plan",
@@ -227,6 +231,7 @@ export const emailTranslations = {
       heading: 'Pro 试用即将结束',
       desc: '您可以使用 Pro 至 {date}。<br>不会自动扣款。',
       cta: '订阅 Pro',
+      tg: '⏳ Pro 试用即将结束\n您可以使用 Pro 至 {date}。不会自动扣款。\n继续使用：{link}',
     },
     trialEnded: {
       subject: '已切换到免费方案',
@@ -239,6 +244,7 @@ export const emailTranslations = {
       heading: 'Pro 使用权即将到期',
       desc: '您可以使用 Pro 至 {date}。<br>不会自动扣款。',
       cta: '订阅 Pro',
+      tg: '⏳ Pro 使用权即将到期\n您可以使用 Pro 至 {date}。不会自动扣款。\n继续使用：{link}',
     },
     passEnded: {
       subject: '已切换到免费方案',
@@ -311,6 +317,7 @@ export const emailTranslations = {
       heading: 'Proトライアルはまもなく終了します',
       desc: '{date}までご利用いただけます。<br>自動課金はありません。',
       cta: 'Proを購読する',
+      tg: '⏳ Proトライアルはまもなく終了します\n{date}までご利用いただけます。自動課金はありません。\n続けるには: {link}',
     },
     trialEnded: {
       subject: '無料プランに切り替わりました',
@@ -323,6 +330,7 @@ export const emailTranslations = {
       heading: 'Pro利用権はまもなく期限切れになります',
       desc: '{date}までご利用いただけます。<br>自動課金はありません。',
       cta: 'Proを購読する',
+      tg: '⏳ Pro利用権はまもなく期限切れになります\n{date}までご利用いただけます。自動課金はありません。\n続けるには: {link}',
     },
     passEnded: {
       subject: '無料プランに切り替わりました',
