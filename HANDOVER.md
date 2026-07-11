@@ -158,13 +158,18 @@ ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
 
 ## 8. DB 테이블 / 주요 컬럼
 
-- profiles, categories, channels(is_active, uploads_playlist_id), settings(notify_when_empty, locale, breaking_keywords)
+- profiles, categories, channels(is_active, uploads_playlist_id), settings(notify_when_empty, locale, breaking_keywords, email)
+- **★ 사용자 수신 주소의 정본은 settings.email** — 발송(다이제스트·체험/이용권 알림)은 settings.email 우선, 없으면 profiles.email 폴백. profiles.email만 보고 보내면 안 됨.
+- profiles 체험/이용권 알림 플래그 4개: trial_ending_notified_at / trial_ended_notified_at(메일 발송 기록), trial_ending_popup_seen_at / trial_ended_popup_seen_at(대시보드 팝업 확인 기록)
 - digests: 요약 기록(히스토리/읽음용). key_points=ARRAY(text[]), timeline=jsonb
 - videos: video_id PK, is_short, **summary_attempts(재시도 상한 3회)**
 - video_summaries: video_id PK, summary, **key_points=JSONB, timeline=JSONB**(과거 TEXT였음→전환 완료), model, **summary_basis**(자막/설명/제목 기반 표시)
 - send_log: 발송 멱등성
 - email_logs: 발송 성공률 통계 (시간 컬럼은 **sent_at**)
 - api_usage: 사용량(date, service, user_id, api_calls, input/output_tokens). **공유 작업은 시스템 ID(00000000-0000-0000-0000-000000000000)로 기록.**
+- feedback: 사용자 의견. user_id(탈퇴 시 SET NULL), rating, type, message(2~500자), status, is_public(테스티모니얼 공개용, 공개 UI는 미구현), locale. RLS는 본인 insert만 허용(조회·관리는 서버 service key).
+- error_log: 오류 로그. **is_read**(관리자 오류 탭 읽음 상태 — 안 읽은 오류 강조/뱃지용)
+- admin_alert_settings: 관리자 알림 설정. **last_error_alert_at**(신규 오류 알림 워터마크 — 이 시각 이후 오류만 새로 알림)
 
 ## 9. Supabase RPC 함수 (관리자 통계 / 정리)
 
@@ -189,20 +194,20 @@ ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
 
 ## 12. 결제 / 프로필 (현재 상태)
 
-- 결제 진입점 **/pricing 하나로 일원화.** 실결제 미구현 → 결제 누르면 "준비 중" 안내.
-- /subscribe, /subscription, /test 페이지 **삭제됨.**
+- 요금제 **/pricing** → 결제창 **/subscribe**(7일 Pro 체험 시작 실작동 / 실결제는 PG 미연동이라 "준비 중" 안내). /subscription, /test 페이지는 삭제됨.
 - 프로필 **/profile 단일 페이지**(탭 없음): 계정 정보 + 플랜 카드(FREE=업그레이드 버튼 / PRO=만료일+구독 관리).
-- /terms = "준비 중" 정적 페이지.
+- 약관 3종 페이지 있음: /terms /privacy /refund (한국어, [[placeholder]] 미기입 — §15 ① 참조).
 - **열람 기록 표시**: FREE는 최근 7일만 표시(저장은 30일, 재구독 시 복원). PRO/VIP/admin은 전체. FREE 하단에 "PRO에서 더 보기" 안내.
 
 ## 13. 이메일
 
-- 다국어(ko/en): lib/i18n/email-translations.ts
+- 다국어 4개 언어(ko/en/zh/ja): lib/i18n/email-translations.ts (UI용 translations.ts와 분리)
+- 종류: 다이제스트 / 빈 다이제스트 / 속보 / 환영 / 체험 종료 예고·안내(trialEnding·trialEnded) / 1개월권 만료 예고·안내(passEnding·passEnded, PG 연동 전이라 대상 0명)
 - 푸터: "Daily Digest / (태그라인) / 알림 설정 / (이메일) 님에게 발송" — 수신자는 이름 우선.
 - 헤더(안녕하세요/N개 요약) 전체가 **/dashboard 링크.** 우측 힌트 "다이제스트 바로가기"(en: Go to Digest).
 - 각 요약 카드 하단에 분석 근거 표시(자막/설명/제목 기반).
 
-## 14. 이번 세션에서 해결한 주요 버그 (참고)
+## 14. 해결한 주요 버그 (참고)
 
 - digests 6/6 이후 저장 중단: video_summaries.key_points가 TEXT여서 digests(text[]) 저장 시 타입 충돌 → JSONB 전환 + 코드 방어로 해결.
 - Gemini 503 전멸: gemini-flash-latest(실험 모델) → 안정 모델 고정 + 폴백.
@@ -210,17 +215,31 @@ ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
 - Gemini 깨진 JSON: 복구 파서 + responseMimeType:application/json.
 - api_usage 6/7 이후 기록 중단: 공유 경로 userId=null → 시스템 ID로 기록.
 - 쇼츠(is_short=true)는 발송 대상 제외(정상 동작).
+- 다이제스트 중복 발송: 실행이 발송 후 죽으면 send_log가 sending으로 남고, 다음 실행이 STALE 복구로 재선점해 또 발송 → email_logs 기준 hasDigestSentToday 교차확인을 추가해 "오늘 이미 성공 발송"이면 재발송 차단.
+- DB 자체 백업 실패: 백업 워크플로가 Microsoft apt 저장소 오류로 죽음 → apt 갱신을 PGDG(PostgreSQL 저장소)만 하도록 좁혀 해결.
+- 신규 오류가 쌓여도 무알림: 알림 체크가 오류 발생 뒤에만 돌아 놓침 → collect run 시작 전에도 체크 + admin_alert_settings.last_error_alert_at 워터마크로 "그 이후 새 오류"만 집계해 알림.
+- 체험 종료 메일 미발송 2건: ① mailer의 transporter를 모듈 최상단에서 참조해 Cloudflare에서 터짐 → getTransporter() 사용으로 수정. ② 수신 주소를 profiles.email로만 보고 발송 → 다이제스트와 동일하게 settings.email 우선(폴백 profiles.email)으로 통일.
 
-## 15. 백로그 (2026-07-03 기준)
+## 15. 백로그 (2026-07-11 기준)
 
-> 현재 작업 기준. 완료되면 ④로 옮기고, 새 항목은 분류에 맞게 추가할 것.
+> 현재 작업 기준. 완료되면 ⑤로 옮기고, 새 항목은 분류에 맞게 추가할 것.
 
-### ① 출시 전 필수 (남은 것)
-- $5 Cloudflare Workers Paid + Supabase Pro $25 여부 결정 (Supabase 무료 유지 가능성 점검 먼저) → 전환 시 MAX_SUMMARIES_PER_RUN 1→100. $5 전환은 무료 CPU 30초 한도 문제(다이제스트 누락 원인)도 함께 해결
-- 약관 3종 마무리: [[placeholder]] 기입(사업자 등록 후) + 4개 언어 번역 + 개인정보처리방침에 trial_history(이메일 해시·플랫폼ID, 재체험 방지, 탈퇴 후 보관) 고지 추가
-- 자막 없는 영상 AI 요약 = Pro 전용 게이트 로직 (정책 확정, 코드 미구현)
+### ① 출시 전 필수
+- $5 Cloudflare Workers Paid 전환 → 전환 시 MAX_SUMMARIES_PER_RUN 환경변수를 100으로(subrequest 50→1,000). 무료 CPU 30초 한도 문제(다이제스트 누락 원인)도 함께 해결됨
+- 자막 API 유료 전환 (Supadata 무료 월 100크레딧으로는 부족)
+- 약관 3종 마무리: [[placeholder]] 기입(사업자 등록 후) + 4개 언어 번역 + 개인정보처리방침에 trial_history(이메일 해시·플랫폼ID, 재체험 방지, 탈퇴 후 보관) 고지 + "무료 체험"→"Pro 체험" 명칭 정리
 
-### ② 보류
+### ② 미완 (작업하다 남은 것)
+- C. 관리자 콘텐츠 탭 가독성 — admin_top_channels RPC가 Supabase에만 정의되어 있고 저장소에 SQL이 없음. 수정 전 Supabase에서 현재 정의(SQL) 확인 필요
+- 환불 문의 안내 위치 (환불 규정은 있는데 어디로 문의하라는 안내가 없음)
+- digest·breaking 최상위 catch에 오류 알림 배선 (지금은 통째로 실패하면 조용히 죽음)
+
+### ③ PG 연동 시 필수 (잊으면 안 됨)
+- plan_status에 결제 유형 기록: 자동갱신=**active** / 1개월권(일회성)=**onetime**
+- 결제(자동갱신/1개월권) 부여 시점에 profiles의 trial_ending_notified_at / trial_ended_notified_at / trial_ending_popup_seen_at / trial_ended_popup_seen_at **4개를 null로 리셋** — 이용 사이클마다 만료 알림이 재활성화되는 구조 (lib/trial-notify.ts 상단 주석에도 명시됨)
+- 자동갱신(active)은 만료 알림 대상 아님 — 알림 스캔은 trialing/onetime만
+
+### ④ 보류·아이디어
 - 실결제 PG 연동 (사업자 등록 후): 결제 화면 자동/일회성 선택, 체험 카드 요구 재검토, 탈퇴 환불 연동
 - 카카오/WhatsApp/LINE 메신저 (출시 후)
 - 소셜 로그인 추가(카카오 등) — trial_history platform_id 확장 포함
@@ -231,15 +250,12 @@ ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
 - 언어 동기화 로직 중복 통합 (대시보드+AppHeader)
 - subrequest/CPU 근본 대응: 수집/요약 분리 + 영상단위 큐화 (대규모 성장 시)
 - 관리자 텔레그램 오류 알림 실발송 검증 (오류 자연 발생 시)
-
-### ③ 아이디어만
+- 피드백 공개(테스티모니얼) — feedback.is_public 컬럼 준비됨, 공개 UI만 만들면 됨
+- 관리자 의견↔사용자 교차링크 (의견에서 그 사용자로, 사용자에서 그 사람 의견으로 이동)
 - 이주의 인기 영상 위젯 / 북마크·나중에 볼 영상 / "오늘 미리보기"
-- 폐기됨: 영상 정밀 요약, 매일 여러 번, 우선 처리, Premium/Family, 슈퍼 프로, AI 음성, 디스코드, 카테고리 제한, 연 단위 결제(2026-07), 제목 기반 요약(2026-07)
+- 폐기됨: 영상 정밀 요약, 매일 여러 번, 우선 처리, Premium/Family, 슈퍼 프로, AI 음성, 디스코드, 카테고리 제한, 연 단위 결제(2026-07), 제목 기반 요약(2026-07), FAQ 고객센터 이관(2026-07, pricing 내 FAQ 유지 확정)
 
-### ③ UI 다듬기 (출시 전)
-- 랜딩 페이지 / 도움말 모달 / 요약 메일 (속보 배너 + 중복)
-
-### ④ 완료
+### ⑤ 완료
 - 구조3 자막 / Cloudflare Cron / 랜딩 / 색 톤 / 도움말 팝업 / MAX_SUMMARIES_PER_RUN=1
 - 요금제 개편(연 폐기·월 ₩4,900 단일·4상태 버튼) + 결제창(/subscribe) + 7일 체험 실작동 + trial_history 재체험 방지 + 재가입자 결제 유도 (2026-07)
 - 약관·개인정보·환불 3종 페이지 (/terms /privacy /refund, 한국어, placeholder) (2026-07)
@@ -247,9 +263,13 @@ ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
 - DB 자체 백업 (backup.yml: 매일 KST 04시 pg_dump→R2, 14일 보존, 실패 텔레그램) (2026-07)
 - 요약 실패 사유 표기 (fail_reason 4종 + 대시보드/이메일 표시 + 관리자 [debug]) + 제목 기반 폐지 + 라이브 감지 + 요금제 한계 고지 (2026-07)
 - 관리자 오류 시스템 (error_log + /admin 오류 탭 + 이메일/텔레그램 알림 선택) (2026-07)
+- 사용자 피드백 시스템: /feedback 페이지 + /admin/feedback 관리 탭 + 진입점 3곳 + 관리자 헤더 실시간 뱃지 (2026-07)
+- 관리자 오류 탭 읽음·강조 (error_log.is_read — 안 읽은 오류 하이라이트/뱃지, 클릭 시 읽음) (2026-07)
+- 관리자 헤더 탭 순서 확정: 대시보드·시스템·오류·사용자·의견·콘텐츠·이메일 (2026-07)
+- 체험 종료 안내: 메일 2종(전날 예고/당일 안내) + 대시보드 팝업 2종 + 1개월권(onetime) 뼈대(메일·팝업 문구 분기, PG 연동 전이라 대상 0명). 명칭 규칙: 개념="Pro 체험", CTA="7일 무료" (2026-07)
 
 ### 출시 전 잡일
-- 이모지→lucide / 영어 이메일 재검증 / 미사용 i18n 키 정리(pricing faq 제외) / Vercel 정리 / 시크릿 별도 기록
+- 이모지→lucide / 영어 이메일 재검증 / 미사용 i18n 키 정리(pricing faq 제외) / 요약 메일 다듬기(속보 배너+중복) / Vercel 정리 / 시크릿 별도 기록
 
 ## 16. 자주 쓰는 링크
 
