@@ -265,8 +265,18 @@ export default function Home() {
           </div>
           {/* 사업자 정보 (법정 표기 — 언어 설정과 무관하게 한국어 고정) */}
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.8, textAlign: 'center' }}>
-            <div>솔로옵스 | 대표: 김해솔 | 사업자등록번호: 374-04-03551</div>
-            <div>통신판매업신고: 제2026-성남수정-0528호</div>
+            <div>
+              솔로옵스 | 대표: 김해솔 |{' '}
+              <a
+                href="https://www.ftc.go.kr/bizCommPop.do?wrkr_no=3740403551"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={footerLinkStyle}
+              >
+                사업자등록번호: 374-04-03551
+              </a>
+            </div>
+            <div>통신판매업신고: 제2026-성남수정-0528호 | 호스팅서비스 제공: Cloudflare, Inc.</div>
             <div>주소: 경기도 성남시 수정구 수정로 319, 130동 604호</div>
             <div>
               문의: support@dailyvideodigest.com | 전화:{' '}
