@@ -5,9 +5,13 @@ import { Mail } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
+// 전화번호 조각 (스팸 수집기 방어: 완성 문자열을 소스·초기 DOM에 두지 않음)
+const PHONE_PARTS = ['010', '8791', '9498'] // ← 배포 시 실제 번호 조각으로 교체
+
 export default function Home() {
   const { t } = useTranslation()
   const [isMobile, setIsMobile] = useState(false)
+  const [showPhone, setShowPhone] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -258,6 +262,33 @@ export default function Home() {
             <a href="/privacy" style={footerLinkStyle}>{t('settings.privacy')}</a>
             <span aria-hidden="true">·</span>
             <a href="/refund" style={footerLinkStyle}>{t('settings.refund')}</a>
+          </div>
+          {/* 사업자 정보 (법정 표기 — 언어 설정과 무관하게 한국어 고정) */}
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.8, textAlign: 'center' }}>
+            <div>솔로옵스 | 대표: 김해솔 | 사업자등록번호: 374-04-03551</div>
+            <div>통신판매업신고: 제2026-성남수정-0528호</div>
+            <div>주소: 경기도 성남시 수정구 수정로 319, 130동 604호</div>
+            <div>
+              문의: support@dailyvideodigest.com | 전화:{' '}
+              {showPhone ? (
+                <span>{PHONE_PARTS.join('-')}</span>
+              ) : (
+                <button
+                  onClick={() => setShowPhone(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    fontSize: 'inherit',
+                    fontFamily: 'inherit',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  [번호 보기]
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>© 2026 Daily Video Digest</div>
         </footer>
