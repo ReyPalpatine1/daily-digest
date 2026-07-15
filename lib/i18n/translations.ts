@@ -386,6 +386,12 @@ export const translations = {
       linkGithubDesc: '코드·배포·백업 Actions',
       linkService: '서비스 (운영)',
       linkServiceDesc: '실서비스 화면',
+      // 광고 클릭 현황
+      adSection: '광고',
+      adProBanner: 'Pro 배너',
+      adPartner: '제휴 슬롯',
+      adToday: '오늘',
+      adTotal: '누적',
     },
     adminUsers: {
       title: '사용자 관리',
@@ -1013,6 +1019,11 @@ export const translations = {
       linkGithubDesc: 'Code, deploys & backup Actions',
       linkService: 'Service (production)',
       linkServiceDesc: 'Live production site',
+      adSection: 'Ads',
+      adProBanner: 'Pro banner',
+      adPartner: 'Partner slot',
+      adToday: 'Today',
+      adTotal: 'Total',
     },
     adminUsers: {
       title: 'User Management',
@@ -1639,6 +1650,11 @@ export const translations = {
       linkGithubDesc: '代码·部署·备份 Actions',
       linkService: '服务（生产）',
       linkServiceDesc: '实际服务界面',
+      adSection: '广告',
+      adProBanner: 'Pro 横幅',
+      adPartner: '合作广告位',
+      adToday: '今日',
+      adTotal: '累计',
     },
     adminUsers: {
       title: '用户管理',
@@ -2262,6 +2278,11 @@ export const translations = {
       linkGithubDesc: 'コード・デプロイ・バックアップ Actions',
       linkService: 'サービス（本番）',
       linkServiceDesc: '本番サービス画面',
+      adSection: '広告',
+      adProBanner: 'Pro バナー',
+      adPartner: '提携スロット',
+      adToday: '本日',
+      adTotal: '累計',
     },
     adminUsers: {
       title: 'ユーザー管理',

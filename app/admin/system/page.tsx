@@ -27,12 +27,19 @@ type SystemStats = {
     transcriptapi: ApiEntry
   }
 }
+// 이메일 광고 클릭 집계 (/api/admin/ad-clicks 응답)
+type AdClickStats = {
+  proBanner: { today: number; total: number }
+  partner: { today: number; total: number }
+  bots: number
+}
 
 export default function AdminSystemPage() {
   const router = useRouter()
   const { t, locale } = useTranslation()
   const [isAdmin, setIsAdmin] = useState(false)
   const [stats, setStats] = useState<SystemStats | null>(null)
+  const [adStats, setAdStats] = useState<AdClickStats | null>(null)
   const [loading, setLoading] = useState(true)
 
   const loadStats = useCallback(async () => {
@@ -45,6 +52,18 @@ export default function AdminSystemPage() {
       console.error('[admin/system] loadStats failed:', e)
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  // 광고 클릭 집계 — 실패해도 페이지는 뜨고 0으로 표시(?? 0).
+  const loadAdStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/ad-clicks')
+      if (res.ok) {
+        setAdStats(await res.json())
+      }
+    } catch (e) {
+      console.error('[admin/system] loadAdStats failed:', e)
     }
   }, [])
 
@@ -61,11 +80,11 @@ export default function AdminSystemPage() {
         return
       }
       setIsAdmin(true)
-      await loadStats()
+      await Promise.all([loadStats(), loadAdStats()])
     }
     checkAdminAndLoad()
     return () => { cancelled = true }
-  }, [router, loadStats])
+  }, [router, loadStats, loadAdStats])
 
   const nf = new Intl.NumberFormat(locale === 'ko' ? 'ko-KR' : 'en-US')
   const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
@@ -179,6 +198,29 @@ export default function AdminSystemPage() {
             </div>
           </section>
         )}
+
+        {/* ===== 광고 클릭 현황 (다이제스트 메일 광고 슬롯) ===== */}
+        <section style={{ marginTop: 28 }}>
+          <h2 style={sectionTitleStyle}>{t('adminSystem.adSection')}</h2>
+          <div style={gridStyle}>
+            {([
+              { key: 'proBanner', label: t('adminSystem.adProBanner'), stat: adStats?.proBanner },
+              { key: 'partner', label: t('adminSystem.adPartner'), stat: adStats?.partner },
+            ]).map(c => (
+              <div key={c.key} style={cardStyle}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c.label}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 12 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.adToday')}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nf.format(c.stat?.today ?? 0)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.adTotal')}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nf.format(c.stat?.total ?? 0)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* ===== 고정비 안내 (카드 클릭 시 해당 대시보드 이동) ===== */}
         <section style={{ marginTop: 28 }}>
