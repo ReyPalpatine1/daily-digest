@@ -93,6 +93,9 @@ function shell(title: string, locale: EmailLocale, inner: string, footer: string
 }
 
 function footerBlock(locale: EmailLocale, email?: string): string {
+  // Gmail이 매일 동일한 푸터를 "반복 내용"으로 접는 것을 완화하기 위해 발송 날짜를 넣어 내용을 변화시킨다.
+  // 새 시간 로직을 만들지 않고 @/lib/time의 nowUtc + 기존 formatDate(KST·locale 매핑)를 재사용.
+  const footerDate = formatDate(nowUtc(), locale)
   return `
     <div style="text-align:center;padding:20px 0 8px;border-top:1px solid #E5E5E5;margin-top:24px;">
       <div style="font-size:13px;font-weight:600;color:#0A0A0A;letter-spacing:-0.01em;">Daily Video Digest</div>
@@ -103,6 +106,7 @@ function footerBlock(locale: EmailLocale, email?: string): string {
         <a href="${APP_URL}/feedback" style="color:#525252;text-decoration:underline;">${et(locale, 'digest.feedbackLink')}</a>
       </div>
       ${email ? `<div style="font-size:11px;color:#A1A1AA;margin-top:14px;">${escapeHtml(et(locale, 'digest.sentTo', { email }))}</div>` : ''}
+      <div style="font-size:11px;color:#A1A1AA;margin-top:6px;">© Daily Video Digest · ${footerDate}</div>
     </div>`
 }
 
