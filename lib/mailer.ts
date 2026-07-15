@@ -108,7 +108,9 @@ export async function sendDigestEmail(
   userName: string,
   items: DigestItem[],
   locale: string | null = 'ko',
-  userId: string | null = null
+  userId: string | null = null,
+  // 기본값 true = 광고 없음. 무료 사용자임이 확실할 때만 false로 광고 노출.
+  isPro = true
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   const date = new Date().toLocaleDateString(dateLocaleByEmailLocale[lc], {
@@ -123,7 +125,7 @@ export async function sendDigestEmail(
       from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'digest.subject', { date }),
-      html: buildDigestHtml(items, userName, lc, to),
+      html: buildDigestHtml(items, userName, lc, to, isPro),
     })
     await logEmailResult(userId, to, 'digest', true)
   } catch (e) {

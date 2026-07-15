@@ -31,6 +31,10 @@ export const emailTranslations = {
       basisTranscript: '자막을 기반으로 분석한 요약입니다',
       basisDescription: '영상 설명을 기반으로 분석한 요약입니다',
       basisTitle: '제목을 기반으로 한 간략 요약입니다',
+      adLabel: '광고',
+      adTitle: '광고 없이, 채널 20개까지 — Pro',
+      adDesc: '자막 없는 영상 요약과 실시간 속보까지. 월 ₩4,900',
+      adCta: 'Pro 알아보기',
     },
     breaking: {
       subject: '[속보] {title}',
@@ -117,6 +121,10 @@ export const emailTranslations = {
       basisTranscript: 'Summary based on the video transcript',
       basisDescription: 'Summary based on the video description',
       basisTitle: 'Brief summary based on the title only',
+      adLabel: 'AD',
+      adTitle: 'Ad-free, up to 20 channels — Pro',
+      adDesc: 'Summaries for videos without captions, plus breaking alerts. ₩4,900/mo',
+      adCta: 'Explore Pro',
     },
     breaking: {
       subject: '[Breaking] {title}',
@@ -203,6 +211,10 @@ export const emailTranslations = {
       basisTranscript: '基于字幕分析的摘要',
       basisDescription: '基于视频说明分析的摘要',
       basisTitle: '仅基于标题的简要摘要',
+      adLabel: '广告',
+      adTitle: '无广告，最多可订阅 20 个频道 — Pro',
+      adDesc: '无字幕视频的摘要与实时快讯一应俱全。每月 ₩4,900',
+      adCta: '了解 Pro',
     },
     breaking: {
       subject: '[快讯] {title}',
@@ -289,6 +301,10 @@ export const emailTranslations = {
       basisTranscript: '字幕をもとに分析した要約です',
       basisDescription: '動画の説明をもとに分析した要約です',
       basisTitle: 'タイトルをもとにした簡単な要約です',
+      adLabel: '広告',
+      adTitle: '広告なし、チャンネル20個まで — Pro',
+      adDesc: '字幕なし動画の要約もリアルタイム速報も。月額 ₩4,900',
+      adCta: 'Proを詳しく見る',
     },
     breaking: {
       subject: '[速報] {title}',

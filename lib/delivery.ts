@@ -52,7 +52,7 @@ export async function deliverDigest(
   }
 
   // email / 준비중 채널(whatsapp·line·kakao) / 주소 미설정 → 이메일 폴백
-  await sendDigestEmail(settings.email, userName, items, locale, userId)
+  await sendDigestEmail(settings.email, userName, items, locale, userId, isPro)
 }
 
 export async function deliverBreaking(

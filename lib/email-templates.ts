@@ -171,11 +171,25 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
     </div>`
 }
 
+// 무료 사용자 다이제스트 하단(요약 끝·푸터 위) 광고 슬롯 — Pro 배너 1개 고정.
+// Pro/VIP에게는 렌더하지 않는다("광고 없음" 약속). 다른 메일에는 넣지 말 것.
+function adBlock(locale: EmailLocale): string {
+  return `
+    <div style="padding:16px 20px;background:#fafafa;border-top:1px solid #f0f0f0;">
+      <div style="font-size:10px;color:#a0a0a4;letter-spacing:0.5px;margin-bottom:8px;">${et(locale, 'digest.adLabel')}</div>
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:3px;color:#1a1a1c;">${et(locale, 'digest.adTitle')}</div>
+      <div style="font-size:12px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.adDesc')}</div>
+      <a href="${APP_URL}/pricing" style="display:inline-block;font-size:12.5px;font-weight:500;color:#ffffff;background:#1a1a1c;padding:8px 14px;border-radius:6px;text-decoration:none;">${et(locale, 'digest.adCta')}</a>
+    </div>`
+}
+
 export function buildDigestHtml(
   items: EmailDigestItem[],
   userName: string,
   locale: EmailLocale = 'ko',
-  email?: string
+  email?: string,
+  // 기본값 true = 광고 없음. 호출부가 무료임을 명시했을 때만 광고 노출(누락 시 안전).
+  isPro = true
 ): string {
   const date = formatDate(new Date(), locale)
   const header = `
@@ -201,7 +215,7 @@ export function buildDigestHtml(
   const body = items.length > 0
     ? items.map(it => digestCard(it, locale)).join('')
     : `<div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;color:#A1A1AA;font-size:13px;">${et(locale, 'digest.noVideos')}</div>`
-  return shell(et(locale, 'digest.subject', { date }), locale, header + body, footerBlock(locale, email))
+  return shell(et(locale, 'digest.subject', { date }), locale, header + body + (isPro ? '' : adBlock(locale)), footerBlock(locale, email))
 }
 
 export function buildBreakingHtml(
