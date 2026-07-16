@@ -1,7 +1,5 @@
 'use client'
 
-import { nowUtc, toZoned } from '@/lib/time'
-
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
 type Props = {
@@ -11,12 +9,12 @@ type Props = {
 
 // 웹 공용 광고 카드 (대시보드 하단·열람기록 탭).
 // 무료 사용자에게만 노출 — 호출부에서 {!isPro && <AdCard .../>} 가드 필수.
-// 로테이션은 이메일(email-templates.ts)과 동일: KST 일(day)이 짝수면 Pro 배너, 홀수면 제휴.
+// 웹 슬롯은 제휴(골드박스) 고정 — 이메일(email-templates.ts) 로테이션과는 무관.
+// 제휴 고지(ads.partnerDisclosure)는 항상 표시. ads.pro* i18n 키는 향후 재사용 예정이라 유지.
 // 클릭은 /api/ad-click 경유(리다이렉트) — source 별 집계 후 목적지로 302.
 export default function AdCard({ source, t }: Props) {
-  const kstDay = toZoned(nowUtc()).day
-  const slot = kstDay % 2 === 0 ? 'pro_banner' : 'partner'
-  const isPartner = slot === 'partner'
+  const slot = 'partner' as const
+  const isPartner = true
 
   return (
     <div style={{

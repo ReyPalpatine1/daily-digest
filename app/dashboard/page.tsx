@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
@@ -2158,205 +2158,209 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {filteredDigests.map(digest => {
+                  {filteredDigests.map((digest, idx) => {
                     const isUnread = digest.is_breaking && !digest.is_read
                     const isExpanded = expandedDigest === digest.id
                     return (
-                      <div key={digest.id}
-                        onMouseEnter={e => { if (!isUnread) e.currentTarget.style.borderColor = 'var(--text-muted)' }}
-                        onMouseLeave={e => { if (!isUnread) e.currentTarget.style.borderColor = 'var(--border)' }}
-                        style={{
-                          background: 'var(--bg-card)',
-                          border: '0.5px solid var(--border)',
-                          borderLeftWidth: isUnread ? 3 : 0.5,
-                          borderLeftColor: isUnread ? 'var(--danger)' : 'var(--border)',
-                          borderRadius: 10,
-                          overflow: 'hidden',
-                          transition: 'border-color 0.15s',
-                        }}>
-                        {/* 헤더 (클릭 → 펼침 + 자동 읽음) */}
-                        <div onClick={() => {
-                          const isOpening = !isExpanded
-                          setExpandedDigest(isExpanded ? null : digest.id)
-                          if (isOpening) markAsRead(digest.id)
-                        }}
+                      <Fragment key={digest.id}>
+                        <div
+                          onMouseEnter={e => { if (!isUnread) e.currentTarget.style.borderColor = 'var(--text-muted)' }}
+                          onMouseLeave={e => { if (!isUnread) e.currentTarget.style.borderColor = 'var(--border)' }}
                           style={{
-                            padding: '14px 16px',
-                            display: 'flex', alignItems: 'center', gap: 12,
-                            cursor: 'pointer',
+                            background: 'var(--bg-card)',
+                            border: '0.5px solid var(--border)',
+                            borderLeftWidth: isUnread ? 3 : 0.5,
+                            borderLeftColor: isUnread ? 'var(--danger)' : 'var(--border)',
+                            borderRadius: 10,
+                            overflow: 'hidden',
+                            transition: 'border-color 0.15s',
                           }}>
-                          <div style={{ fontSize: 18, flexShrink: 0 }}>{digest.channel_emoji}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-                              {digest.is_breaking && (
-                                <span style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                  fontSize: 11, fontWeight: 600,
-                                  color: isUnread ? 'var(--danger)' : 'var(--text-muted)',
-                                  flexShrink: 0,
-                                }}>
-                                  <span style={{
-                                    width: 6, height: 6, borderRadius: '50%',
-                                    background: 'currentColor',
-                                  }} />
-                                  {t('history.breakingBadge')}
-                                </span>
-                              )}
-                              <span style={{
-                                fontSize: 14, fontWeight: 500, color: 'var(--text-primary)',
-                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                minWidth: 0,
-                              }}>{digest.video_title}</span>
-                            </div>
-                            <div style={{
-                              fontSize: 11, color: 'var(--text-tertiary)',
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              flexWrap: 'wrap',
+                          {/* 헤더 (클릭 → 펼침 + 자동 읽음) */}
+                          <div onClick={() => {
+                            const isOpening = !isExpanded
+                            setExpandedDigest(isExpanded ? null : digest.id)
+                            if (isOpening) markAsRead(digest.id)
+                          }}
+                            style={{
+                              padding: '14px 16px',
+                              display: 'flex', alignItems: 'center', gap: 12,
+                              cursor: 'pointer',
                             }}>
-                              <span>{digest.channel_alias}</span>
-                              {digest.category_name && (
-                                <>
-                                  <span style={{ color: 'var(--text-muted)' }}>·</span>
-                                  <span>{digest.category_name}</span>
-                                </>
-                              )}
-                              <span style={{ color: 'var(--text-muted)' }}>·</span>
-                              <span>🎬 {formatShortDate(digest.published_at)}</span>
-                              <span style={{ color: 'var(--text-muted)' }}>·</span>
-                              <span>📅 {formatShortDate(digest.created_at)}</span>
-                            </div>
-                          </div>
-                          <div style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
-                            {isExpanded ? '▲' : '▼'}
-                          </div>
-                        </div>
-
-                        {/* 펼친 영역 */}
-                        {isExpanded && (
-                          <div style={{
-                            padding: '14px 16px 16px',
-                            borderTop: '0.5px solid var(--border-light)',
-                          }}>
-                            {/* 요약 상태 라벨 (자막/설명 기반, 실패·대기·라이브 사유) */}
-                            {(() => {
-                              const status = summaryStatusKeys(digest)
-                              if (!status) return null
-                              return (
-                                <div style={{ marginBottom: 12 }}>
-                                  <div style={{
+                            <div style={{ fontSize: 18, flexShrink: 0 }}>{digest.channel_emoji}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                                {digest.is_breaking && (
+                                  <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
                                     fontSize: 11, fontWeight: 600,
-                                    color: 'var(--text-muted)', letterSpacing: 0.2,
-                                  }}>
-                                    {t(status.labelKey)}
-                                  </div>
-                                  {status.noteKey && (
-                                    <div style={{
-                                      fontSize: 11, color: 'var(--text-muted)',
-                                      lineHeight: 1.6, marginTop: 3,
-                                    }}>
-                                      {t(status.noteKey)}
-                                    </div>
-                                  )}
-                                  {digest.fail_reason === 'pro_only' && (
-                                    <button onClick={() => router.push('/pricing')}
-                                      style={{
-                                        background: 'none', border: 'none', padding: 0,
-                                        marginTop: 4, fontSize: 11, color: 'var(--accent)',
-                                        cursor: 'pointer', textDecoration: 'underline',
-                                        textUnderlineOffset: 2,
-                                      }}>
-                                      {t('history.proOnlyPricingLink')}
-                                    </button>
-                                  )}
-                                  {isAdmin && digest.fail_detail && (
-                                    <div style={{
-                                      fontSize: 11, color: 'var(--text-muted)',
-                                      fontFamily: 'monospace', marginTop: 3,
-                                      wordBreak: 'break-all',
-                                    }}>
-                                      [debug] {digest.fail_detail}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })()}
-
-                            {/* 실패·대기·라이브 항목은 자리표시 문구 대신 위 라벨이 사유를 설명 */}
-                            {!digest.fail_reason && (
-                              <div style={{
-                                fontSize: 13, color: 'var(--text-secondary)',
-                                lineHeight: 1.7, marginBottom: 14,
-                              }}>
-                                {digest.summary}
-                              </div>
-                            )}
-
-                            {digest.key_points?.length > 0 && (
-                              <div style={{ marginBottom: 14 }}>
-                                <div style={{
-                                  fontSize: 11, color: 'var(--text-tertiary)',
-                                  fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
-                                }}>
-                                  {t('history.keyPoints')}
-                                </div>
-                                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                                  {digest.key_points.map((p, i) => (
-                                    <li key={i} style={{
-                                      fontSize: 13, color: 'var(--text-secondary)',
-                                      marginBottom: 4, lineHeight: 1.6,
-                                    }}>{p}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {digest.timeline?.length > 0 && (
-                              <div style={{ marginBottom: 14 }}>
-                                <div style={{
-                                  fontSize: 11, color: 'var(--text-tertiary)',
-                                  fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
-                                }}>
-                                  {t('history.timeline')}
-                                </div>
-                                {digest.timeline.map((t, i) => (
-                                  <div key={i} style={{
-                                    fontSize: 12, color: 'var(--text-secondary)',
-                                    marginBottom: 4, lineHeight: 1.6,
+                                    color: isUnread ? 'var(--danger)' : 'var(--text-muted)',
+                                    flexShrink: 0,
                                   }}>
                                     <span style={{
-                                      display: 'inline-block',
-                                      background: 'var(--bg-subtle)',
-                                      color: 'var(--text-primary)',
-                                      padding: '1px 6px', borderRadius: 4,
-                                      marginRight: 8,
-                                      fontSize: 11, fontWeight: 500,
-                                    }}>{t.time}</span>
-                                    {t.content}
-                                  </div>
-                                ))}
+                                      width: 6, height: 6, borderRadius: '50%',
+                                      background: 'currentColor',
+                                    }} />
+                                    {t('history.breakingBadge')}
+                                  </span>
+                                )}
+                                <span style={{
+                                  fontSize: 14, fontWeight: 500, color: 'var(--text-primary)',
+                                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                  minWidth: 0,
+                                }}>{digest.video_title}</span>
                               </div>
-                            )}
-
-                            <a href={digest.video_url} target="_blank" rel="noreferrer"
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 6,
-                                background: 'var(--danger)', color: '#fff',
-                                padding: '8px 14px', borderRadius: 7,
-                                textDecoration: 'none',
-                                fontSize: 12, fontWeight: 600,
+                              <div style={{
+                                fontSize: 11, color: 'var(--text-tertiary)',
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                flexWrap: 'wrap',
                               }}>
-                              {t('history.watchVideo')}
-                            </a>
+                                <span>{digest.channel_alias}</span>
+                                {digest.category_name && (
+                                  <>
+                                    <span style={{ color: 'var(--text-muted)' }}>·</span>
+                                    <span>{digest.category_name}</span>
+                                  </>
+                                )}
+                                <span style={{ color: 'var(--text-muted)' }}>·</span>
+                                <span>🎬 {formatShortDate(digest.published_at)}</span>
+                                <span style={{ color: 'var(--text-muted)' }}>·</span>
+                                <span>📅 {formatShortDate(digest.created_at)}</span>
+                              </div>
+                            </div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
+                              {isExpanded ? '▲' : '▼'}
+                            </div>
                           </div>
-                        )}
-                      </div>
+
+                          {/* 펼친 영역 */}
+                          {isExpanded && (
+                            <div style={{
+                              padding: '14px 16px 16px',
+                              borderTop: '0.5px solid var(--border-light)',
+                            }}>
+                              {/* 요약 상태 라벨 (자막/설명 기반, 실패·대기·라이브 사유) */}
+                              {(() => {
+                                const status = summaryStatusKeys(digest)
+                                if (!status) return null
+                                return (
+                                  <div style={{ marginBottom: 12 }}>
+                                    <div style={{
+                                      fontSize: 11, fontWeight: 600,
+                                      color: 'var(--text-muted)', letterSpacing: 0.2,
+                                    }}>
+                                      {t(status.labelKey)}
+                                    </div>
+                                    {status.noteKey && (
+                                      <div style={{
+                                        fontSize: 11, color: 'var(--text-muted)',
+                                        lineHeight: 1.6, marginTop: 3,
+                                      }}>
+                                        {t(status.noteKey)}
+                                      </div>
+                                    )}
+                                    {digest.fail_reason === 'pro_only' && (
+                                      <button onClick={() => router.push('/pricing')}
+                                        style={{
+                                          background: 'none', border: 'none', padding: 0,
+                                          marginTop: 4, fontSize: 11, color: 'var(--accent)',
+                                          cursor: 'pointer', textDecoration: 'underline',
+                                          textUnderlineOffset: 2,
+                                        }}>
+                                        {t('history.proOnlyPricingLink')}
+                                      </button>
+                                    )}
+                                    {isAdmin && digest.fail_detail && (
+                                      <div style={{
+                                        fontSize: 11, color: 'var(--text-muted)',
+                                        fontFamily: 'monospace', marginTop: 3,
+                                        wordBreak: 'break-all',
+                                      }}>
+                                        [debug] {digest.fail_detail}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
+
+                              {/* 실패·대기·라이브 항목은 자리표시 문구 대신 위 라벨이 사유를 설명 */}
+                              {!digest.fail_reason && (
+                                <div style={{
+                                  fontSize: 13, color: 'var(--text-secondary)',
+                                  lineHeight: 1.7, marginBottom: 14,
+                                }}>
+                                  {digest.summary}
+                                </div>
+                              )}
+
+                              {digest.key_points?.length > 0 && (
+                                <div style={{ marginBottom: 14 }}>
+                                  <div style={{
+                                    fontSize: 11, color: 'var(--text-tertiary)',
+                                    fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
+                                  }}>
+                                    {t('history.keyPoints')}
+                                  </div>
+                                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                    {digest.key_points.map((p, i) => (
+                                      <li key={i} style={{
+                                        fontSize: 13, color: 'var(--text-secondary)',
+                                        marginBottom: 4, lineHeight: 1.6,
+                                      }}>{p}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {digest.timeline?.length > 0 && (
+                                <div style={{ marginBottom: 14 }}>
+                                  <div style={{
+                                    fontSize: 11, color: 'var(--text-tertiary)',
+                                    fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
+                                  }}>
+                                    {t('history.timeline')}
+                                  </div>
+                                  {digest.timeline.map((t, i) => (
+                                    <div key={i} style={{
+                                      fontSize: 12, color: 'var(--text-secondary)',
+                                      marginBottom: 4, lineHeight: 1.6,
+                                    }}>
+                                      <span style={{
+                                        display: 'inline-block',
+                                        background: 'var(--bg-subtle)',
+                                        color: 'var(--text-primary)',
+                                        padding: '1px 6px', borderRadius: 4,
+                                        marginRight: 8,
+                                        fontSize: 11, fontWeight: 500,
+                                      }}>{t.time}</span>
+                                      {t.content}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <a href={digest.video_url} target="_blank" rel="noreferrer"
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                                  background: 'var(--danger)', color: '#fff',
+                                  padding: '8px 14px', borderRadius: 7,
+                                  textDecoration: 'none',
+                                  fontSize: 12, fontWeight: 600,
+                                }}>
+                                {t('history.watchVideo')}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                        {idx === 4 && !isPro && <AdCard source="history" t={t} />}
+                      </Fragment>
                     )
                   })}
                 </div>
               )}
 
-              {/* 광고 카드 — 무료 사용자 한정, 기록 목록 맨 아래 */}
-              {!isPro && <AdCard source="history" t={t} />}
+              {/* 광고 카드 — 무료 사용자 한정. 기록 5개 이상이면 5번째 기록 뒤(목록 안)에 삽입되므로,
+                  5개 미만일 때만 목록 끝에 1개 렌더 → 어떤 경우에도 정확히 1개(기록 0개면 0개) */}
+              {filteredDigests.length > 0 && filteredDigests.length < 5 && !isPro && <AdCard source="history" t={t} />}
 
               {/* FREE 7일 제한 안내 (숨겨진 기록이 있을 때만) */}
               {hiddenByRetentionCount > 0 && (
@@ -2377,26 +2381,31 @@ export default function Dashboard() {
           )
         })()}
 
-        {/* 광고 카드 — 무료 사용자 한정, 피드백 스트립 바로 위 (간격은 스트립과 동일 규칙) */}
-        {!isPro && (
-          <div style={{ marginTop: 24 }}>
-            <AdCard source="dashboard" t={t} />
-          </div>
-        )}
+        {/* 광고 카드 + 의견 보내기 스트립 — 채널 탭 최하단 한정 (발송 설정·열람기록 탭에는 없음) */}
+        {activeTab === 'channels' && (
+          <>
+            {/* 광고 카드 — 무료 사용자 한정, 피드백 스트립 바로 위 (채널 목록과는 여백 구획) */}
+            {!isPro && (
+              <div style={{ marginTop: 48 }}>
+                <AdCard source="dashboard" t={t} />
+              </div>
+            )}
 
-        {/* 의견 보내기 스트립 — 모든 탭에서 상시 노출 */}
-        <div style={{
-          marginTop: 24, marginBottom: 8, padding: '14px 16px',
-          background: 'var(--bg-card)', border: '0.5px solid var(--border)', borderRadius: 12,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-        }}>
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('feedback.dashboardPrompt')}</span>
-          <button onClick={() => router.push('/feedback')} style={{
-            padding: '8px 14px', borderRadius: 8, border: '0.5px solid var(--border)',
-            background: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 500,
-            fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
-          }}>{t('feedback.title')}</button>
-        </div>
+            {/* 의견 보내기 스트립 — 채널 탭 최하단 한정 */}
+            <div style={{
+              marginTop: 24, marginBottom: 8, padding: '14px 16px',
+              background: 'var(--bg-card)', border: '0.5px solid var(--border)', borderRadius: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+            }}>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('feedback.dashboardPrompt')}</span>
+              <button onClick={() => router.push('/feedback')} style={{
+                padding: '8px 14px', borderRadius: 8, border: '0.5px solid var(--border)',
+                background: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 500,
+                fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>{t('feedback.title')}</button>
+            </div>
+          </>
+        )}
       </main>
 
       {/* 열람 기록 "맨 위로" 버튼 (히스토리 탭 + 일정량 스크롤 시) */}
