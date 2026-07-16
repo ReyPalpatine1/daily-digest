@@ -35,6 +35,10 @@ export const emailTranslations = {
       adTitle: '광고 없이, 채널 20개까지 — Pro',
       adDesc: '자막 없는 영상 요약과 실시간 속보까지. 월 ₩4,900',
       adCta: 'Pro 알아보기',
+      partnerDisclosure: '이 광고는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.',
+      partnerTitle: '쿠팡 오늘의 특가 — 골드박스',
+      partnerDesc: '매일 바뀌는 최대 할인 상품 모음',
+      partnerCta: '특가 보기',
     },
     breaking: {
       subject: '[속보] {title}',
@@ -125,6 +129,10 @@ export const emailTranslations = {
       adTitle: 'Ad-free, up to 20 channels — Pro',
       adDesc: 'Summaries for videos without captions, plus breaking alerts. ₩4,900/mo',
       adCta: 'Explore Pro',
+      partnerDisclosure: 'As part of the Coupang Partners program, we receive a commission from purchases made through this ad.',
+      partnerTitle: "Coupang Today's Deals — Gold Box",
+      partnerDesc: 'Top discounted picks, refreshed daily',
+      partnerCta: 'View Deals',
     },
     breaking: {
       subject: '[Breaking] {title}',
@@ -215,6 +223,10 @@ export const emailTranslations = {
       adTitle: '无广告，最多可订阅 20 个频道 — Pro',
       adDesc: '无字幕视频的摘要与实时快讯一应俱全。每月 ₩4,900',
       adCta: '了解 Pro',
+      partnerDisclosure: '本广告属于 Coupang Partners 推广活动，我们会因此获得一定金额的佣金。',
+      partnerTitle: 'Coupang 今日特价 — Gold Box',
+      partnerDesc: '每日更新的超值折扣商品精选',
+      partnerCta: '查看特价',
     },
     breaking: {
       subject: '[快讯] {title}',
@@ -305,6 +317,10 @@ export const emailTranslations = {
       adTitle: '広告なし、チャンネル20個まで — Pro',
       adDesc: '字幕なし動画の要約もリアルタイム速報も。月額 ₩4,900',
       adCta: 'Proを詳しく見る',
+      partnerDisclosure: 'この広告はクーパンパートナーズ活動の一環であり、当社はこれにより一定額の手数料を受け取ります。',
+      partnerTitle: 'クーパン本日の特価 — ゴールドボックス',
+      partnerDesc: '毎日変わる最大割引商品のまとめ',
+      partnerCta: '特価を見る',
     },
     breaking: {
       subject: '[速報] {title}',

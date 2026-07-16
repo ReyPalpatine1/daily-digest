@@ -12,6 +12,7 @@ import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import HelpPopup from '@/components/HelpPopup'
 import TrialPopup from '@/components/TrialPopup'
 import { AppHeader } from '@/components/AppHeader'
+import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy } from 'lucide-react'
 
@@ -2354,6 +2355,9 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* 광고 카드 — 무료 사용자 한정, 기록 목록 맨 아래 */}
+              {!isPro && <AdCard source="history" t={t} />}
+
               {/* FREE 7일 제한 안내 (숨겨진 기록이 있을 때만) */}
               {hiddenByRetentionCount > 0 && (
                 <div style={{
@@ -2372,6 +2376,13 @@ export default function Dashboard() {
             </div>
           )
         })()}
+
+        {/* 광고 카드 — 무료 사용자 한정, 피드백 스트립 바로 위 (간격은 스트립과 동일 규칙) */}
+        {!isPro && (
+          <div style={{ marginTop: 24 }}>
+            <AdCard source="dashboard" t={t} />
+          </div>
+        )}
 
         {/* 의견 보내기 스트립 — 모든 탭에서 상시 노출 */}
         <div style={{
