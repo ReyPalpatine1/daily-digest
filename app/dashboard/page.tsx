@@ -967,7 +967,7 @@ export default function Dashboard() {
       )}
 
       {/* =============== 메인 본문 =============== */}
-      <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 28px' }}>
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 28px', display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 120px)', width: '100%', boxSizing: 'border-box' }}>
 
         {/* 각 탭이 자체 헤더(타이틀+서브타이틀)를 갖는다. 공통 헤더는 제거. */}
 
@@ -2031,7 +2031,7 @@ export default function Dashboard() {
           }
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
               {/* 페이지 헤더 */}
               <div style={{ marginBottom: 6 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--text-primary)', letterSpacing: -0.3 }}>
@@ -2375,8 +2375,13 @@ export default function Dashboard() {
               )}
 
               {/* 광고 카드 — 무료 사용자 한정. 6개 이상이면 5번째 기록 뒤(목록 안)에 삽입되므로,
-                  1~5개일 때만 PRO 안내 뒤 맨 끝에 1개 렌더 → 어떤 경우에도 정확히 1개(기록 0개면 0개) */}
-              {filteredDigests.length > 0 && filteredDigests.length <= 5 && !isPro && <AdCard source="history" t={t} />}
+                  1~5개일 때만 PRO 안내 뒤 맨 끝에 1개 렌더 → 어떤 경우에도 정확히 1개(기록 0개면 0개).
+                  marginTop:auto로 화면 최하단 밀착(래퍼 flex:1 필요). */}
+              {filteredDigests.length > 0 && filteredDigests.length <= 5 && !isPro && (
+                <div style={{ marginTop: 'auto', paddingTop: 32, marginBottom: 8 }}>
+                  <AdCard source="history" t={t} />
+                </div>
+              )}
             </div>
           )
         })()}
@@ -2398,9 +2403,10 @@ export default function Dashboard() {
               }}>{t('feedback.title')}</button>
             </div>
 
-            {/* 광고 카드 — 무료 사용자 한정, 의견 스트립 아래·페이지 맨 끝 밀착 */}
+            {/* 광고 카드 — 무료 사용자 한정, 화면 최하단 밀착(footer 방식).
+                marginTop:auto가 flex 컬럼에서 남는 공간을 위로 밀어 광고를 바닥에 붙인다. */}
             {!isPro && (
-              <div style={{ marginTop: 32, marginBottom: 8 }}>
+              <div style={{ marginTop: 'auto', paddingTop: 32, marginBottom: 8 }}>
                 <AdCard source="dashboard" t={t} />
               </div>
             )}
