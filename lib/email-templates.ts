@@ -3,6 +3,7 @@
 
 import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
+import { PARTNER_BANNER_IMG } from '@/lib/ads'
 
 export type { EmailLocale }
 
@@ -197,6 +198,9 @@ function partnerBlock(locale: EmailLocale): string {
     <div style="padding:16px 20px;background:#fafafa;border-top:1px solid #f0f0f0;">
       <div style="font-size:10px;color:#a0a0a4;letter-spacing:0.5px;margin-bottom:8px;">${et(locale, 'digest.adLabel')}</div>
       <div style="font-size:11px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.partnerDisclosure')}</div>
+      <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email&amp;dest=banner" target="_blank">
+        <img src="${PARTNER_BANNER_IMG}" alt="Coupang" width="728" height="90" style="display:block;width:100%;max-width:728px;height:auto;border:0;border-radius:6px;margin-bottom:12px;" />
+      </a>
       <div style="font-size:13.5px;font-weight:600;margin-bottom:3px;color:#1a1a1c;">${et(locale, 'digest.partnerTitle')}</div>
       <div style="font-size:12px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.partnerDesc')}</div>
       <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email" style="display:inline-block;font-size:12.5px;font-weight:500;color:#ffffff;background:#1a1a1c;padding:8px 14px;border-radius:6px;text-decoration:none;">${et(locale, 'digest.partnerCta')}</a>

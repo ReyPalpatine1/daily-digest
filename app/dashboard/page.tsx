@@ -2384,16 +2384,9 @@ export default function Dashboard() {
         {/* 광고 카드 + 의견 보내기 스트립 — 채널 탭 최하단 한정 (발송 설정·열람기록 탭에는 없음) */}
         {activeTab === 'channels' && (
           <>
-            {/* 광고 카드 — 무료 사용자 한정, 피드백 스트립 바로 위 (채널 목록과는 여백 구획) */}
-            {!isPro && (
-              <div style={{ marginTop: 48 }}>
-                <AdCard source="dashboard" t={t} />
-              </div>
-            )}
-
-            {/* 의견 보내기 스트립 — 채널 탭 최하단 한정 */}
+            {/* 의견 보내기 스트립 — 채널 탭 최하단 한정 (채널 목록 바로 아래 이어짐) */}
             <div style={{
-              marginTop: 24, marginBottom: 8, padding: '14px 16px',
+              marginTop: 24, padding: '14px 16px',
               background: 'var(--bg-card)', border: '0.5px solid var(--border)', borderRadius: 12,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
             }}>
@@ -2404,6 +2397,13 @@ export default function Dashboard() {
                 fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
               }}>{t('feedback.title')}</button>
             </div>
+
+            {/* 광고 카드 — 무료 사용자 한정, 의견 스트립 뒤 (큰 여백으로 구획) */}
+            {!isPro && (
+              <div style={{ marginTop: 80, marginBottom: 8 }}>
+                <AdCard source="dashboard" t={t} />
+              </div>
+            )}
           </>
         )}
       </main>

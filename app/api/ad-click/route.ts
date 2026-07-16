@@ -18,6 +18,9 @@ export async function GET(request: Request) {
   const srcParam = searchParams.get('src')
   const src = srcParam === 'email' || srcParam === 'dashboard' || srcParam === 'history' ? srcParam : null
 
+  // dest=banner → 쿠팡 배너 전용 목적지, 그 외 → 기존 동작.
+  const isBanner = searchParams.get('dest') === 'banner'
+
   // 메일 보안 스캐너가 링크를 사전 클릭해 집계를 오염시키므로,
   // 봇으로 보이면 기록은 하되 is_bot=true로 구분한다.
   const userAgent = request.headers.get('user-agent') ?? ''
@@ -36,5 +39,8 @@ export async function GET(request: Request) {
     console.error('[ad-click] 기록 실패:', e)
   }
 
-  return NextResponse.redirect(slot === 'partner' ? partnerLink() : `${APP_URL}/pricing`, 302)
+  const destination = isBanner
+    ? partnerLink('banner')
+    : slot === 'partner' ? partnerLink() : `${APP_URL}/pricing`
+  return NextResponse.redirect(destination, 302)
 }

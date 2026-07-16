@@ -1,5 +1,7 @@
 'use client'
 
+import { PARTNER_BANNER_IMG } from '@/lib/ads'
+
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
 type Props = {
@@ -31,6 +33,9 @@ export default function AdCard({ source, t }: Props) {
           {t('ads.partnerDisclosure')}
         </div>
       )}
+      <a href={`/api/ad-click?slot=partner&src=${source}&dest=banner`}>
+        <img src={PARTNER_BANNER_IMG} alt="Coupang" style={{ display: 'block', width: '100%', maxWidth: 728, height: 'auto', border: 0, borderRadius: 8, marginBottom: 12 }} />
+      </a>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>
