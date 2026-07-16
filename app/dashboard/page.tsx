@@ -2351,16 +2351,12 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
-                        {idx === 4 && !isPro && <AdCard source="history" t={t} />}
+                        {idx === 4 && filteredDigests.length > 5 && !isPro && <AdCard source="history" t={t} />}
                       </Fragment>
                     )
                   })}
                 </div>
               )}
-
-              {/* 광고 카드 — 무료 사용자 한정. 기록 5개 이상이면 5번째 기록 뒤(목록 안)에 삽입되므로,
-                  5개 미만일 때만 목록 끝에 1개 렌더 → 어떤 경우에도 정확히 1개(기록 0개면 0개) */}
-              {filteredDigests.length > 0 && filteredDigests.length < 5 && !isPro && <AdCard source="history" t={t} />}
 
               {/* FREE 7일 제한 안내 (숨겨진 기록이 있을 때만) */}
               {hiddenByRetentionCount > 0 && (
@@ -2377,6 +2373,10 @@ export default function Dashboard() {
                   <UpgradeButton label={t('nav.proUpgrade')} />
                 </div>
               )}
+
+              {/* 광고 카드 — 무료 사용자 한정. 6개 이상이면 5번째 기록 뒤(목록 안)에 삽입되므로,
+                  1~5개일 때만 PRO 안내 뒤 맨 끝에 1개 렌더 → 어떤 경우에도 정확히 1개(기록 0개면 0개) */}
+              {filteredDigests.length > 0 && filteredDigests.length <= 5 && !isPro && <AdCard source="history" t={t} />}
             </div>
           )
         })()}
@@ -2398,9 +2398,9 @@ export default function Dashboard() {
               }}>{t('feedback.title')}</button>
             </div>
 
-            {/* 광고 카드 — 무료 사용자 한정, 의견 스트립 뒤 (큰 여백으로 구획) */}
+            {/* 광고 카드 — 무료 사용자 한정, 의견 스트립 아래·페이지 맨 끝 밀착 */}
             {!isPro && (
-              <div style={{ marginTop: 80, marginBottom: 8 }}>
+              <div style={{ marginTop: 32, marginBottom: 8 }}>
                 <AdCard source="dashboard" t={t} />
               </div>
             )}

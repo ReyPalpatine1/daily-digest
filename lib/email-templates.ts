@@ -3,7 +3,7 @@
 
 import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
-import { PARTNER_BANNER_IMG } from '@/lib/ads'
+import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
 
 export type { EmailLocale }
 
@@ -193,17 +193,17 @@ function adBlock(locale: EmailLocale): string {
 // 제휴 광고 슬롯 — 쿠팡 파트너스 골드박스.
 // 고지 문구(확정형)는 라벨 바로 아래 — 본문과 동등한 크기로 확인하기 쉬운 위치에 둘 것(광고 표시 의무).
 // CTA는 /api/ad-click 경유 — 클릭 기록 후 제휴 링크(lib/ads.ts)로 302.
-function partnerBlock(locale: EmailLocale): string {
+function partnerBlock(locale: EmailLocale, banner: PartnerBanner): string {
   return `
     <div style="padding:16px 20px;background:#fafafa;border-top:1px solid #f0f0f0;">
       <div style="font-size:10px;color:#a0a0a4;letter-spacing:0.5px;margin-bottom:8px;">${et(locale, 'digest.adLabel')}</div>
       <div style="font-size:11px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.partnerDisclosure')}</div>
-      <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email&amp;dest=banner" target="_blank">
-        <img src="${PARTNER_BANNER_IMG}" alt="Coupang" width="728" height="90" style="display:block;width:100%;max-width:728px;height:auto;border:0;border-radius:6px;margin-bottom:12px;" />
+      <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email&amp;dest=${banner.key}" target="_blank">
+        <img src="${banner.img}" alt="Coupang" width="728" height="90" style="display:block;width:100%;max-width:728px;height:auto;border:0;border-radius:6px;margin-bottom:12px;" />
       </a>
       <div style="font-size:13.5px;font-weight:600;margin-bottom:3px;color:#1a1a1c;">${et(locale, 'digest.partnerTitle')}</div>
       <div style="font-size:12px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.partnerDesc')}</div>
-      <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email" style="display:inline-block;font-size:12.5px;font-weight:500;color:#ffffff;background:#1a1a1c;padding:8px 14px;border-radius:6px;text-decoration:none;">${et(locale, 'digest.partnerCta')}</a>
+      <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email&amp;dest=${banner.key}" style="display:inline-block;font-size:12.5px;font-weight:500;color:#ffffff;background:#1a1a1c;padding:8px 14px;border-radius:6px;text-decoration:none;">${et(locale, 'digest.partnerCta')}</a>
     </div>`
 }
 
@@ -241,7 +241,7 @@ export function buildDigestHtml(
     : `<div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;color:#A1A1AA;font-size:13px;">${et(locale, 'digest.noVideos')}</div>`
   // 광고 로테이션: KST 날짜의 일(day of month)이 짝수면 Pro 배너, 홀수면 제휴 슬롯.
   const kstDay = toZoned(nowUtc()).day
-  const ad = isPro ? '' : (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale))
+  const ad = isPro ? '' : (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay)))
   return shell(et(locale, 'digest.subject', { date }), locale, header + body + ad, footerBlock(locale, email))
 }
 
