@@ -860,7 +860,9 @@ export default function Dashboard() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100dvh',
       background: 'var(--bg-primary)',
       color: 'var(--text-primary)',
       fontFamily: 'var(--font-sans)',
@@ -967,7 +969,7 @@ export default function Dashboard() {
       )}
 
       {/* =============== 메인 본문 =============== */}
-      <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 28px', display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 120px)', width: '100%', boxSizing: 'border-box' }}>
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 28px', display: 'flex', flexDirection: 'column', flex: 1, width: '100%', boxSizing: 'border-box' }}>
 
         {/* 각 탭이 자체 헤더(타이틀+서브타이틀)를 갖는다. 공통 헤더는 제거. */}
 
