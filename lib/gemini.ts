@@ -20,6 +20,9 @@ function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs: number
 }
 
 export type SummaryResult = {
+  // 한 줄 요약 (품질 평가용, UI 미노출). gemini 생산 경로는 항상 문자열을 채우지만,
+  // DB에서 요약을 재구성해 발송하는 경로(breaking/digest route)는 tldr을 싣지 않으므로 옵셔널.
+  tldr?: string
   summary: string
   keyPoints: string[]
   timeline: { time: string; content: string }[]
@@ -102,9 +105,11 @@ ${content || '(자막 및 설명 없음)'}
 - 제공되지 않은 수치, 통계, 인용, 사실을 절대 지어내지 마세요. 정보가 부족하면 무리해서 길게 쓰지 말고 아는 만큼만 쓰세요.
 - 구체적으로: 자막/설명에 등장하는 고유명사, 수치, 핵심 주장을 가능한 한 살려서 요약하세요.
 - ${lengthGuide}${langInstruction}
+- tldr은 영상 전체의 결론을 담은 한 문장(공백 포함 80자 이내). summary의 첫 문장을 복사하지 말고 독립적으로 작성. 다국어 요약 시 tldr도 해당 언어.
 
 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 완전한 JSON만 반환하세요:
 {
+  "tldr": "...",
   "summary": "...",
   "keyPoints": ["...", "..."],
   "timeline": [{"time": "0:00", "content": "..."}]
@@ -138,6 +143,7 @@ ${content || '(자막 및 설명 없음)'}
 // 실패 시 반환하는 가짜 성공 객체 (errorInfo·summaryBasis로 저장 단계에서 걸러짐).
 function failureResult(model: string, errorInfo: string, attempts: number): SummaryResult {
   return {
+    tldr: '',
     summary: '요약을 가져오지 못했습니다.',
     keyPoints: [],
     timeline: [],
@@ -270,6 +276,7 @@ async function callGeminiModel(
           return {
             kind: 'done',
             result: {
+              tldr: '',
               summary: `영상 요약을 생성할 수 없습니다: ${title}`,
               keyPoints: ['요약 생성 실패'],
               timeline: [],
@@ -283,7 +290,9 @@ async function callGeminiModel(
       }
 
       console.log(`⏱ [summarizeVideo total] ${Date.now() - fnStart}ms (model=${model}, basis=${summaryBasis})`)
-      return { kind: 'done', result: { ...parsed, summaryBasis, model, attempts: attempt } }
+      // tldr이 없거나 문자열이 아니면 '' 폴백 (timeline: [] 폴백과 동일한 방어)
+      const tldr = typeof parsed.tldr === 'string' ? parsed.tldr : ''
+      return { kind: 'done', result: { ...parsed, tldr, summaryBasis, model, attempts: attempt } }
     } catch (e) {
       const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
       const isRetryable = errorInfo.includes('503') || errorInfo.includes('429')
