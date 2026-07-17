@@ -64,6 +64,19 @@ export function AppHeader({
   const isLoggedIn = !!user
   const isLoggedOut = user === null
 
+  // 로고 클릭: 비로그인=랜딩 / 대시보드 안=첫 탭(채널)으로 전환, 이미 첫 탭이면 맨 위로 / 하위 페이지=대시보드
+  function handleLogoClick() {
+    if (!isLoggedIn) { router.push('/'); return }
+    // 대시보드(탭 헤더가 있는 화면): 첫 탭으로 전환, 이미 첫 탭이면 맨 위로
+    if (showTabs && tabs.length > 0 && onTabChange) {
+      const homeKey = tabs[0].key
+      if (activeTab !== homeKey) onTabChange(homeKey)
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    router.push('/dashboard')
+  }
+
   // 사용자 / 프로필 / 관리자 모드 자체 로드
   useEffect(() => {
     let cancelled = false
@@ -336,7 +349,7 @@ export function AppHeader({
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: showTabs && !isMobile ? 18 : 12 }}>
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={handleLogoClick}
             style={{
               display: 'flex', alignItems: 'center', gap: 9,
               background: 'transparent', border: 'none', cursor: 'pointer',
