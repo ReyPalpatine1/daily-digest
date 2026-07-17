@@ -190,20 +190,19 @@ function adBlock(locale: EmailLocale): string {
     </div>`
 }
 
-// 제휴 광고 슬롯 — 쿠팡 파트너스 골드박스.
+// 제휴 광고 슬롯 — 쿠팡 파트너스 카테고리 배너(날짜 로테이션).
 // 고지 문구(확정형)는 라벨 바로 아래 — 본문과 동등한 크기로 확인하기 쉬운 위치에 둘 것(광고 표시 의무).
-// CTA는 /api/ad-click 경유 — 클릭 기록 후 제휴 링크(lib/ads.ts)로 302.
+// 배너 링크는 /api/ad-click 경유 — 클릭 기록 후 제휴 링크(lib/ads.ts)로 302.
+// 배너 내용이 날마다 바뀌므로 고정 텍스트(제목/설명/CTA)는 두지 않는다.
+// img alt는 이미지 차단 환경에서 링크 텍스트 역할을 한다.
 function partnerBlock(locale: EmailLocale, banner: PartnerBanner): string {
   return `
     <div style="padding:16px 20px;background:#fafafa;border-top:1px solid #f0f0f0;">
       <div style="font-size:10px;color:#a0a0a4;letter-spacing:0.5px;margin-bottom:8px;">${et(locale, 'digest.adLabel')}</div>
       <div style="font-size:11px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.partnerDisclosure')}</div>
       <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email&amp;dest=${banner.key}" target="_blank">
-        <img src="${banner.img}" alt="Coupang" width="728" height="90" style="display:block;width:100%;max-width:728px;height:auto;border:0;border-radius:6px;margin-bottom:12px;" />
+        <img src="${banner.img}" alt="${et(locale, 'digest.partnerCta')}" width="728" height="90" style="display:block;width:100%;max-width:728px;height:auto;border:0;border-radius:6px;margin-bottom:0;" />
       </a>
-      <div style="font-size:13.5px;font-weight:600;margin-bottom:3px;color:#1a1a1c;">${et(locale, 'digest.partnerTitle')}</div>
-      <div style="font-size:12px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.partnerDesc')}</div>
-      <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email&amp;dest=${banner.key}" style="display:inline-block;font-size:12.5px;font-weight:500;color:#ffffff;background:#1a1a1c;padding:8px 14px;border-radius:6px;text-decoration:none;">${et(locale, 'digest.partnerCta')}</a>
     </div>`
 }
 
