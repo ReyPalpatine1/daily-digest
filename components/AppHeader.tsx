@@ -52,9 +52,11 @@ export function AppHeader({
 
   // 플랜 판정 (대시보드와 동일: 관리자는 미리보기 토글 우선, 일반 사용자는 실제 plan 기반)
   // showTabs(대시보드) 모드에선 주입된 adminPlanMode를 우선 사용, 아니면 자체 상태(localStorage 기반).
+  // 미리보기 판정은 토글이 있는 showTabs(대시보드)에서만 — 토글 없는 하위 페이지(profile 등)에서
+  // 관리자가 미리보기 기본값 'free'에 갇혀 FREE로 오표시되는 것을 막는다.
   const realIsPro = checkIsPro(profile, isAdmin)
   const effectiveAdminPlanMode = showTabs && adminPlanModeProp ? adminPlanModeProp : adminPlanMode
-  const isPro = isAdmin ? effectiveAdminPlanMode === 'pro' : realIsPro
+  const isPro = isAdmin && showTabs ? effectiveAdminPlanMode === 'pro' : realIsPro
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
   // 로그인 상태 분기. isLoggedIn=계정/플랜 UI 노출, isLoggedOut(=null)=로그인 버튼 노출.
