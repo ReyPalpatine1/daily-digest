@@ -477,7 +477,7 @@ async function summarizeAndStore(
     {
       video_id: video.video_id,
       locale,
-      tldr: result.tldr ?? null, // 한 줄 요약 (품질 평가용, UI 미노출)
+      tldr: result.tldr ?? '', // 한 줄 요약 (품질 평가용, UI 미노출)
       summary: result.summary,
       key_points: asArray(result.keyPoints), // JSONB 배열로 정규화
       timeline: asArray(result.timeline), // JSONB 배열로 정규화
