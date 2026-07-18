@@ -14,7 +14,8 @@ import TrialPopup from '@/components/TrialPopup'
 import { AppHeader } from '@/components/AppHeader'
 import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
-import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy } from 'lucide-react'
+import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2 } from 'lucide-react'
+import ShareSheet from '@/components/ShareSheet'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -104,6 +105,8 @@ export default function Dashboard() {
   const [msgKey, setMsgKey] = useState<{ key: string; params?: Record<string, string | number>; ok?: boolean } | null>(null)
   const [newKeyword, setNewKeyword] = useState('')
   const [expandedDigest, setExpandedDigest] = useState<string | null>(null)
+  // 열람기록 요약 카드 "공유" 시트 대상 (null이면 닫힘)
+  const [shareTarget, setShareTarget] = useState<null | { videoId: string; title: string; timeline: { time: string; content: string }[] }>(null)
 
   const [newChannel, setNewChannel] = useState({ url: '', alias: '', emoji: '📺', category_id: '' })
   const [newCategory, setNewCategory] = useState({ name: '', color: '#4da6ff' })
@@ -2340,16 +2343,37 @@ export default function Dashboard() {
                                 </div>
                               )}
 
-                              <a href={digest.video_url} target="_blank" rel="noreferrer"
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                                  background: 'var(--danger)', color: '#fff',
-                                  padding: '8px 14px', borderRadius: 7,
-                                  textDecoration: 'none',
-                                  fontSize: 12, fontWeight: 600,
-                                }}>
-                                {t('history.watchVideo')}
-                              </a>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <a href={digest.video_url} target="_blank" rel="noreferrer"
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    background: 'var(--danger)', color: '#fff',
+                                    padding: '8px 14px', borderRadius: 7,
+                                    textDecoration: 'none',
+                                    fontSize: 12, fontWeight: 600,
+                                  }}>
+                                  {t('history.watchVideo')}
+                                </a>
+                                {/* 공유 — 요약이 있는 항목만 (실패·대기 항목은 공유할 내용이 없음) */}
+                                {!digest.fail_reason && (
+                                  <button
+                                    onClick={() => setShareTarget({
+                                      videoId: digest.video_id,
+                                      title: digest.video_title,
+                                      timeline: digest.timeline ?? [],
+                                    })}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                                      background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                                      color: 'var(--text-secondary)',
+                                      padding: '8px 14px', borderRadius: 7,
+                                      fontSize: 12, fontWeight: 600,
+                                      cursor: 'pointer', fontFamily: 'inherit',
+                                    }}>
+                                    <Share2 size={13} /> 공유
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2433,6 +2457,18 @@ export default function Dashboard() {
           }}>
           ↑
         </button>
+      )}
+
+      {/* 요약 공유 시트 */}
+      {shareTarget && (
+        <ShareSheet
+          videoId={shareTarget.videoId}
+          videoTitle={shareTarget.title}
+          timeline={shareTarget.timeline}
+          userName={user?.user_metadata?.full_name || user?.email?.split('@')[0] || '사용자'}
+          t={t}
+          onClose={() => setShareTarget(null)}
+        />
       )}
 
       {/* 처음 사용자 도움말 팝업 (자동 노출 + 설정에서 재열기) */}
