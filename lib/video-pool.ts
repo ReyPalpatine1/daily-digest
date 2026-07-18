@@ -502,8 +502,8 @@ async function summarizeAndStore(
 // deadlineTs(ms): 이 시각을 넘으면 다음 배치를 시작하지 않음 (60초 budget 보호).
 export async function summarizePendingVideos(deadlineTs?: number, locale: Locale = 'ko'): Promise<number> {
   // Cloudflare Workers subrequest 한도 보호. 모듈 최상단이 아닌 요청 시점에 읽어야 한다(Cloudflare lazy eval).
-  // 영상 1개 ≈ subrequest 3~4개(자막+설명+Gemini). 무료 한도(50) 기준 보수적으로 기본 10.
-  const maxSummaries = Number(process.env.MAX_SUMMARIES_PER_RUN ?? 10)
+  // 영상 1개 ≈ subrequest 3~4개(자막+설명+Gemini). Paid 한도(1,000) 기준 기본 100.
+  const maxSummaries = Number(process.env.MAX_SUMMARIES_PER_RUN ?? 100)
   const pending = await getVideosWithoutSummary(locale, maxSummaries)
   console.log(`🤖 요약 대기: ${pending.length}개 (이번 실행 최대 ${maxSummaries}개)`)
   if (!pending.length) return 0
