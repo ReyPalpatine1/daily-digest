@@ -30,6 +30,8 @@ function getTransporter(): nodemailer.Transporter {
 }
 
 // 기존 `transporter.sendMail(...)` 사용처를 그대로 두기 위해 Proxy로 인터페이스 유지.
+// (현재 실제 발송은 전부 sendViaCloudflare 경유 — SMTP 롤백 대비로 남겨둠)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const transporter: nodemailer.Transporter = new Proxy({} as nodemailer.Transporter, {
   get(_target, prop, receiver) {
     const t = getTransporter()
@@ -37,6 +39,23 @@ const transporter: nodemailer.Transporter = new Proxy({} as nodemailer.Transport
     return typeof value === 'function' ? value.bind(t) : value
   },
 })
+
+// Cloudflare Email Sending REST API 발송.
+// SMTP(nodemailer 소켓)는 Workers의 global_fetch_strictly_public 제약으로 연결 불가라 HTTPS fetch 사용.
+// account_id는 공개값이라 상수, 토큰(CF_EMAIL_TOKEN)은 함수 내부에서 읽음(Cloudflare 호환).
+const CF_ACCOUNT_ID = 'd0c818cc564e1942b7bd8f65c6c53fcb'
+async function sendViaCloudflare(opts: { from: string; to: string; subject: string; html: string; text?: string }): Promise<void> {
+  const token = process.env.CF_EMAIL_TOKEN
+  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/email/sending/send`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: opts.from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text ?? '' }),
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Cloudflare email send failed: ${res.status} ${body.slice(0, 300)}`)
+  }
+}
 
 // 이메일 발송 로그 기록용 (서버 전용 service client)
 let _supabase: SupabaseClient | null = null
@@ -121,8 +140,8 @@ export async function sendDigestEmail(
   })
 
   try {
-    await transporter.sendMail({
-      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+    await sendViaCloudflare({
+      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
       to,
       subject: et(lc, 'digest.subject', { date }),
       html: buildDigestHtml(items, userName, lc, to, isPro),
@@ -161,8 +180,8 @@ export async function sendEmptyDigestEmail(
   `
 
   try {
-    await transporter.sendMail({
-      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+    await sendViaCloudflare({
+      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
       to,
       subject: et(lc, 'digest.emptySubject', { date }),
       html,
@@ -183,8 +202,8 @@ export async function sendBreakingAlert(
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   try {
-    await transporter.sendMail({
-      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+    await sendViaCloudflare({
+      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
       to,
       subject: et(lc, 'breaking.subject', { title: item.video.title }),
       html: buildBreakingHtml(item, userName, lc, to),
@@ -201,8 +220,8 @@ export async function sendWelcomeEmail(
   locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await transporter.sendMail({
-    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+  await sendViaCloudflare({
+    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
     to,
     subject: et(lc, 'welcome.subject'),
     html: buildWelcomeHtml(lc),
@@ -216,8 +235,8 @@ export async function sendTrialEndingEmail(
   locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+  await sendViaCloudflare({
+    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
     to,
     subject: et(lc, 'trialEnding.subject'),
     html: buildTrialEndingHtml(lc, endDate),
@@ -230,8 +249,8 @@ export async function sendTrialEndedEmail(
   locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+  await sendViaCloudflare({
+    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
     to,
     subject: et(lc, 'trialEnded.subject'),
     html: buildTrialEndedHtml(lc),
@@ -245,8 +264,8 @@ export async function sendPassEndingEmail(
   locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+  await sendViaCloudflare({
+    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
     to,
     subject: et(lc, 'passEnding.subject'),
     html: buildPassEndingHtml(lc, endDate),
@@ -259,8 +278,8 @@ export async function sendPassEndedEmail(
   locale: string | null = 'ko'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
+  await sendViaCloudflare({
+    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
     to,
     subject: et(lc, 'passEnded.subject'),
     html: buildPassEndedHtml(lc),
@@ -330,9 +349,8 @@ export async function sendAdminBulkErrorEmail(
     </tr>
   `).join('')
 
-  await transporter.sendMail({
-    from: `"Daily Video Digest 오류 알림" <${process.env.GMAIL_USER}>`,
-    to: recipients.join(','),
+  const mail = {
+    from: `"Daily Video Digest 오류 알림" <${process.env.MAIL_FROM}>`,
     subject: `❗ [Daily Video Digest] 요약 실패 알림 — ${failedItems.length}개 (${triggerLabel[trigger]})`,
     html: `
       <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:1000px;margin:0 auto;padding:24px">
@@ -367,7 +385,16 @@ export async function sendAdminBulkErrorEmail(
         </div>
       </div>
     `,
-  })
+  }
+
+  // Cloudflare API는 단일 수신자 기준 — 수신자별 개별 발송, 하나 실패가 나머지를 막지 않게.
+  for (const to of recipients) {
+    try {
+      await sendViaCloudflare({ ...mail, to })
+    } catch (e) {
+      console.error(`관리자 오류 알림 메일 발송 실패 (${to}):`, e)
+    }
+  }
 }
 
 // 관리자 피드백 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
@@ -409,9 +436,8 @@ export async function sendAdminFeedbackEmail(feedback: {
     .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>')
 
-  await transporter.sendMail({
-    from: `"Daily Video Digest 피드백" <${process.env.GMAIL_USER}>`,
-    to: recipients.join(','),
+  const mail = {
+    from: `"Daily Video Digest 피드백" <${process.env.MAIL_FROM}>`,
     subject: '[피드백] 새 의견이 도착했습니다',
     html: `
       <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
@@ -432,7 +458,16 @@ export async function sendAdminFeedbackEmail(feedback: {
         </div>
       </div>
     `,
-  })
+  }
+
+  // Cloudflare API는 단일 수신자 기준 — 수신자별 개별 발송, 하나 실패가 나머지를 막지 않게.
+  for (const to of recipients) {
+    try {
+      await sendViaCloudflare({ ...mail, to })
+    } catch (e) {
+      console.error(`관리자 피드백 알림 메일 발송 실패 (${to}):`, e)
+    }
+  }
 }
 
 // 관리자 신규 오류 집계 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
@@ -446,9 +481,8 @@ export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
   // APP_URL은 기존 email-templates 방식과 동일하게 함수 내부에서 읽는다(Cloudflare 호환).
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.com').replace(/\/+$/, '')
 
-  await transporter.sendMail({
-    from: `"Daily Video Digest 오류 알림" <${process.env.GMAIL_USER}>`,
-    to: recipients.join(','),
+  const mail = {
+    from: `"Daily Video Digest 오류 알림" <${process.env.MAIL_FROM}>`,
     subject: `[오류] 새 오류 ${count}건`,
     html: `
       <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
@@ -463,5 +497,14 @@ export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
         </div>
       </div>
     `,
-  })
+  }
+
+  // Cloudflare API는 단일 수신자 기준 — 수신자별 개별 발송, 하나 실패가 나머지를 막지 않게.
+  for (const to of recipients) {
+    try {
+      await sendViaCloudflare({ ...mail, to })
+    } catch (e) {
+      console.error(`관리자 신규 오류 알림 메일 발송 실패 (${to}):`, e)
+    }
+  }
 }
