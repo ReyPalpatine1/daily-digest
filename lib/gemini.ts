@@ -78,9 +78,9 @@ export async function summarizeVideo(
   let summaryBasis = ''
   let lengthGuide = ''
   if (transcript && transcript.length > 50) {
-    content = `자막:\n${transcript.slice(0, 8000)}`
+    content = `자막:\n${transcript.slice(0, 45000)}`
     summaryBasis = '자동 생성 자막 기반 요약'
-    lengthGuide = "summary는 5~7문장으로 충실하게. keyPoints는 5개, 각 항목은 '핵심 내용 — 한 문장 부연' 형태. 영상에 시간 구간 정보가 있으면 timeline을 4~6개 채울 것."
+    lengthGuide = "summary는 5~7문장으로 충실하게. keyPoints는 5개, 각 항목은 '핵심 내용 — 한 문장 부연' 형태. 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고, 존재하지 않는 시간을 추정·창작하지 말 것. 자막에 시간 앵커가 없으면(설명 기반 등) timeline은 빈 배열 []. timeline은 영상 흐름상 의미 있는 구간 4~6개로, 각 항목의 time은 그 내용이 시작되는 가장 가까운 앵커 시각."
   } else if (description && description.length > 20) {
     content = `영상 설명:\n${description.slice(0, 2000)}`
     summaryBasis = '영상 설명 기반 요약'
@@ -118,7 +118,7 @@ ${content || '(자막 및 설명 없음)'}
   "timeline": [{"time": "0:00", "content": "..."}]
 }
 
-응답은 반드시 유효한 JSON이어야 합니다.`
+timeline의 time은 자막에 실제 등장한 [m:ss] 앵커 시각만 사용하세요. 응답은 반드시 유효한 JSON이어야 합니다.`
 
   // 시도 순서: 기본 모델(재시도 2회) → 503 지속이면 폴백 모델 1회.
   const plan: { model: string; maxRetries: number }[] = [
@@ -335,16 +335,28 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
   if (transcriptApiKey) {
     const taStart = Date.now()
     try {
-      // 세그먼트 배열(transcript)을 받아 공백 join → 평문 자막. 타임스탬프 불필요.
+      // 세그먼트 배열(transcript)을 받아 시간 앵커([m:ss])와 함께 join → timeline 실측화에 사용.
       const res = await fetchWithTimeout(
-        `https://transcriptapi.com/api/v2/youtube/transcript?video_url=${videoId}&format=json&include_timestamp=false`,
+        `https://transcriptapi.com/api/v2/youtube/transcript?video_url=${videoId}&format=json&include_timestamp=true`,
         { headers: { Authorization: `Bearer ${transcriptApiKey}` } },
         TRANSCRIPTAPI_TIMEOUT_MS
       )
       if (res.ok) {
         const data = await res.json()
         const segments = Array.isArray(data?.transcript) ? data.transcript : []
-        const text = segments.map((s: { text?: string }) => s?.text ?? '').join(' ').trim()
+        // 시간표시 붙은 자막 생성: 매 세그먼트마다 앵커를 붙이면 너무 촘촘하므로
+        // 직전 앵커와 30초 이상 벌어질 때만 [m:ss] 삽입 (start는 초 단위 float).
+        const fmtTime = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
+        let lastMark = -999
+        const text = segments.map((s: { text?: string; start?: number }) => {
+          const t = (s?.text ?? '').trim()
+          if (!t) return ''
+          if (typeof s?.start === 'number' && s.start - lastMark >= 30) {
+            lastMark = s.start
+            return `[${fmtTime(s.start)}] ${t}`
+          }
+          return t
+        }).filter(Boolean).join(' ').trim()
         if (text) {
           transcript = text
           // 성공 요청당 과금 → 성공 시에만 기록. userId 없으면 시스템 계정 귀속.
