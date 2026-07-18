@@ -5,6 +5,7 @@ import { yesterdayRangeUtc, formatDateKst } from '@/lib/time'
 import { DigestTrigger } from '@/lib/mailer'
 import { sendAdminFailureAlert } from '@/lib/admin-alert'
 import { logErrorEvent, cleanupOldErrorLogs } from '@/lib/error-log'
+import { cleanupExpiredShares } from '@/lib/share'
 import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed, hasDigestSentToday } from '@/lib/send-guard'
@@ -357,9 +358,10 @@ async function runDigest(
       await sendAdminFailureAlert(userName, settings.email, userId, failedItems, trigger)
     }
 
-    // 30일 지난 기록 삭제 (digests + error_log)
+    // 오래된 기록 삭제 (digests 30일 + error_log 30일 + 만료 공유 링크 7일 유예)
     await supabase.rpc('delete_old_digests')
     await cleanupOldErrorLogs()
+    await cleanupExpiredShares()
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     const successCount = digestItems.length - failedItems.length
