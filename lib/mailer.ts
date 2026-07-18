@@ -19,12 +19,10 @@ let _transporter: nodemailer.Transporter | null = null
 function getTransporter(): nodemailer.Transporter {
   if (!_transporter) {
     _transporter = nodemailer.createTransport({
-      host: process.env.CF_SMTP_HOST,
-      port: Number(process.env.CF_SMTP_PORT) || 465,
-      secure: true, // 465 = implicit TLS(SMTPS)
+      service: 'gmail',
       auth: {
-        user: process.env.CF_SMTP_USER,
-        pass: process.env.CF_SMTP_PASS,
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
       },
     })
   }
@@ -124,7 +122,7 @@ export async function sendDigestEmail(
 
   try {
     await transporter.sendMail({
-      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'digest.subject', { date }),
       html: buildDigestHtml(items, userName, lc, to, isPro),
@@ -164,7 +162,7 @@ export async function sendEmptyDigestEmail(
 
   try {
     await transporter.sendMail({
-      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'digest.emptySubject', { date }),
       html,
@@ -186,7 +184,7 @@ export async function sendBreakingAlert(
   const lc = normalizeLocale(locale)
   try {
     await transporter.sendMail({
-      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+      from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
       to,
       subject: et(lc, 'breaking.subject', { title: item.video.title }),
       html: buildBreakingHtml(item, userName, lc, to),
@@ -204,7 +202,7 @@ export async function sendWelcomeEmail(
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   await transporter.sendMail({
-    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'welcome.subject'),
     html: buildWelcomeHtml(lc),
@@ -219,7 +217,7 @@ export async function sendTrialEndingEmail(
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'trialEnding.subject'),
     html: buildTrialEndingHtml(lc, endDate),
@@ -233,7 +231,7 @@ export async function sendTrialEndedEmail(
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'trialEnded.subject'),
     html: buildTrialEndedHtml(lc),
@@ -248,7 +246,7 @@ export async function sendPassEndingEmail(
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'passEnding.subject'),
     html: buildPassEndingHtml(lc, endDate),
@@ -262,7 +260,7 @@ export async function sendPassEndedEmail(
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   await getTransporter().sendMail({
-    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest" <${process.env.GMAIL_USER}>`,
     to,
     subject: et(lc, 'passEnded.subject'),
     html: buildPassEndedHtml(lc),
@@ -333,7 +331,7 @@ export async function sendAdminBulkErrorEmail(
   `).join('')
 
   await transporter.sendMail({
-    from: `"Daily Video Digest 오류 알림" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest 오류 알림" <${process.env.GMAIL_USER}>`,
     to: recipients.join(','),
     subject: `❗ [Daily Video Digest] 요약 실패 알림 — ${failedItems.length}개 (${triggerLabel[trigger]})`,
     html: `
@@ -412,7 +410,7 @@ export async function sendAdminFeedbackEmail(feedback: {
     .replace(/\n/g, '<br>')
 
   await transporter.sendMail({
-    from: `"Daily Video Digest 피드백" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest 피드백" <${process.env.GMAIL_USER}>`,
     to: recipients.join(','),
     subject: '[피드백] 새 의견이 도착했습니다',
     html: `
@@ -449,7 +447,7 @@ export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.com').replace(/\/+$/, '')
 
   await transporter.sendMail({
-    from: `"Daily Video Digest 오류 알림" <${process.env.MAIL_FROM}>`,
+    from: `"Daily Video Digest 오류 알림" <${process.env.GMAIL_USER}>`,
     to: recipients.join(','),
     subject: `[오류] 새 오류 ${count}건`,
     html: `
