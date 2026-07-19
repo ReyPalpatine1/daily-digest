@@ -7,7 +7,7 @@ type TFn = (key: string, params?: Record<string, string | number>) => string
 
 type Props = {
   videoId: string
-  videoTitle: string
+  videoTitle: string // 현재 미사용(호출부 유지용으로 시그니처에 잔존)
   timeline: { time: string; content: string }[]
   userName: string
   t: TFn
@@ -16,7 +16,7 @@ type Props = {
 
 // 요약 공유 시트 — HelpPopup/TrialPopup 모달 뼈대 미러링(오버레이 zIndex 200, 중앙 카드, CSS 변수만).
 // ※ 문구는 우선 한국어 하드코딩(i18n 키 추가는 백로그 — 수정 파일 범위 제한).
-export default function ShareSheet({ videoId, videoTitle, timeline, userName, t, onClose }: Props) {
+export default function ShareSheet({ videoId, timeline, userName, t, onClose }: Props) {
   const [comment, setComment] = useState('')
   const [highlightTime, setHighlightTime] = useState<string | null>(null)
   const [showName, setShowName] = useState(true)
@@ -44,6 +44,14 @@ export default function ShareSheet({ videoId, videoTitle, timeline, userName, t,
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.url) {
         setShareUrl(data.url)
+        // 생성 즉시 자동 복사 — await 뒤 clipboard는 사파리/모바일에서 막힐 수 있으므로 실패해도 무시(아래 복사 버튼이 안전망)
+        try {
+          await navigator.clipboard.writeText(data.url)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 2500)
+        } catch {
+          // 무시
+        }
       } else {
         setErrorMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해 주세요.')
       }
@@ -114,17 +122,6 @@ export default function ShareSheet({ videoId, videoTitle, timeline, userName, t,
           </button>
         </div>
 
-        {/* 영상 제목 */}
-        <div style={{
-          fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5,
-          background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
-          borderRadius: 9, padding: '9px 12px',
-          overflow: 'hidden', textOverflow: 'ellipsis',
-          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        }}>
-          {videoTitle}
-        </div>
-
         {shareUrl ? (
           /* ── 링크 생성됨 ── */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -171,15 +168,15 @@ export default function ShareSheet({ videoId, videoTitle, timeline, userName, t,
         ) : (
           /* ── 작성 폼 ── */
           <>
-            {/* 코멘트 */}
+            {/* 메모 */}
             <div>
-              <div style={sectionLabel}>코멘트 (선택)</div>
+              <div style={sectionLabel}>메모 남기기</div>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value.slice(0, 100))}
                 maxLength={100}
                 rows={2}
-                placeholder="예: 초반은 넘기고 7:52부터 보세요"
+                placeholder="예: 초반은 넘기고 여기부터 보세요"
                 style={{
                   width: '100%', boxSizing: 'border-box', resize: 'none',
                   background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
@@ -192,35 +189,6 @@ export default function ShareSheet({ videoId, videoTitle, timeline, userName, t,
                 {comment.length}/100
               </div>
             </div>
-
-            {/* 하이라이트 선택 (timeline 있을 때만) */}
-            {timeline.length > 0 && (
-              <div>
-                <div style={sectionLabel}>하이라이트 구간 (선택)</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {timeline.map((item, i) => {
-                    const active = highlightTime === item.time
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => setHighlightTime(active ? null : item.time)}
-                        title={item.content}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
-                          borderRadius: 999, padding: '4px 11px',
-                          fontSize: 12, fontWeight: active ? 700 : 500,
-                          background: active ? 'var(--accent)' : 'var(--bg-card)',
-                          color: active ? 'var(--bg-card)' : 'var(--text-secondary)',
-                          border: active ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
-                          cursor: 'pointer', fontFamily: 'inherit',
-                        }}>
-                        {item.time}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* 이름 표시 토글 */}
             <label style={{
@@ -235,6 +203,50 @@ export default function ShareSheet({ videoId, videoTitle, timeline, userName, t,
               />
               내 이름({userName}) 표시
             </label>
+
+            {/* 핵심 구간 선택 — 타임라인 목록에서 직접 선택(형광펜), timeline 있을 때만 */}
+            {timeline.length > 0 && (
+              <div>
+                <div style={{ ...sectionLabel, marginBottom: 3 }}>핵심 구간 선택</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  받는 사람이 여기부터 보게 됩니다 (선택)
+                </div>
+                <div style={{
+                  maxHeight: 150, overflowY: 'auto',
+                  border: '0.5px solid var(--border-light)', borderRadius: 8, padding: 4,
+                }}>
+                  {timeline.map((item, i) => {
+                    const active = highlightTime === item.time
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => setHighlightTime(active ? null : item.time)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+                          background: active ? 'rgba(255,205,0,0.18)' : 'transparent',
+                          boxShadow: active ? 'inset 2px 0 0 var(--text-primary)' : 'none',
+                        }}>
+                        <span style={{
+                          fontSize: 12, fontWeight: 600, flexShrink: 0, minWidth: 34,
+                          fontVariantNumeric: 'tabular-nums',
+                          color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                        }}>
+                          {item.time}
+                        </span>
+                        <span style={{
+                          fontSize: 12, lineHeight: 1.45, flex: 1,
+                          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        }}>
+                          {item.content}
+                        </span>
+                        {active && <Check size={12} style={{ flexShrink: 0, color: 'var(--text-primary)' }} />}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {errorMsg && (
               <div style={{ fontSize: 12, color: 'var(--danger)' }}>{errorMsg}</div>
