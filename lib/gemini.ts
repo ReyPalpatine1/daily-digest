@@ -73,28 +73,22 @@ export async function summarizeVideo(
 ): Promise<SummaryResult> {
   const fnStart = Date.now()
 
-  // 요약 스타일 A/B 테스트 — 환경변수는 함수 내부에서 읽음 (Cloudflare 호환)
-  // headline: '## 소제목' 블록 구성 / paragraph(기본): 빈 줄 구분 문단 + summary·keyPoints 역할 분리
-  const style = process.env.SUMMARY_STYLE || 'paragraph'
-  const transcriptSummaryGuide = style === 'headline'
-    ? "summary는 2~4개의 소제목 블록으로 구성. 각 블록은 '## 소제목' 한 줄 뒤 1~2문장 내용. 소제목은 그 블록 내용을 압축한 명사구(예: '## 시장 배경', '## 핵심 주장', '## 결론과 전망'). keyPoints는 5개, 각 항목은 '핵심 내용 — 한 문장 부연' 형태."
-    : "summary는 2~3개 문단으로, 문단 사이는 빈 줄(\\n\\n)로 구분. 각 문단은 2~3문장. summary는 전체 흐름·맥락 위주로 서술하고, 세부 수치·고유명사·구체적 결론은 keyPoints로 분리해 중복을 피할 것. keyPoints는 5개, summary에서 다루지 않은 구체적 디테일(숫자·이름·결론) 위주로 '핵심 내용 — 한 문장 부연' 형태."
-  const descriptionSummaryGuide = style === 'headline'
-    ? "summary는 '## 소제목' 블록 1~2개로 구성, 각 블록은 소제목 한 줄 뒤 1~2문장."
-    : "summary는 1~2개 문단(문단 사이는 빈 줄 \\n\\n), 총 3~4문장."
-
   // 요약 기반 콘텐츠 구성 (모델과 무관 → 1회만 계산)
+  // summary/keyPoints/timeline이 같은 내용을 반복하지 않도록 역할 분리 지침 사용.
   let content = ''
   let summaryBasis = ''
   let lengthGuide = ''
   if (transcript && transcript.length > 50) {
     content = `자막:\n${transcript.slice(0, 45000)}`
     summaryBasis = '자동 생성 자막 기반 요약'
-    lengthGuide = `${transcriptSummaryGuide} 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고, 존재하지 않는 시간을 추정·창작하지 말 것. 자막에 시간 앵커가 없으면(설명 기반 등) timeline은 빈 배열 []. timeline은 영상 흐름상 의미 있는 구간 4~6개로, 각 항목의 time은 그 내용이 시작되는 가장 가까운 앵커 시각.`
+    lengthGuide = `세 요소는 서로 다른 역할을 하며 같은 내용을 반복하지 말 것:
+  · summary: 영상의 전체 맥락과 흐름을 2~3문장으로 개괄. '무슨 영상이고 무엇을 다루는지' 파악용. 세부 수치·고유명사·구체적 결론은 여기 넣지 말 것(그건 keyPoints 담당). 문단이 나뉘면 문단 사이는 빈 줄(\\n\\n).
+  · keyPoints: summary에서 다루지 않은 구체적 디테일 5개 — 숫자, 고유명사, 핵심 주장·조언·결론 등 '팩트' 위주. 각 항목은 '핵심 내용 — 한 문장 부연'. summary 문장을 그대로 반복하지 말 것.
+  · timeline: 영상의 어느 지점에서 무슨 주제가 나오는지 '위치 안내'. 각 content는 그 구간의 주제를 짧은 명사구로(내용 서술을 길게 하지 말 것 — 그건 summary/keyPoints 담당). 제공된 자막의 [m:ss] 실제 시간 앵커만 time에 사용하고 존재하지 않는 시간을 추정·창작하지 말 것. 앵커 없으면 timeline은 빈 배열 []. 영상 흐름상 의미 있는 구간 4~6개, 각 항목의 time은 그 내용이 시작되는 가장 가까운 앵커 시각.`
   } else if (description && description.length > 20) {
     content = `영상 설명:\n${description.slice(0, 2000)}`
     summaryBasis = '영상 설명 기반 요약'
-    lengthGuide = `${descriptionSummaryGuide} keyPoints는 3~4개, '핵심 내용 — 부연' 형태. timeline은 빈 배열 [].`
+    lengthGuide = "summary는 맥락 2~3문장 개괄. keyPoints는 3~4개 구체 디테일 위주('핵심 내용 — 부연'). summary와 중복 금지. timeline은 빈 배열 []."
   } else {
     // 자막·설명 모두 없음 → 제목만으로는 요약하지 않는다 (환각 위험). Gemini 미호출 즉시 실패.
     console.log(`❌ 자막·설명 없음 → 요약 불가 (no_source): ${title}`)
