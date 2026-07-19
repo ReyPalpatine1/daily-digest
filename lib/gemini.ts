@@ -78,7 +78,7 @@ export async function summarizeVideo(
   let summaryBasis = ''
   let lengthGuide = ''
   if (transcript && transcript.length > 50) {
-    content = `자막:\n${transcript.slice(0, 45000)}`
+    content = `자막:\n${transcript.slice(0, 8000)}`
     summaryBasis = '자동 생성 자막 기반 요약'
     lengthGuide = "summary는 5~7문장으로 영상 내용을 충실하게 서술. 세부 수치·고유명사·핵심 주장을 살려서 작성. 길면 문단을 나누고 문단 사이는 빈 줄(\\n\\n). keyPoints는 5개, 각 항목은 '핵심 내용 — 한 문장 부연'. 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제."
   } else if (description && description.length > 20) {
