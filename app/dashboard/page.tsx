@@ -16,6 +16,7 @@ import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2 } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
+import { parseSummaryBlocks } from '@/lib/summary-format'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -2288,12 +2289,24 @@ export default function Dashboard() {
                               })()}
 
                               {/* 실패·대기·라이브 항목은 자리표시 문구 대신 위 라벨이 사유를 설명 */}
+                              {/* summary는 마커('## ' 소제목, 빈 줄 문단) 해석 렌더 — 마커 없는 기존 데이터는 문단 1개 */}
                               {!digest.fail_reason && (
                                 <div style={{
-                                  fontSize: 13, color: 'var(--text-secondary)',
+                                  fontSize: 14, color: 'var(--text-secondary)',
                                   lineHeight: 1.7, marginBottom: 14,
                                 }}>
-                                  {digest.summary}
+                                  {parseSummaryBlocks(digest.summary || '').map((b, i) =>
+                                    b.type === 'heading' ? (
+                                      <div key={i} style={{
+                                        fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+                                        marginTop: i === 0 ? 0 : 10, marginBottom: 4,
+                                      }}>
+                                        {b.text}
+                                      </div>
+                                    ) : (
+                                      <div key={i} style={{ marginBottom: 10 }}>{b.text}</div>
+                                    )
+                                  )}
                                 </div>
                               )}
 

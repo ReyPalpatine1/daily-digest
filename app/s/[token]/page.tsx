@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { Clock, ExternalLink, MessageSquareQuote, Sparkles } from 'lucide-react'
 import { getShareByToken } from '@/lib/share'
+import { parseSummaryBlocks } from '@/lib/summary-format'
 
 // 공개 공유 페이지 — 로그인 불필요, 매 요청 조회 (토큰 만료/조회수 반영)
 export const dynamic = 'force-dynamic'
@@ -228,11 +229,23 @@ export default async function SharePage({ params }: PageProps) {
           {summary.summary && (
             <div style={cardStyle}>
               <div style={sectionLabelStyle}>요약</div>
+              {/* 마커('## ' 소제목, 빈 줄 문단) 해석 — 마커 없는 기존 데이터는 문단 1개 */}
               <div style={{
                 fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.75,
-                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                wordBreak: 'break-word',
               }}>
-                {summary.summary}
+                {parseSummaryBlocks(summary.summary).map((b, i) =>
+                  b.type === 'heading' ? (
+                    <div key={i} style={{
+                      fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+                      marginTop: i === 0 ? 0 : 10, marginBottom: 4,
+                    }}>
+                      {b.text}
+                    </div>
+                  ) : (
+                    <div key={i} style={{ marginBottom: 10, whiteSpace: 'pre-wrap' }}>{b.text}</div>
+                  )
+                )}
               </div>
             </div>
           )}
