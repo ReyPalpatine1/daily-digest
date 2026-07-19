@@ -61,6 +61,164 @@ export async function createShare(params: {
   throw new Error('shared_summaries insert 실패: 토큰 생성 재시도 초과') // 도달 불가 (타입 안전용)
 }
 
+// ── 공개 공유 페이지(/s/[token])용 조회 ──────────────────────────────
+export type ShareData = {
+  expired: boolean
+  comment: string | null
+  highlightTime: string | null
+  showName: boolean
+  sharerName: string | null // show_name=false거나 프로필 조회 실패 시 null(익명 처리)
+  video: {
+    videoId: string
+    title: string
+    description: string | null
+    channelName: string | null
+  } | null
+  summary: {
+    tldr: string | null
+    summary: string | null
+    keyPoints: string[]
+    timeline: { time: string; content: string }[]
+    summaryBasis: string | null
+  } | null
+}
+
+// 토큰으로 공유 정보 + 영상 + 요약 조회. 없으면 null, 만료면 { expired: true }만 채워 반환.
+// countView: true일 때만 view_count +1 (best-effort — 페이지 본문 렌더에서만, 봇/메타 요청은 skip).
+export async function getShareByToken(
+  token: string,
+  opts?: { countView?: boolean }
+): Promise<ShareData | null> {
+  try {
+    const supabase = getSupabase()
+    const { data: shareRow } = await supabase
+      .from('shared_summaries')
+      .select('token, video_id, shared_by, comment, highlight_time, show_name, expires_at')
+      .eq('token', token)
+      .maybeSingle()
+    if (!shareRow) return null
+
+    const share = shareRow as {
+      video_id: string
+      shared_by: string
+      comment: string | null
+      highlight_time: string | null
+      show_name: boolean
+      expires_at: string | null
+    }
+
+    if (share.expires_at && new Date(share.expires_at) <= new Date()) {
+      return {
+        expired: true,
+        comment: null, highlightTime: null, showName: false,
+        sharerName: null, video: null, summary: null,
+      }
+    }
+
+    // view_count +1 — 컬럼 조회/갱신 모두 best-effort(실패해도 페이지 렌더에 영향 없음).
+    // 동시 접속 시 레이스로 일부 누락 가능하나 통계용이라 허용.
+    if (opts?.countView) {
+      try {
+        const { data: vc } = await supabase
+          .from('shared_summaries').select('view_count').eq('token', token).maybeSingle()
+        const cur = (vc as { view_count?: number } | null)?.view_count
+        if (typeof cur === 'number') {
+          await supabase.from('shared_summaries').update({ view_count: cur + 1 }).eq('token', token)
+        }
+      } catch {
+        // 무시
+      }
+    }
+
+    // 영상 + 요약 + 공유자 이름 병렬 조회 (요약은 ko 우선, 없으면 임의 1행)
+    const [videoRes, summaryRes, profileRes] = await Promise.all([
+      supabase.from('videos')
+        .select('video_id, title, channel_id, description')
+        .eq('video_id', share.video_id)
+        .maybeSingle(),
+      supabase.from('video_summaries')
+        .select('locale, tldr, summary, key_points, timeline, summary_basis')
+        .eq('video_id', share.video_id)
+        .limit(10),
+      share.show_name
+        ? supabase.from('profiles').select('name').eq('id', share.shared_by).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+
+    const videoRow = videoRes.data as {
+      video_id: string; title: string | null; channel_id: string | null; description: string | null
+    } | null
+
+    // 채널명: channels는 사용자별 행이라 channel_id로 임의 1행의 alias 사용 (error-log.ts 패턴)
+    let channelName: string | null = null
+    if (videoRow?.channel_id) {
+      try {
+        const { data: ch } = await supabase
+          .from('channels').select('alias').eq('channel_id', videoRow.channel_id).limit(1)
+        channelName = (ch?.[0] as { alias?: string } | undefined)?.alias ?? null
+      } catch {
+        // 무시
+      }
+    }
+
+    type SummaryRow = {
+      locale: string | null
+      tldr: string | null
+      summary: string | null
+      key_points: unknown
+      timeline: unknown
+      summary_basis: string | null
+    }
+    const summaryRows = (summaryRes.data ?? []) as SummaryRow[]
+    const picked = summaryRows.find(r => r.locale === 'ko') ?? summaryRows[0] ?? null
+
+    // JSONB 필드 방어적 정규화 (배열 아니거나 항목 형식이 다르면 버림)
+    const keyPoints = Array.isArray(picked?.key_points)
+      ? (picked!.key_points as unknown[]).filter((p): p is string => typeof p === 'string')
+      : []
+    const timeline = Array.isArray(picked?.timeline)
+      ? (picked!.timeline as unknown[]).filter(
+          (it): it is { time: string; content: string } =>
+            !!it && typeof it === 'object' &&
+            typeof (it as { time?: unknown }).time === 'string' &&
+            typeof (it as { content?: unknown }).content === 'string'
+        )
+      : []
+
+    const sharerName = share.show_name
+      ? ((profileRes.data as { name?: string } | null)?.name?.trim() || null)
+      : null
+
+    return {
+      expired: false,
+      comment: share.comment,
+      highlightTime: share.highlight_time,
+      showName: share.show_name,
+      sharerName,
+      video: videoRow
+        ? {
+            videoId: videoRow.video_id,
+            title: videoRow.title ?? '(제목 없음)',
+            description: videoRow.description,
+            channelName,
+          }
+        : null,
+      summary: picked
+        ? {
+            tldr: picked.tldr?.trim() || null,
+            summary: picked.summary?.trim() || null,
+            keyPoints,
+            timeline,
+            summaryBasis: picked.summary_basis,
+          }
+        : null,
+    }
+  } catch (e) {
+    console.error('[share] 공유 조회 실패:', e)
+    return null
+  }
+}
+
 // 만료된 지 7일 지난 공유 링크 물리 삭제 — digests 30일 정리(delete_old_digests)와 같은 지점에서 호출.
 // 만료 직후 바로 지우지 않고 7일 유예: 만료 안내 페이지 노출 기간 확보.
 export async function cleanupExpiredShares(): Promise<void> {
