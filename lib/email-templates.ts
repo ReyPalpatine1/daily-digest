@@ -3,6 +3,7 @@
 
 import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
+import { videoDeepLink } from './video-time'
 import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
 
 export type { EmailLocale }
@@ -164,10 +165,18 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       ${tl.length > 0 ? `
         <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">
           <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.timeline')}</div>
-          ${tl.map(tt => `
+          ${tl.map(tt => {
+            // 시각을 유튜브 딥링크로 (url 없음/파싱 실패 시 기존 pill 텍스트 폴백)
+            const deepLink = videoDeepLink(item.video.url, tt.time)
+            const pillStyle = 'background:#F4F4F5;color:#0A0A0A;padding:1px 6px;border-radius:4px;margin-right:6px;font-weight:500;'
+            const timeHtml = deepLink
+              ? `<a href="${escapeHtml(deepLink)}" style="${pillStyle}text-decoration:none;">${escapeHtml(tt.time)}</a>`
+              : `<span style="${pillStyle}">${escapeHtml(tt.time)}</span>`
+            return `
             <div style="font-size:12px;color:#525252;line-height:1.7;margin-bottom:3px;">
-              <span style="background:#F4F4F5;color:#0A0A0A;padding:1px 6px;border-radius:4px;margin-right:6px;font-weight:500;">${escapeHtml(tt.time)}</span>${escapeHtml(tt.content)}
-            </div>`).join('')}
+              ${timeHtml}${escapeHtml(tt.content)}
+            </div>`
+          }).join('')}
         </div>` : ''}
       <a href="${escapeHtml(item.video.url)}" style="display:inline-block;padding:7px 14px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
         ${et(locale, 'digest.watchVideo')}
