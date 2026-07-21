@@ -5,7 +5,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
 import { et, type EmailLocale } from './i18n/email-translations'
-import { videoDeepLink } from './video-time'
+import { youtubeDeepLink } from '@/lib/video-time'
 
 // 발송 결과 로그용 (서버 전용 service client) — mailer 를 건드리지 않기 위해 별도 lazy 생성.
 let _supabase: SupabaseClient | null = null
@@ -143,17 +143,19 @@ function itemLines(item: DigestItem, lc: EmailLocale): string[] {
       lines.push(`• ${escapeHtml(p)}`)
     }
   }
-  // timeline: 시각을 유튜브 딥링크로 (다이제스트 전용 — 속보는 별도 조립이라 미적용).
+  // timeline: 줄 전체(시각+설명)가 해당 지점 딥링크 (다이제스트 전용 — 속보는 별도 조립이라 미적용).
+  // 텔레그램은 CSS 미지원이라 줄 전체가 링크색으로 표시된다(챕터 목록 관행).
   // JSONB에서 온 값이 배열이 아닐 수 있어 Array.isArray 방어.
   const tl = Array.isArray(item.summary.timeline) ? item.summary.timeline : []
   if (tl.length) {
     lines.push(`<b>${et(lc, 'digest.timeline')}</b>`)
     for (const t of tl) {
-      const deepLink = videoDeepLink(item.video.url, t?.time ?? '')
-      const timePart = deepLink
-        ? `<a href="${escapeHtml(deepLink)}">${escapeHtml(t?.time ?? '')}</a>`
-        : escapeHtml(t?.time ?? '')
-      lines.push(`${timePart} ${escapeHtml(t?.content ?? '')}`)
+      const label = `${escapeHtml(t?.time ?? '')} ${escapeHtml(t?.content ?? '')}`
+      lines.push(
+        item.video.url
+          ? `<a href="${escapeHtml(youtubeDeepLink(item.video.url, t?.time ?? ''))}">${label}</a>`
+          : label
+      )
     }
   }
   return lines

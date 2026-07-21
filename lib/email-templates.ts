@@ -3,7 +3,7 @@
 
 import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
-import { videoDeepLink } from './video-time'
+import { youtubeDeepLink } from '@/lib/video-time'
 import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
 
 export type { EmailLocale }
@@ -166,15 +166,16 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">
           <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.timeline')}</div>
           ${tl.map(tt => {
-            // 시각을 유튜브 딥링크로 (url 없음/파싱 실패 시 기존 pill 텍스트 폴백)
-            const deepLink = videoDeepLink(item.video.url, tt.time)
-            const pillStyle = 'background:#F4F4F5;color:#0A0A0A;padding:1px 6px;border-radius:4px;margin-right:6px;font-weight:500;'
-            const timeHtml = deepLink
-              ? `<a href="${escapeHtml(deepLink)}" style="${pillStyle}text-decoration:none;">${escapeHtml(tt.time)}</a>`
-              : `<span style="${pillStyle}">${escapeHtml(tt.time)}</span>`
+            // 챕터 목록 관행: 줄 전체(시각+설명)가 해당 지점 딥링크.
+            // url 없으면 링크 없이 텍스트만(폴백). 시각 파싱 실패 시 youtubeDeepLink가 원본 URL 반환.
+            const timeHtml = `<span style="color:#0A0A0A;font-weight:600;margin-right:6px;">${escapeHtml(tt.time)}</span>`
+            const contentHtml = `<span style="color:#525252;">${escapeHtml(tt.content)}</span>`
+            const inner = item.video.url
+              ? `<a href="${escapeHtml(youtubeDeepLink(item.video.url, tt.time))}" style="text-decoration:none;">${timeHtml}${contentHtml}</a>`
+              : `${timeHtml}${contentHtml}`
             return `
-            <div style="font-size:12px;color:#525252;line-height:1.7;margin-bottom:3px;">
-              ${timeHtml}${escapeHtml(tt.content)}
+            <div style="font-size:12px;line-height:1.7;margin-bottom:3px;">
+              ${inner}
             </div>`
           }).join('')}
         </div>` : ''}
