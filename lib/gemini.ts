@@ -64,6 +64,16 @@ const LOCALE_LANGUAGE_NAMES: Record<Locale, string> = {
   ja: '일본어',
 }
 
+// 자막 길이 → summary 목표 문장 수.
+// "5~15문장에서 자유롭게" 같은 넓은 범위만 주면 모델이 자막 길이와 무관하게
+// 중앙값(7문장)으로 수렴하는 것이 실측으로 확인됨 → 구간별 목표치를 계산해 프롬프트에 못박는다.
+function sentenceTarget(len: number): { min: number; max: number; label: string } {
+  if (len < 5000) return { min: 5, max: 7, label: '짧은 영상' }
+  if (len < 15000) return { min: 8, max: 10, label: '보통 길이 영상' }
+  if (len < 30000) return { min: 11, max: 13, label: '긴 영상' }
+  return { min: 13, max: 15, label: '매우 긴 영상' }
+}
+
 export async function summarizeVideo(
   userId: string | null,
   title: string,
@@ -78,9 +88,11 @@ export async function summarizeVideo(
   let summaryBasis = ''
   let lengthGuide = ''
   if (transcript && transcript.length > 50) {
-    content = `자막:\n${transcript.slice(0, 45000)}`
+    const sliced = transcript.slice(0, 45000)
+    content = `자막:\n${sliced}`
     summaryBasis = '자동 생성 자막 기반 요약'
-    lengthGuide = "summary는 5~7문장으로 충실하게. keyPoints는 5개, 각 항목은 '핵심 내용 — 한 문장 부연' 형태. 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제."
+    const t = sentenceTarget(sliced.length)
+    lengthGuide = `이 영상은 자막 ${sliced.length.toLocaleString()}자 분량의 ${t.label}입니다. **summary는 반드시 ${t.min}~${t.max}문장으로 쓰세요**(이 범위는 권장이 아니라 지켜야 할 분량입니다. ${t.min}문장 미만은 정보 누락입니다). 다만 분량을 채우려고 같은 말을 반복하거나 자막에 없는 일반론으로 늘리지는 마세요 — 영상이 실제로 다룬 서로 다른 논점을 빠짐없이 담아 자연스럽게 그 분량을 채우세요. keyPoints는 5개, 각 항목은 '핵심 내용 — 한 문장 부연' 형태. 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제.`
   } else if (description && description.length > 20) {
     content = `영상 설명:\n${description.slice(0, 2000)}`
     summaryBasis = '영상 설명 기반 요약'
@@ -105,10 +117,20 @@ ${content || '(자막 및 설명 없음)'}
 - 제공되지 않은 수치, 통계, 인용, 사실을 절대 지어내지 마세요. 정보가 부족하면 무리해서 길게 쓰지 말고 아는 만큼만 쓰세요.
 - 구체적으로: 자막/설명에 등장하는 고유명사, 수치, 핵심 주장을 가능한 한 살려서 요약하세요. 수치가 있는 항목은 '대폭', '크게' 같은 모호한 표현 대신 실제 수치(예: '300만원까지 상승')를 사용하고, 같은 사실을 summary와 keyPoints에서 다룰 때는 양쪽 모두 동일한 구체적 수치로 표현해 불일치가 없도록 하세요.
 - ${lengthGuide}${langInstruction}
-- tldr은 "제목만 보고는 알 수 없는, 영상이 실제로 밝히는 핵심 답"을 한 문장으로(공백 포함 80자 이내). **제목이 이미 말한 주제·질문을 다시 언급하며 시작하지 말고, 곧바로 답·결론·수치부터 제시할 것.** 독자는 제목을 이미 봤으므로 배경 반복은 불필요하다. 제목/summary 첫 문장을 반복하지 말 것.
+- **tldr은 "제목이 던진 질문에 대한 직접적인 답"이다.** 먼저 제목이 독자에게 무엇을 묻고 있는지 파악하고(예: "언제 팔아야 하나?", "왜 저평가인가?", "어디를 사야 하나?"), 그 질문에 정면으로 답하는 한 문장을 쓰세요. 영상 전체의 총평·조언·마무리 제언으로 흐르지 말 것 — 독자가 제목을 보고 궁금해한 바로 그 한 가지에만 답합니다.
+  · 제목이 질문형이 아니어도 마찬가지다. 제목이 암묵적으로 약속한 정보(예: "~하는 이유를 설명하겠습니다" → 그 이유가 무엇인지)를 답으로 제시할 것.
+  · **공백 포함 100자를 절대 넘기지 말 것**(100자는 상한이며 목표가 아니다. 80자 안팎이면 충분하고, 넘칠 것 같으면 수식어를 덜어내 반드시 100자 안으로 맞춘다).
+  · **제목이 이미 말한 주제·질문을 다시 언급하며 시작하지 말고, 곧바로 답·결론·수치부터 제시할 것.** 독자는 제목을 이미 봤으므로 배경 반복은 불필요하다. 제목/summary 첫 문장을 반복하지 말 것.
   · 나쁜 예(제목 "비규제지역 여기 대장 사세요"): "비규제지역 중에서도 동남권 대장급 아파트가 유망하며…" (앞부분이 제목 반복)
   · 좋은 예: "동남권 대장급 아파트가 가장 유망하고, 자금이 부족하면 경기 서·북부 저평가 대장주가 대안." (배경 없이 답부터)
+  · 나쁜 예(제목 "'이 신호'가 뜨면 팔아야 합니다"): "분할 매수로 대응하고 유망 섹터로 분산하십시오." (제목이 물은 '그 신호가 뭔지'에 답하지 않고 총평으로 빠짐)
+  · 좋은 예: "실적 호조 뉴스에도 주가가 빠지기 시작하는 때가 매도 신호이며, 보통 업황 정점 4~6개월 전에 나타납니다." (제목의 질문에 정면으로 답)
   영상에 그런 구체적 답이 없으면 억지로 만들지 말고 가장 정보가치 높은 사실 한 가지를 답부터 제시. 다국어 요약 시 tldr도 해당 언어.
+- **summary와 keyPoints의 중복을 피할 것 — 같은 사실을 두 번 읽게 하지 마세요.**
+  · keyPoints는 "무엇"만 압축해 제시한다. 결론·사실·수치를 짧게 못박고 끝낸다.
+  · summary는 "왜/어떻게"를 서술한다. 그 결론에 이르는 배경, 근거, 논리 과정, 이번 사례가 과거와 다른 점을 문장으로 풀어 쓴다.
+  · 예시 — keyPoints: "고점 대비 44% 하락, 과거 급락 패턴과 유사" / summary: 2017·2020년 사례에서 실적 전망 하향 시 오히려 44~63% 급등했던 배경, 삼성전자 공급 능력 약화와 AI 수요 변화라는 이번 사이클의 차이점 등 논리 과정을 서술.
+  · 단, summary는 여전히 그 자체로 완결된 글이어야 한다. 개괄만 남기고 디테일을 keyPoints로 넘기지 말고, 수치와 고유명사는 summary 안에서 근거로 충분히 활용할 것.
 
 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 완전한 JSON만 반환하세요:
 {
@@ -118,7 +140,10 @@ ${content || '(자막 및 설명 없음)'}
   "timeline": [{"time": "0:00", "content": "..."}]
 }
 
-timeline의 time은 자막에 실제 등장한 [m:ss] 앵커 시각만 사용하세요. 응답은 반드시 유효한 JSON이어야 합니다.`
+timeline의 time은 자막에 실제 등장한 [m:ss] 앵커 시각만 사용하세요. 응답은 반드시 유효한 JSON이어야 합니다.
+
+[분량 상한 — 반드시 준수]
+JSON 응답 전체(모든 필드 합계, 공백·기호 포함)는 3200자를 절대 넘기지 마세요. 상한에 걸릴 것 같으면 위에서 지시한 summary 문장 수는 그대로 유지하되 각 문장을 더 간결하게 다듬어 맞추세요(문장 수를 줄이지 말 것). JSON은 반드시 완결된 형태로 끝내세요 — 중간에 잘린 JSON은 사용할 수 없습니다.`
 
   // 시도 순서: 기본 모델(재시도 2회) → 503 지속이면 폴백 모델 1회.
   const plan: { model: string; maxRetries: number }[] = [
@@ -190,7 +215,7 @@ async function callGeminiModel(
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             // responseMimeType로 유효한 JSON만 반환하도록 강제 (따옴표 없는 값 등 깨진 JSON 방지)
-            generationConfig: { temperature: 0.3, maxOutputTokens: 1500, responseMimeType: 'application/json' },
+            generationConfig: { temperature: 0.3, maxOutputTokens: 2000, responseMimeType: 'application/json' },
           }),
         },
         GEMINI_TIMEOUT_MS
