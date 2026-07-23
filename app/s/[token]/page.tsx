@@ -2,9 +2,10 @@ import type { Metadata } from 'next'
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
 import { headers } from 'next/headers'
-import { Clock, ExternalLink, MessageSquareQuote, Sparkles } from 'lucide-react'
+import { MessageSquareQuote, ShieldOff, Sparkles } from 'lucide-react'
 import { getShareByToken } from '@/lib/share'
-import { parseSummaryBlocks } from '@/lib/summary-format'
+import { splitSentences } from '@/lib/summary-format'
+import ShareVideo from '@/components/ShareVideo'
 
 // 공개 공유 페이지 — 로그인 불필요, 매 요청 조회 (토큰 만료/조회수 반영)
 export const dynamic = 'force-dynamic'
@@ -37,7 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!isValidTokenFormat(token)) return fallback
 
   const data = await getShareByToken(token)
-  if (!data || data.expired || !data.video) return fallback
+  if (!data || data.blocked || data.expired || !data.video) return fallback
 
   const title = data.video.title
   const description =
@@ -63,6 +64,25 @@ const sectionLabelStyle: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6,
   fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
   color: 'var(--text-tertiary)', marginBottom: 10,
+}
+
+// 공유자가 강조한 항목(핵심 포인트·요약 문장·타임라인 공통) 하이라이트 스타일
+const highlightStyle: CSSProperties = {
+  background: 'rgba(255,205,0,0.18)',
+  boxShadow: 'inset 2px 0 0 var(--text-primary)',
+  borderRadius: 5,
+  color: 'var(--text-primary)',
+  padding: '6px 8px',
+}
+
+// 문제 신고 mailto 링크 (공유 토큰을 제목에 포함)
+function ReportLink({ token }: { token: string }) {
+  const href = `mailto:support@dailyvideodigest.com?subject=${encodeURIComponent(`[공유 신고] ${token}`)}`
+  return (
+    <a href={href} style={{ fontSize: 10.5, color: 'var(--text-muted)', textDecoration: 'underline' }}>
+      문제 신고
+    </a>
+  )
 }
 
 // 상단 서비스 로고 + 본문 래퍼 (외부인 대상 독립 페이지 — AppHeader 미사용)
@@ -117,17 +137,37 @@ function SignupCta() {
   )
 }
 
-// 없음/만료 공통 안내
-function NoticePage({ title, desc }: { title: string; desc: string }) {
+// 없음/만료/차단 공통 안내
+function NoticePage({
+  title, desc, icon, cta = true, reportToken,
+}: {
+  title: string
+  desc: string
+  icon?: React.ReactNode
+  cta?: boolean
+  reportToken?: string
+}) {
   return (
     <Shell>
       <div style={{ ...cardStyle, textAlign: 'center', padding: '36px 20px' }}>
+        {icon && (
+          <div style={{
+            marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-tertiary)',
+          }}>
+            {icon}
+          </div>
+        )}
         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
           {title}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{desc}</div>
+        {reportToken && (
+          <div style={{ marginTop: 14 }}>
+            <ReportLink token={reportToken} />
+          </div>
+        )}
       </div>
-      <SignupCta />
+      {cta && <SignupCta />}
     </Shell>
   )
 }
@@ -149,18 +189,55 @@ export default async function SharePage({ params }: PageProps) {
       />
     )
   }
+  if (data.blocked) {
+    return (
+      <NoticePage
+        icon={<ShieldOff size={22} />}
+        title="더 이상 볼 수 없는 공유입니다"
+        desc="운영 정책에 따라 비공개 처리되었습니다."
+        cta={false}
+      />
+    )
+  }
   if (data.expired || !data.video) {
     return (
       <NoticePage
         title="이 공유는 만료되었습니다"
         desc="공유 링크는 생성 후 14일간 유효해요."
+        reportToken={token}
       />
     )
   }
 
   const { video, summary } = data
-  const watchUrl = (t?: string) =>
-    `https://youtube.com/watch?v=${video.videoId}${t ? `&t=${toSeconds(t)}s` : ''}`
+  const ann = data.annotations
+
+  // 핵심 포인트 강조 인덱스 — text 일치 우선, 없으면 인덱스(i) 폴백.
+  const activeKpIdx = new Set<number>()
+  if (ann && summary) {
+    for (const a of ann.keyPoints) {
+      const byText = summary.keyPoints.findIndex(p => p === a.text)
+      if (byText >= 0) activeKpIdx.add(byText)
+      else if (a.i >= 0 && a.i < summary.keyPoints.length) activeKpIdx.add(a.i)
+    }
+  }
+  // 요약 문장 강조 — 원문(text) 일치.
+  const activeSumTexts = new Set<string>(ann ? ann.summary.map(s => s.text) : [])
+  // 타임라인 강조 시각 — annotations 있으면 그 time, 없으면(구버전) highlight_time 폴백.
+  const activeTlTimes = new Set<string>()
+  if (ann) {
+    for (const t of ann.timeline) activeTlTimes.add(t.time)
+  } else if (data.highlightTime) {
+    activeTlTimes.add(data.highlightTime)
+  }
+
+  const timelineItems = (summary?.timeline ?? []).map(it => ({
+    time: it.time,
+    content: it.content,
+    seconds: toSeconds(it.time),
+    active: activeTlTimes.has(it.time),
+  }))
+  const watchUrl = `https://youtube.com/watch?v=${video.videoId}`
 
   return (
     <Shell>
@@ -181,35 +258,16 @@ export default async function SharePage({ params }: PageProps) {
         </div>
       )}
 
-      {/* (b) 영상 제목 + 채널명 + 썸네일 */}
-      <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
-        <a href={watchUrl(data.highlightTime ?? undefined)} target="_blank" rel="noopener noreferrer"
-          style={{ display: 'block', textDecoration: 'none' }}>
-          {/* 외부(i.ytimg.com) 이미지 — next/image 원격 도메인 설정 없이 plain img 사용 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`}
-            alt={video.title}
-            style={{ width: '100%', display: 'block', aspectRatio: '16 / 9', objectFit: 'cover' }}
-          />
-        </a>
-        <div style={{ padding: '14px 18px' }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.45 }}>
-            {video.title}
-          </div>
-          <div style={{
-            marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-            fontSize: 12, color: 'var(--text-tertiary)',
-          }}>
-            {video.channelName && <span>{video.channelName}</span>}
-            <a href={watchUrl()} target="_blank" rel="noopener noreferrer" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              color: 'var(--text-tertiary)', textDecoration: 'none',
-            }}>
-              <ExternalLink size={11} /> 유튜브에서 보기
-            </a>
-          </div>
+      {/* (b) 영상 제목 + 채널명 (임베드는 요약 아래로 이동) */}
+      <div style={cardStyle}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+          {video.title}
         </div>
+        {video.channelName && (
+          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>
+            {video.channelName}
+          </div>
+        )}
       </div>
 
       {summary ? (
@@ -225,101 +283,71 @@ export default async function SharePage({ params }: PageProps) {
             </div>
           )}
 
-          {/* 역피라미드(이메일과 통일): tldr → 핵심 포인트 → 상세 요약 → 타임라인 */}
-          {/* (d) 핵심 포인트 */}
+          {/* 역피라미드(이메일과 통일): tldr → 핵심 포인트 → 상세 요약 → 임베드 → 타임라인 */}
+          {/* (d) 핵심 포인트 — 강조된 항목만 하이라이트 */}
           {summary.keyPoints.length > 0 && (
             <div style={cardStyle}>
               <div style={sectionLabelStyle}>핵심 포인트</div>
               <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {summary.keyPoints.map((p, i) => (
-                  <li key={i} style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    {p}
-                  </li>
-                ))}
+                {summary.keyPoints.map((p, i) => {
+                  const active = activeKpIdx.has(i)
+                  return (
+                    <li key={i} style={{
+                      fontSize: 13.5, lineHeight: 1.6,
+                      color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      ...(active ? highlightStyle : {}),
+                    }}>
+                      {p}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}
 
-          {/* (e) 상세 요약 본문 */}
+          {/* (e) 상세 요약 본문 — 문장 단위 렌더, 강조 문장만 하이라이트 (문단은 여백으로 유지) */}
           {summary.summary && (
             <div style={cardStyle}>
               <div style={sectionLabelStyle}>상세 요약</div>
-              {/* 마커('## ' 소제목, 빈 줄 문단) 해석 — 마커 없는 기존 데이터는 문단 1개 */}
               <div style={{
                 fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.75,
                 wordBreak: 'break-word',
               }}>
-                {parseSummaryBlocks(summary.summary).map((b, i) =>
-                  b.type === 'heading' ? (
-                    <div key={i} style={{
-                      fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-                      marginTop: i === 0 ? 0 : 10, marginBottom: 4,
-                    }}>
-                      {b.text}
-                    </div>
-                  ) : (
-                    <div key={i} style={{ marginBottom: 10, whiteSpace: 'pre-wrap' }}>{b.text}</div>
-                  )
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* (f) 타임라인 — highlight_time 일치 항목은 형광펜 강조, 각 항목은 해당 시각 유튜브 링크 */}
-          {summary.timeline.length > 0 && (
-            <div style={cardStyle}>
-              <div style={sectionLabelStyle}>
-                <Clock size={12} /> 타임라인
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {summary.timeline.map((item, i) => {
-                  const active = data.highlightTime !== null && item.time === data.highlightTime
-                  return (
-                    <a
-                      key={i}
-                      href={watchUrl(item.time)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 10,
-                        padding: '7px 10px', borderRadius: 6, textDecoration: 'none',
-                        background: active ? 'rgba(255,205,0,0.18)' : 'transparent',
-                        boxShadow: active ? 'inset 2px 0 0 var(--text-primary)' : 'none',
-                      }}>
-                      <span style={{
-                        fontSize: 12, fontWeight: 600, flexShrink: 0, minWidth: 34,
-                        fontVariantNumeric: 'tabular-nums',
-                        color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                      }}>
-                        {item.time}
-                      </span>
-                      <span style={{
-                        fontSize: 13, lineHeight: 1.55,
-                        color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        fontWeight: active ? 600 : 400,
-                      }}>
-                        {item.content}
-                        {active && (
-                          <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>
-                            ← 공유자가 추천한 구간
-                          </span>
-                        )}
-                      </span>
-                    </a>
-                  )
-                })}
+                {summary.summary.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean).map((para, pi, arr) => (
+                  <div key={pi} style={{
+                    display: 'flex', flexDirection: 'column', gap: 4,
+                    marginBottom: pi < arr.length - 1 ? 12 : 0,
+                  }}>
+                    {splitSentences(para).map((s, si) => {
+                      const active = activeSumTexts.has(s)
+                      return (
+                        <div key={si} style={active ? highlightStyle : { padding: '2px 8px' }}>
+                          {s}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </>
       ) : (
         <div style={{ ...cardStyle, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          이 영상의 요약을 불러올 수 없어요. 유튜브에서 영상을 직접 확인해 주세요.
+          이 영상의 요약을 불러올 수 없어요. 아래 영상에서 직접 확인해 주세요.
         </div>
       )}
 
+      {/* (f) 유튜브 임베드 + 타임라인(클릭 시 해당 시각 재생) */}
+      <ShareVideo videoId={video.videoId} watchUrl={watchUrl} timeline={timelineItems} />
+
       {/* (g) 하단 가입 CTA */}
       <SignupCta />
+
+      {/* (h) 푸터 — 문제 신고 */}
+      <div style={{ textAlign: 'center', paddingTop: 2 }}>
+        <ReportLink token={token} />
+      </div>
     </Shell>
   )
 }

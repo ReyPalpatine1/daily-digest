@@ -129,6 +129,7 @@ export async function createShare(params: {
 // ── 공개 공유 페이지(/s/[token])용 조회 ──────────────────────────────
 export type ShareData = {
   expired: boolean
+  blocked?: boolean // 운영 정책상 비공개 처리(blocked_at) — 만료보다 우선
   comment: string | null
   highlightTime: string | null
   annotations: ShareAnnotations | null
@@ -159,7 +160,7 @@ export async function getShareByToken(
     const supabase = getSupabase()
     const { data: shareRow } = await supabase
       .from('shared_summaries')
-      .select('token, video_id, shared_by, comment, highlight_time, annotations, show_name, expires_at')
+      .select('token, video_id, shared_by, comment, highlight_time, annotations, show_name, expires_at, blocked_at')
       .eq('token', token)
       .maybeSingle()
     if (!shareRow) return null
@@ -172,6 +173,17 @@ export async function getShareByToken(
       annotations: unknown
       show_name: boolean
       expires_at: string | null
+      blocked_at: string | null
+    }
+
+    // 차단(비공개 처리)은 만료 판정보다 우선.
+    if (share.blocked_at) {
+      return {
+        blocked: true,
+        expired: false,
+        comment: null, highlightTime: null, annotations: null, showName: false,
+        sharerName: null, video: null, summary: null,
+      }
     }
 
     if (share.expires_at && new Date(share.expires_at) <= new Date()) {
