@@ -26,29 +26,40 @@ export function generateShareToken(): string {
   return Array.from(bytes).map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 12)
 }
 
-// 공유 항목 강조/메모 데이터. keyPoints[i]=핵심포인트 배열 인덱스, timeline[time]=타임라인 시각(식별자).
-// text는 표시·검증용 원문 보존, note는 선택(각 100자 truncate). 항목 총합 20개 제한.
+// 공유 항목 강조 데이터. keyPoints[i]=핵심포인트 배열 인덱스, summary=요약 문장 원문,
+// timeline[time]=타임라인 시각(식별자). 항목별 메모 기능은 폐지(note 제거).
+// summary는 인덱스가 아닌 문장 원문(text)만 저장한다 — 요약 재생성·분리 로직이 바뀌어도
+// 인덱스가 어긋나지 않도록. 세 배열 합계 20개 제한.
 export type ShareAnnotations = {
-  keyPoints: { i: number; text: string; note?: string }[]
-  timeline: { time: string; text: string; note?: string }[]
+  keyPoints: { i: number; text: string }[]
+  summary: { text: string }[]
+  timeline: { time: string; text: string }[]
 }
 
-// 클라이언트가 보낸 annotations를 방어적으로 검증(필드 타입 확인, note 100자 truncate, 총 20개 제한).
+// 클라이언트가 보낸 annotations를 방어적으로 검증(필드 타입 확인, 세 배열 합계 20개 제한).
 // 유효 항목이 하나도 없으면 null(→ 컬럼 null 저장). DB 조회값 재검증에도 재사용.
 function validateAnnotations(input: unknown): ShareAnnotations | null {
   if (!input || typeof input !== 'object') return null
-  const obj = input as { keyPoints?: unknown; timeline?: unknown }
+  const obj = input as { keyPoints?: unknown; summary?: unknown; timeline?: unknown }
 
   const kp: ShareAnnotations['keyPoints'] = []
   if (Array.isArray(obj.keyPoints)) {
     for (const it of obj.keyPoints) {
       if (!it || typeof it !== 'object') continue
-      const o = it as { i?: unknown; text?: unknown; note?: unknown }
+      const o = it as { i?: unknown; text?: unknown }
       if (typeof o.i !== 'number' || !Number.isFinite(o.i)) continue
       if (typeof o.text !== 'string') continue
-      const item: ShareAnnotations['keyPoints'][number] = { i: Math.trunc(o.i), text: o.text }
-      if (typeof o.note === 'string' && o.note.trim()) item.note = o.note.trim().slice(0, 100)
-      kp.push(item)
+      kp.push({ i: Math.trunc(o.i), text: o.text })
+    }
+  }
+
+  const sum: ShareAnnotations['summary'] = []
+  if (Array.isArray(obj.summary)) {
+    for (const it of obj.summary) {
+      if (!it || typeof it !== 'object') continue
+      const o = it as { text?: unknown }
+      if (typeof o.text !== 'string' || !o.text.trim()) continue
+      sum.push({ text: o.text })
     }
   }
 
@@ -56,20 +67,21 @@ function validateAnnotations(input: unknown): ShareAnnotations | null {
   if (Array.isArray(obj.timeline)) {
     for (const it of obj.timeline) {
       if (!it || typeof it !== 'object') continue
-      const o = it as { time?: unknown; text?: unknown; note?: unknown }
+      const o = it as { time?: unknown; text?: unknown }
       if (typeof o.time !== 'string' || !o.time.trim()) continue
       if (typeof o.text !== 'string') continue
-      const item: ShareAnnotations['timeline'][number] = { time: o.time, text: o.text }
-      if (typeof o.note === 'string' && o.note.trim()) item.note = o.note.trim().slice(0, 100)
-      tl.push(item)
+      tl.push({ time: o.time, text: o.text })
     }
   }
 
-  // 항목 총합 20개 제한 (keyPoints 우선, 남는 슬롯만큼 timeline).
+  // 세 배열 합계 20개 제한 (keyPoints → summary → timeline 순으로 슬롯 배분).
   const limitedKp = kp.slice(0, 20)
-  const limitedTl = tl.slice(0, Math.max(0, 20 - limitedKp.length))
-  if (limitedKp.length === 0 && limitedTl.length === 0) return null
-  return { keyPoints: limitedKp, timeline: limitedTl }
+  let remaining = 20 - limitedKp.length
+  const limitedSum = sum.slice(0, Math.max(0, remaining))
+  remaining -= limitedSum.length
+  const limitedTl = tl.slice(0, Math.max(0, remaining))
+  if (limitedKp.length === 0 && limitedSum.length === 0 && limitedTl.length === 0) return null
+  return { keyPoints: limitedKp, summary: limitedSum, timeline: limitedTl }
 }
 
 // 공유 레코드 생성 → token 반환. 실패 시 throw (호출부 API 라우트에서 500 처리).
