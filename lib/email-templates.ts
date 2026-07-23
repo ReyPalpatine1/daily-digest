@@ -14,6 +14,7 @@ export type EmailDigestItem = {
   emoji: string
   video: { title: string; url: string; publishedAt: string }
   summary: {
+    tldr?: string // 결론 한 줄(역피라미드 최상단, 라벨 없이 강조). 과거 데이터엔 없을 수 있어 옵셔널.
     summary: string
     keyPoints: string[]
     timeline: { time: string; content: string }[]
@@ -152,9 +153,8 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       <div style="font-size:12px;color:#A1A1AA;line-height:1.7;margin-bottom:12px;">
         ${escapeHtml(et(locale, failKey))}
       </div>` : `
-      <div style="font-size:13px;color:#525252;line-height:1.7;margin-bottom:12px;">
-        ${escapeHtml(item.summary.summary)}
-      </div>`}
+      ${item.summary.tldr ? `
+      <div style="font-size:14px;font-weight:600;color:#0A0A0A;line-height:1.6;margin-bottom:12px;">${escapeHtml(item.summary.tldr)}</div>` : ''}
       ${kp.length > 0 ? `
         <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">
           <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.keyPoints')}</div>
@@ -162,6 +162,10 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
             ${kp.map(p => `<li style="font-size:12px;color:#525252;line-height:1.7;">${escapeHtml(p)}</li>`).join('')}
           </ul>
         </div>` : ''}
+      <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.detailSummary')}</div>
+      <div style="font-size:13px;color:#525252;line-height:1.7;margin-bottom:12px;">
+        ${escapeHtml(item.summary.summary)}
+      </div>
       ${tl.length > 0 ? `
         <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">
           <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.timeline')}</div>
@@ -178,7 +182,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
               ${inner}
             </div>`
           }).join('')}
-        </div>` : ''}
+        </div>` : ''}`}
       <a href="${escapeHtml(item.video.url)}" style="display:inline-block;padding:7px 14px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
         ${et(locale, 'digest.watchVideo')}
       </a>

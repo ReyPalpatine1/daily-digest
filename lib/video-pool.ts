@@ -557,6 +557,7 @@ export type PoolVideo = {
 export type PoolSummary = {
   video_id: string
   locale: string
+  tldr?: string | null
   summary: string | null
   key_points: string[] | null
   timeline: { time: string; content: string }[] | null
@@ -598,7 +599,7 @@ export async function getSummariesFromPool(videoIds: string[], locale: Locale = 
   if (!videoIds.length) return map
   const { data } = await supabase
     .from('video_summaries')
-    .select('video_id, locale, summary, key_points, timeline, model, summary_basis')
+    .select('video_id, locale, tldr, summary, key_points, timeline, model, summary_basis')
     .in('video_id', videoIds)
     .eq('locale', locale)
   for (const s of (data ?? []) as PoolSummary[]) map.set(s.video_id, s)

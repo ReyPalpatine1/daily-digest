@@ -250,6 +250,8 @@ async function runDigest(
           url,
         },
         summary: {
+          // 역피라미드 최상단 한 줄(이메일 전용). 요약 숨김(pro_only) 시 미노출, null→undefined 정규화.
+          tldr: (!withheld && typeof s?.tldr === 'string') ? s.tldr : undefined,
           // 요약 없음·pro_only: 사유별 구분 문구 (텔레그램 등 요약 텍스트를 그대로 쓰는 채널 호환)
           summary: (withheld ? null : s?.summary) ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
           // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
