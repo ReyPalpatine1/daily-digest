@@ -225,12 +225,20 @@ export default function ShareSheet({ videoId, keyPoints, summary, timeline, t, o
         </div>
 
         {/* (b) 메모 남기기 */}
-        <div>
+        <div style={{ marginBottom: -3 }}>
           <div style={{
-            fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
-            color: 'var(--text-tertiary)', marginBottom: 3,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 3,
           }}>
-            메모 남기기
+            <div style={{
+              fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
+              color: 'var(--text-tertiary)',
+            }}>
+              메모 남기기
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+              {comment.length}/100
+            </div>
           </div>
           <textarea
             value={comment}
@@ -246,9 +254,6 @@ export default function ShareSheet({ videoId, keyPoints, summary, timeline, t, o
               fontFamily: 'inherit', outline: 'none',
             }}
           />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', marginTop: 3 }}>
-            {comment.length}/100
-          </div>
         </div>
 
         {/* (c) 안내 + (d) 접이식 섹션 3개 */}
@@ -328,7 +333,7 @@ export default function ShareSheet({ videoId, keyPoints, summary, timeline, t, o
               fontSize: 13.5, fontWeight: 600, cursor: creating ? 'default' : 'pointer',
               fontFamily: 'inherit', opacity: creating ? 0.6 : 1,
             }}>
-            <Link size={15} /> {creating ? '생성 중…' : '링크 만들고 복사하기'}
+            <Link size={15} /> {creating ? '생성 중…' : '공유하기'}
           </button>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
