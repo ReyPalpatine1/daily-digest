@@ -225,10 +225,25 @@ export default async function SharePage({ params }: PageProps) {
             </div>
           )}
 
-          {/* (d) 요약 본문 */}
+          {/* 역피라미드(이메일과 통일): tldr → 핵심 포인트 → 상세 요약 → 타임라인 */}
+          {/* (d) 핵심 포인트 */}
+          {summary.keyPoints.length > 0 && (
+            <div style={cardStyle}>
+              <div style={sectionLabelStyle}>핵심 포인트</div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {summary.keyPoints.map((p, i) => (
+                  <li key={i} style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* (e) 상세 요약 본문 */}
           {summary.summary && (
             <div style={cardStyle}>
-              <div style={sectionLabelStyle}>요약</div>
+              <div style={sectionLabelStyle}>상세 요약</div>
               {/* 마커('## ' 소제목, 빈 줄 문단) 해석 — 마커 없는 기존 데이터는 문단 1개 */}
               <div style={{
                 fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.75,
@@ -247,20 +262,6 @@ export default async function SharePage({ params }: PageProps) {
                   )
                 )}
               </div>
-            </div>
-          )}
-
-          {/* (e) 핵심 포인트 */}
-          {summary.keyPoints.length > 0 && (
-            <div style={cardStyle}>
-              <div style={sectionLabelStyle}>핵심 포인트</div>
-              <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {summary.keyPoints.map((p, i) => (
-                  <li key={i} style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    {p}
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
 

@@ -134,14 +134,19 @@ function itemLines(item: DigestItem, lc: EmailLocale): string[] {
   const lines: string[] = []
   lines.push(`<b>${escapeHtml(item.emoji)} ${escapeHtml(item.channel)}</b> · ${escapeHtml(item.category)}`)
   lines.push(`<a href="${escapeHtml(item.video.url)}">${escapeHtml(item.video.title)}</a>`)
-  if (item.summary.summary) {
-    lines.push(escapeHtml(item.summary.summary))
+  // 역피라미드(이메일과 통일): tldr(강조) → keyPoints(핵심) → summary(상세 요약) → timeline
+  if (item.summary.tldr) {
+    lines.push(`<b>${escapeHtml(item.summary.tldr)}</b>`)
   }
   if (item.summary.keyPoints?.length) {
     lines.push(`<b>${et(lc, 'breaking.keyPoints')}</b>`)
     for (const p of item.summary.keyPoints) {
       lines.push(`• ${escapeHtml(p)}`)
     }
+  }
+  if (item.summary.summary) {
+    lines.push(`<b>${et(lc, 'digest.detailSummary')}</b>`)
+    lines.push(escapeHtml(item.summary.summary))
   }
   // timeline: 줄 전체(시각+설명)가 해당 지점 딥링크 (다이제스트 전용 — 속보는 별도 조립이라 미적용).
   // 텔레그램은 CSS 미지원이라 줄 전체가 링크색으로 표시된다(챕터 목록 관행).

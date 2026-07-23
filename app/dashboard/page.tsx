@@ -61,6 +61,10 @@ const channelIcons: Record<ChannelId, typeof Mail> = {
   line: MessageSquare,
 }
 
+// 열람기록 표시용 확장 타입. digests 테이블엔 tldr 컬럼이 없어(비어 있음),
+// 로드 시 video_summaries.tldr(locale 매칭)을 병합해 역피라미드 최상단에 노출한다.
+type HistoryDigest = Digest & { tldr?: string | null }
+
 // 기록 항목의 요약 상태 라벨 키 (fail_reason 우선, 없으면 summary_basis 기반).
 // 매칭 없으면 null → 라벨 생략 (과거 데이터 호환: fail_reason/summary_basis 없는 행).
 function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
@@ -85,7 +89,7 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
-  const [digests, setDigests] = useState<Digest[]>([])
+  const [digests, setDigests] = useState<HistoryDigest[]>([])
   const [activeTab, setActiveTab] = useState<'channels' | 'schedule' | 'history'>('channels')
   // PRO 전용 채널 클릭 시 잠깐 뜨는 안내 문구(결제창 이동 없음)
   const [channelNotice, setChannelNotice] = useState<string | null>(null)
@@ -408,7 +412,32 @@ export default function Dashboard() {
     setCategories(sortedCats)
     setChannels(sortedChs)
     setSettings(sets)
-    setDigests(digs ?? [])
+
+    // digests 테이블엔 tldr이 없으므로 공유 풀(video_summaries)에서 tldr을 병합한다.
+    // 매칭 locale은 요약이 생성된 언어(=settings.locale)로 잡아 표시 요약과 언어를 일치시킨다.
+    // 실패·미존재 시 tldr은 undefined로 두어 기존 동작 유지(역피라미드에서 자동 생략).
+    const digestList = (digs ?? []) as HistoryDigest[]
+    const videoIds = Array.from(new Set(digestList.map(d => d.video_id).filter(Boolean)))
+    if (videoIds.length) {
+      const digestLocale =
+        sets?.locale === 'en' || sets?.locale === 'zh' || sets?.locale === 'ja' ? sets.locale : 'ko'
+      const { data: sums } = await supabase
+        .from('video_summaries')
+        .select('video_id, tldr')
+        .in('video_id', videoIds)
+        .eq('locale', digestLocale)
+      if (sums?.length) {
+        const tldrByVideo = new Map<string, string>()
+        for (const s of sums) {
+          if (s?.tldr) tldrByVideo.set(s.video_id, s.tldr)
+        }
+        for (const d of digestList) {
+          const tl = tldrByVideo.get(d.video_id)
+          if (tl) d.tldr = tl
+        }
+      }
+    }
+    setDigests(digestList)
   }
 
   // 프로필만 재로드 (관리자 토글로 plan 변경 후 isPro 갱신용)
@@ -2288,25 +2317,14 @@ export default function Dashboard() {
                                 )
                               })()}
 
-                              {/* 실패·대기·라이브 항목은 자리표시 문구 대신 위 라벨이 사유를 설명 */}
-                              {/* summary는 마커('## ' 소제목, 빈 줄 문단) 해석 렌더 — 마커 없는 기존 데이터는 문단 1개 */}
-                              {!digest.fail_reason && (
+                              {/* 역피라미드(이메일과 통일): tldr(강조·라벨없음) → 핵심 → 상세 요약 → timeline */}
+                              {/* 실패·대기·라이브 항목은 tldr/요약이 없어 아래 블록이 모두 생략되고 위 라벨이 사유를 설명 */}
+                              {!digest.fail_reason && digest.tldr && (
                                 <div style={{
-                                  fontSize: 14, color: 'var(--text-secondary)',
-                                  lineHeight: 1.7, marginBottom: 14,
+                                  fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
+                                  lineHeight: 1.6, marginBottom: 10,
                                 }}>
-                                  {parseSummaryBlocks(digest.summary || '').map((b, i) =>
-                                    b.type === 'heading' ? (
-                                      <div key={i} style={{
-                                        fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-                                        marginTop: i === 0 ? 0 : 10, marginBottom: 4,
-                                      }}>
-                                        {b.text}
-                                      </div>
-                                    ) : (
-                                      <div key={i} style={{ marginBottom: 10 }}>{b.text}</div>
-                                    )
-                                  )}
+                                  {digest.tldr}
                                 </div>
                               )}
 
@@ -2326,6 +2344,35 @@ export default function Dashboard() {
                                       }}>{p}</li>
                                     ))}
                                   </ul>
+                                </div>
+                              )}
+
+                              {/* summary는 마커('## ' 소제목, 빈 줄 문단) 해석 렌더 — 마커 없는 기존 데이터는 문단 1개 */}
+                              {!digest.fail_reason && (
+                                <div style={{ marginBottom: 14 }}>
+                                  <div style={{
+                                    fontSize: 11, color: 'var(--text-tertiary)',
+                                    fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
+                                  }}>
+                                    {t('history.detailSummary')}
+                                  </div>
+                                  <div style={{
+                                    fontSize: 14, color: 'var(--text-secondary)',
+                                    lineHeight: 1.7,
+                                  }}>
+                                    {parseSummaryBlocks(digest.summary || '').map((b, i) =>
+                                      b.type === 'heading' ? (
+                                        <div key={i} style={{
+                                          fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+                                          marginTop: i === 0 ? 0 : 10, marginBottom: 4,
+                                        }}>
+                                          {b.text}
+                                        </div>
+                                      ) : (
+                                        <div key={i} style={{ marginBottom: 10 }}>{b.text}</div>
+                                      )
+                                    )}
+                                  </div>
                                 </div>
                               )}
 
