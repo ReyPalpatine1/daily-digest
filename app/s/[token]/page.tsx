@@ -153,7 +153,7 @@ export default async function SharePage({ params }: PageProps) {
     return (
       <NoticePage
         title="이 공유는 만료되었습니다"
-        desc="공유 링크는 생성 후 30일간 유효해요."
+        desc="공유 링크는 생성 후 14일간 유효해요."
       />
     )
   }
