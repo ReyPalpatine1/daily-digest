@@ -26,18 +26,70 @@ export function generateShareToken(): string {
   return Array.from(bytes).map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 12)
 }
 
+// 공유 항목 강조/메모 데이터. keyPoints[i]=핵심포인트 배열 인덱스, timeline[time]=타임라인 시각(식별자).
+// text는 표시·검증용 원문 보존, note는 선택(각 100자 truncate). 항목 총합 20개 제한.
+export type ShareAnnotations = {
+  keyPoints: { i: number; text: string; note?: string }[]
+  timeline: { time: string; text: string; note?: string }[]
+}
+
+// 클라이언트가 보낸 annotations를 방어적으로 검증(필드 타입 확인, note 100자 truncate, 총 20개 제한).
+// 유효 항목이 하나도 없으면 null(→ 컬럼 null 저장). DB 조회값 재검증에도 재사용.
+function validateAnnotations(input: unknown): ShareAnnotations | null {
+  if (!input || typeof input !== 'object') return null
+  const obj = input as { keyPoints?: unknown; timeline?: unknown }
+
+  const kp: ShareAnnotations['keyPoints'] = []
+  if (Array.isArray(obj.keyPoints)) {
+    for (const it of obj.keyPoints) {
+      if (!it || typeof it !== 'object') continue
+      const o = it as { i?: unknown; text?: unknown; note?: unknown }
+      if (typeof o.i !== 'number' || !Number.isFinite(o.i)) continue
+      if (typeof o.text !== 'string') continue
+      const item: ShareAnnotations['keyPoints'][number] = { i: Math.trunc(o.i), text: o.text }
+      if (typeof o.note === 'string' && o.note.trim()) item.note = o.note.trim().slice(0, 100)
+      kp.push(item)
+    }
+  }
+
+  const tl: ShareAnnotations['timeline'] = []
+  if (Array.isArray(obj.timeline)) {
+    for (const it of obj.timeline) {
+      if (!it || typeof it !== 'object') continue
+      const o = it as { time?: unknown; text?: unknown; note?: unknown }
+      if (typeof o.time !== 'string' || !o.time.trim()) continue
+      if (typeof o.text !== 'string') continue
+      const item: ShareAnnotations['timeline'][number] = { time: o.time, text: o.text }
+      if (typeof o.note === 'string' && o.note.trim()) item.note = o.note.trim().slice(0, 100)
+      tl.push(item)
+    }
+  }
+
+  // 항목 총합 20개 제한 (keyPoints 우선, 남는 슬롯만큼 timeline).
+  const limitedKp = kp.slice(0, 20)
+  const limitedTl = tl.slice(0, Math.max(0, 20 - limitedKp.length))
+  if (limitedKp.length === 0 && limitedTl.length === 0) return null
+  return { keyPoints: limitedKp, timeline: limitedTl }
+}
+
 // 공유 레코드 생성 → token 반환. 실패 시 throw (호출부 API 라우트에서 500 처리).
 export async function createShare(params: {
   videoId: string
   sharedBy: string
   comment?: string
   highlightTime?: string
+  annotations?: unknown
   showName: boolean
 }): Promise<string> {
-  // comment: 100자 truncate, 빈 문자열은 null. highlightTime: "m:ss" 형식만 허용, 그 외 null.
+  // comment: 100자 truncate, 빈 문자열은 null.
   const comment = params.comment?.trim() ? params.comment.trim().slice(0, 100) : null
-  const highlightTime =
-    params.highlightTime && /^\d{1,2}:\d{2}$/.test(params.highlightTime) ? params.highlightTime : null
+  const annotations = validateAnnotations(params.annotations)
+  // 하위 호환: 기존 공유 페이지가 highlight_time으로 첫 재생 지점을 잡으므로,
+  // timeline 강조 첫 항목의 time을 highlight_time에도 함께 저장한다.
+  // timeline 강조가 없으면 구 클라이언트의 highlightTime 파라미터("m:ss")로 폴백, 그것도 없으면 null.
+  const highlightTime = annotations && annotations.timeline.length > 0
+    ? annotations.timeline[0].time
+    : (params.highlightTime && /^\d{1,2}:\d{2}$/.test(params.highlightTime) ? params.highlightTime : null)
 
   const supabase = getSupabase()
   // 토큰 충돌(PK 중복) 확률은 무시 가능 수준이지만, 만약 충돌하면 재생성해 1회만 재시도.
@@ -49,6 +101,7 @@ export async function createShare(params: {
       shared_by: params.sharedBy,
       comment,
       highlight_time: highlightTime,
+      annotations,
       show_name: params.showName,
       // expires_at은 테이블 기본값 사용
     })
@@ -66,6 +119,7 @@ export type ShareData = {
   expired: boolean
   comment: string | null
   highlightTime: string | null
+  annotations: ShareAnnotations | null
   showName: boolean
   sharerName: string | null // show_name=false거나 프로필 조회 실패 시 null(익명 처리)
   video: {
@@ -93,7 +147,7 @@ export async function getShareByToken(
     const supabase = getSupabase()
     const { data: shareRow } = await supabase
       .from('shared_summaries')
-      .select('token, video_id, shared_by, comment, highlight_time, show_name, expires_at')
+      .select('token, video_id, shared_by, comment, highlight_time, annotations, show_name, expires_at')
       .eq('token', token)
       .maybeSingle()
     if (!shareRow) return null
@@ -103,6 +157,7 @@ export async function getShareByToken(
       shared_by: string
       comment: string | null
       highlight_time: string | null
+      annotations: unknown
       show_name: boolean
       expires_at: string | null
     }
@@ -110,7 +165,7 @@ export async function getShareByToken(
     if (share.expires_at && new Date(share.expires_at) <= new Date()) {
       return {
         expired: true,
-        comment: null, highlightTime: null, showName: false,
+        comment: null, highlightTime: null, annotations: null, showName: false,
         sharerName: null, video: null, summary: null,
       }
     }
@@ -193,6 +248,7 @@ export async function getShareByToken(
       expired: false,
       comment: share.comment,
       highlightTime: share.highlight_time,
+      annotations: validateAnnotations(share.annotations),
       showName: share.show_name,
       sharerName,
       video: videoRow

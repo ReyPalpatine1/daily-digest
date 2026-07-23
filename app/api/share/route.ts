@@ -42,6 +42,7 @@ export async function POST(req: Request) {
     videoId?: string
     comment?: string
     highlightTime?: string
+    annotations?: unknown
     showName?: boolean
   }
 
@@ -56,8 +57,11 @@ export async function POST(req: Request) {
       videoId,
       sharedBy: user.id,
       comment: typeof body.comment === 'string' ? body.comment : undefined,
+      // 구 클라이언트 하위 호환용(신규 클라이언트는 annotations로 전달). 검증은 share.ts가 담당.
       highlightTime: typeof body.highlightTime === 'string' ? body.highlightTime : undefined,
-      showName: body.showName !== false, // 기본 true
+      annotations: body.annotations,
+      // showName은 더 이상 클라이언트에서 오지 않으므로 true로 고정(컬럼 유지, 미사용).
+      showName: true,
     })
     return NextResponse.json({ token, url: `${appUrl}/s/${token}` })
   } catch (e) {
