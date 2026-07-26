@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { X, Copy, Check, MessageCircle, Share2, Link, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
-import { splitSentences, splitBoldSegments } from '@/lib/summary-format'
+import { splitBoldSegments } from '@/lib/summary-format'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -10,7 +10,7 @@ type Props = {
   videoId: string
   videoTitle: string // 현재 미사용(호출부 유지용으로 시그니처에 잔존)
   keyPoints: string[]
-  summary: string
+  summary: string // 요약 섹션 제거로 미사용(호출부 유지용으로 시그니처에 잔존)
   timeline: { time: string; content: string }[]
   userName: string // 이름 표시 토글 제거로 미사용(시그니처만 유지)
   t: TFn
@@ -91,17 +91,15 @@ function CollapsibleSection(props: {
   )
 }
 
-// 요약 공유 시트 — 접이식 통합 구조. 상단 메모 1개 + 핵심 포인트·요약·타임라인 3개 접이식 섹션.
-// 각 섹션 항목/문장 클릭으로 다중 강조. 링크 생성 후에도 (a)~(d) 내용은 유지하고 하단 버튼만 전환.
+// 요약 공유 시트 — 접이식 통합 구조. 상단 메모 1개 + 핵심 포인트·타임라인 2개 접이식 섹션.
+// 상세 요약은 공유 페이지에 표시하지 않으므로 강조 대상에서 제외(요약 섹션 없음).
+// 각 섹션 항목 클릭으로 다중 강조. 링크 생성 후에도 (a)~(d) 내용은 유지하고 하단 버튼만 전환.
 // ※ 문구는 우선 한국어 하드코딩(i18n 키 추가는 백로그 — 수정 파일 범위 제한).
-export default function ShareSheet({ videoId, keyPoints, summary, timeline, t, onClose }: Props) {
-  const sentences = useMemo(() => splitSentences(summary), [summary])
-
+export default function ShareSheet({ videoId, keyPoints, timeline, t, onClose }: Props) {
   const [comment, setComment] = useState('')
   const [kpSel, setKpSel] = useState<Set<number>>(new Set())   // 핵심 포인트 인덱스
-  const [sumSel, setSumSel] = useState<Set<string>>(new Set()) // 요약 문장 원문
   const [tlSel, setTlSel] = useState<Set<string>>(new Set())   // 타임라인 시각(time)
-  const [open, setOpen] = useState<{ kp: boolean; sum: boolean; tl: boolean }>({ kp: false, sum: false, tl: false })
+  const [open, setOpen] = useState<{ kp: boolean; tl: boolean }>({ kp: false, tl: false })
   const [creating, setCreating] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -131,13 +129,11 @@ export default function ShareSheet({ videoId, keyPoints, summary, timeline, t, o
       const annKeyPoints = keyPoints
         .map((text, i) => ({ i, text }))
         .filter((x) => kpSel.has(x.i))
-      const annSummary = sentences
-        .filter((s) => sumSel.has(s))
-        .map((text) => ({ text }))
       const annTimeline = timeline
         .filter((x) => tlSel.has(x.time))
         .map((x) => ({ time: x.time, text: x.content }))
-      const annotations = { keyPoints: annKeyPoints, summary: annSummary, timeline: annTimeline }
+      // summary 강조는 폐지 — 구조 유지를 위해 항상 빈 배열로 전송(lib/share.ts 검증 그대로)
+      const annotations = { keyPoints: annKeyPoints, summary: [], timeline: annTimeline }
 
       const res = await fetch('/api/share', {
         method: 'POST',
@@ -180,7 +176,7 @@ export default function ShareSheet({ videoId, keyPoints, summary, timeline, t, o
     }
   }
 
-  const hasSelectable = keyPoints.length > 0 || sentences.length > 0 || timeline.length > 0
+  const hasSelectable = keyPoints.length > 0 || timeline.length > 0
 
   return (
     <div
@@ -277,23 +273,6 @@ export default function ShareSheet({ videoId, keyPoints, summary, timeline, t, o
                     text={text}
                     highlighted={kpSel.has(i)}
                     onToggle={() => toggleNum(kpSel, setKpSel, i)}
-                  />
-                ))}
-              </CollapsibleSection>
-            )}
-
-            {sentences.length > 0 && (
-              <CollapsibleSection
-                label="요약"
-                count={sumSel.size}
-                open={open.sum}
-                onToggle={() => setOpen((o) => ({ ...o, sum: !o.sum }))}>
-                {sentences.map((s, i) => (
-                  <AnnRow
-                    key={i}
-                    text={s}
-                    highlighted={sumSel.has(s)}
-                    onToggle={() => toggleStr(sumSel, setSumSel, s)}
                   />
                 ))}
               </CollapsibleSection>

@@ -84,6 +84,19 @@ export function splitBoldSegments(text: string): { bold: boolean; text: string }
   return out.length ? out : [{ bold: false, text: s }]
 }
 
+// 핵심 포인트 한 줄을 "앵커 — 설명" 형태로 분리 (4채널 공통 B안 디자인용).
+// - 첫 번째 '—'(em dash) 기준으로 나누고 앞/뒤를 각각 trim (앞뒤 공백 유무 무관).
+// - '—'가 없거나 앞부분이 비어 있으면 prefix=null → 호출부는 rest만 그대로 출력(형식 어긋난 항목 폴백).
+export function splitKeyPointPrefix(text: string): { prefix: string | null; rest: string } {
+  const s = String(text ?? '')
+  const i = s.indexOf('—')
+  if (i < 0) return { prefix: null, rest: s }
+  const prefix = s.slice(0, i).trim()
+  const rest = s.slice(i + 1).trim()
+  if (!prefix) return { prefix: null, rest: s }
+  return { prefix, rest }
+}
+
 // 이미 HTML 이스케이프된 문자열의 `**볼드**`를 <strong>/<b>로 변환 — 이메일/텔레그램(HTML)용.
 // 마커 `**`는 이스케이프에 영향받지 않으므로 반드시 이스케이프 후 호출할 것.
 export function boldMarkersToHtml(escaped: string, tag: 'strong' | 'b' = 'strong'): string {

@@ -6,7 +6,7 @@ import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
 import { et, type EmailLocale } from './i18n/email-translations'
 import { youtubeDeepLink } from '@/lib/video-time'
-import { boldMarkersToHtml } from '@/lib/summary-format'
+import { boldMarkersToHtml, splitKeyPointPrefix } from '@/lib/summary-format'
 
 // 발송 결과 로그용 (서버 전용 service client) — mailer 를 건드리지 않기 위해 별도 lazy 생성.
 let _supabase: SupabaseClient | null = null
@@ -71,6 +71,14 @@ const dateLocaleByEmailLocale: Record<EmailLocale, string> = {
 // 텔레그램 HTML parse_mode 에서 본문에 들어갈 동적 문자열 이스케이프.
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// 핵심 포인트 한 줄 — "앵커 — 설명"에서 앵커만 <b>로 강조(4채널 공통).
+// '—'가 없는 항목은 분리 없이 그대로 출력.
+function keyPointLine(point: string): string {
+  const { prefix, rest } = splitKeyPointPrefix(point)
+  const restHtml = escapeHtml(rest)
+  return prefix ? `• <b>${escapeHtml(prefix)}</b> — ${restHtml}` : `• ${restHtml}`
 }
 
 // 단일 메시지 발송. TELEGRAM_BOT_TOKEN 미설정 시 명확한 에러로 실패(우회 발송 안 함).
@@ -142,7 +150,7 @@ function itemLines(item: DigestItem, lc: EmailLocale): string[] {
   if (item.summary.keyPoints?.length) {
     lines.push(`<b>${et(lc, 'breaking.keyPoints')}</b>`)
     for (const p of item.summary.keyPoints) {
-      lines.push(`• ${escapeHtml(p)}`)
+      lines.push(keyPointLine(p))
     }
   }
   if (item.summary.summary) {
@@ -233,7 +241,7 @@ export async function sendBreakingTelegram(
   if (item.summary.keyPoints?.length) {
     lines.push(`<b>${et(lc, 'breaking.keyPoints')}</b>`)
     for (const p of item.summary.keyPoints) {
-      lines.push(`• ${escapeHtml(p)}`)
+      lines.push(keyPointLine(p))
     }
   }
 

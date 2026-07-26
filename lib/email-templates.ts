@@ -5,7 +5,7 @@ import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
 import { youtubeDeepLink } from '@/lib/video-time'
 import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
-import { boldMarkersToHtml } from '@/lib/summary-format'
+import { boldMarkersToHtml, splitKeyPointPrefix } from '@/lib/summary-format'
 
 export type { EmailLocale }
 
@@ -65,6 +65,20 @@ function renderSummaryHtml(summary: string): string {
   return paras
     .map((p, i) => `<div${i < paras.length - 1 ? ' style="margin-bottom:8px;"' : ''}>${boldMarkersToHtml(escapeHtml(p), 'strong')}</div>`)
     .join('')
+}
+
+// 요약 섹션 라벨 공통 스타일(핵심 포인트·상세 요약·타임라인 — 4채널 통일).
+const SECTION_LABEL_STYLE = 'font-size:11px;color:#8a8a8e;font-weight:600;letter-spacing:0.6px;margin-bottom:9px;'
+
+// 핵심 포인트 한 줄 — 불릿/박스 없이 "앵커 — 설명", 앵커만 세미볼드(4채널 공통 B안).
+// 이스케이프 먼저 → 볼드 마커 변환 순서 준수. '—'가 없는 항목은 분리 없이 그대로 렌더.
+function renderKeyPointHtml(point: string): string {
+  const { prefix, rest } = splitKeyPointPrefix(point)
+  const restHtml = boldMarkersToHtml(escapeHtml(rest), 'strong')
+  const prefixHtml = prefix
+    ? `<span style="color:#1a1a1c;font-weight:600;">${boldMarkersToHtml(escapeHtml(prefix), 'strong')} — </span>`
+    : ''
+  return `<div style="font-size:13px;color:#525252;line-height:1.6;margin-bottom:9px;">${prefixHtml}${restHtml}</div>`
 }
 
 // JSONB에서 읽은 값이 배열이 아닐 수 있어(문자열/객체/null) .map 호출 전 안전 변환.
@@ -158,7 +172,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         <a href="${escapeHtml(item.video.url)}" style="color:#0A0A0A;text-decoration:none;">${escapeHtml(item.video.title)}</a>
       </div>
       <div style="font-size:11px;color:#A1A1AA;margin-bottom:12px;">
-        🕐 ${escapeHtml(formatTime(item.video.publishedAt, locale))} ${et(locale, 'digest.uploadedAt')}
+        ${escapeHtml(formatTime(item.video.publishedAt, locale))} ${et(locale, 'digest.uploadedAt')}
       </div>
       ${failKey ? `
       <div style="font-size:12px;color:#A1A1AA;line-height:1.7;margin-bottom:12px;">
@@ -167,19 +181,17 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       ${item.summary.tldr ? `
       <div style="font-size:14px;font-weight:600;color:#0A0A0A;line-height:1.6;margin-bottom:12px;">${escapeHtml(item.summary.tldr)}</div>` : ''}
       ${kp.length > 0 ? `
-        <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">
-          <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.keyPoints')}</div>
-          <ul style="margin:0;padding-left:16px;">
-            ${kp.map(p => `<li style="font-size:12px;color:#525252;line-height:1.7;">${escapeHtml(p)}</li>`).join('')}
-          </ul>
+        <div style="margin-bottom:12px;">
+          <div style="${SECTION_LABEL_STYLE}">${et(locale, 'digest.keyPoints')}</div>
+          ${kp.map(p => renderKeyPointHtml(p)).join('')}
         </div>` : ''}
-      <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.detailSummary')}</div>
+      <div style="${SECTION_LABEL_STYLE}">${et(locale, 'digest.detailSummary')}</div>
       <div style="font-size:13px;color:#525252;line-height:1.7;margin-bottom:12px;">
         ${renderSummaryHtml(item.summary.summary)}
       </div>
       ${tl.length > 0 ? `
-        <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">
-          <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.timeline')}</div>
+        <div style="margin-bottom:12px;">
+          <div style="${SECTION_LABEL_STYLE}">${et(locale, 'digest.timeline')}</div>
           ${tl.map(tt => {
             // 챕터 목록 관행: 줄 전체(시각+설명)가 해당 지점 딥링크.
             // url 없으면 링크 없이 텍스트만(폴백). 시각 파싱 실패 시 youtubeDeepLink가 원본 URL 반환.

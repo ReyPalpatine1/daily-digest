@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { MessageSquareQuote, ShieldOff, Sparkles } from 'lucide-react'
 import { getShareByToken } from '@/lib/share'
-import { splitSentences, splitBoldSegments } from '@/lib/summary-format'
+import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import ShareVideo from '@/components/ShareVideo'
 
 // 공개 공유 페이지 — 로그인 불필요, 매 요청 조회 (토큰 만료/조회수 반영)
@@ -62,8 +62,8 @@ const cardStyle: CSSProperties = {
 
 const sectionLabelStyle: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6,
-  fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
-  color: 'var(--text-tertiary)', marginBottom: 10,
+  fontSize: 11, fontWeight: 600, letterSpacing: 0.6,
+  color: 'var(--text-muted)', marginBottom: 10,
 }
 
 // 공유자가 강조한 항목(핵심 포인트·요약 문장·타임라인 공통) 하이라이트 스타일
@@ -221,8 +221,6 @@ export default async function SharePage({ params }: PageProps) {
       else if (a.i >= 0 && a.i < summary.keyPoints.length) activeKpIdx.add(a.i)
     }
   }
-  // 요약 문장 강조 — 원문(text) 일치.
-  const activeSumTexts = new Set<string>(ann ? ann.summary.map(s => s.text) : [])
   // 타임라인 강조 시각 — annotations 있으면 그 time, 없으면(구버전) highlight_time 폴백.
   const activeTlTimes = new Set<string>()
   if (ann) {
@@ -283,55 +281,38 @@ export default async function SharePage({ params }: PageProps) {
             </div>
           )}
 
-          {/* 역피라미드(이메일과 통일): tldr → 핵심 포인트 → 상세 요약 → 임베드 → 타임라인 */}
-          {/* (d) 핵심 포인트 — 강조된 항목만 하이라이트 */}
+          {/* 역피라미드(이메일과 통일): tldr → 핵심 포인트 → 임베드 → 타임라인 */}
+          {/* 상세 요약은 공유 페이지에서 표시하지 않는다(이메일 전용) — 데이터는 계속 저장됨 */}
+          {/* (d) 핵심 포인트 — 불릿 없이 "앵커 — 설명" 한 줄, 앵커만 세미볼드. 강조된 항목만 하이라이트 */}
           {summary.keyPoints.length > 0 && (
             <div style={cardStyle}>
               <div style={sectionLabelStyle}>핵심 포인트</div>
-              <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                 {summary.keyPoints.map((p, i) => {
                   const active = activeKpIdx.has(i)
+                  const { prefix, rest } = splitKeyPointPrefix(p)
                   return (
-                    <li key={i} style={{
+                    <div key={i} style={{
                       fontSize: 13.5, lineHeight: 1.6,
                       color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
                       ...(active ? highlightStyle : {}),
                     }}>
-                      {p}
-                    </li>
+                      {prefix && (
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                          {splitBoldSegments(prefix).map((seg, bi) => (
+                            <span key={bi}>{seg.text}</span>
+                          ))}
+                          {' — '}
+                        </span>
+                      )}
+                      {splitBoldSegments(rest).map((seg, bi) =>
+                        seg.bold
+                          ? <strong key={bi} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
+                          : <span key={bi}>{seg.text}</span>
+                      )}
+                    </div>
                   )
                 })}
-              </ul>
-            </div>
-          )}
-
-          {/* (e) 상세 요약 본문 — 문장 단위 렌더, 강조 문장만 하이라이트 (문단은 여백으로 유지) */}
-          {summary.summary && (
-            <div style={cardStyle}>
-              <div style={sectionLabelStyle}>상세 요약</div>
-              <div style={{
-                fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.75,
-                wordBreak: 'break-word',
-              }}>
-                {summary.summary.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean).map((para, pi, arr) => (
-                  <div key={pi} style={{
-                    display: 'flex', flexDirection: 'column', gap: 4,
-                    marginBottom: pi < arr.length - 1 ? 12 : 0,
-                  }}>
-                    {splitSentences(para).map((s, si) => {
-                      const active = activeSumTexts.has(s)
-                      return (
-                        <div key={si} style={active ? highlightStyle : { padding: '2px 8px' }}>
-                          {splitBoldSegments(s).map((seg, bi) =>
-                            seg.bold
-                              ? <strong key={bi} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
-                              : <span key={bi}>{seg.text}</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
               </div>
             </div>
           )}

@@ -16,7 +16,7 @@ import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2 } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
-import { parseSummaryBlocks, splitBoldSegments } from '@/lib/summary-format'
+import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -2317,7 +2317,8 @@ export default function Dashboard() {
                                 )
                               })()}
 
-                              {/* 역피라미드(이메일과 통일): tldr(강조·라벨없음) → 핵심 → 상세 요약 → timeline */}
+                              {/* 역피라미드(이메일과 통일): tldr(강조·라벨없음) → 핵심 → timeline */}
+                              {/* 상세 요약은 열람기록에서 표시하지 않는다(이메일 전용) — 데이터는 계속 저장됨 */}
                               {/* 실패·대기·라이브 항목은 tldr/요약이 없어 아래 블록이 모두 생략되고 위 라벨이 사유를 설명 */}
                               {!digest.fail_reason && digest.tldr && (
                                 <div style={{
@@ -2328,65 +2329,46 @@ export default function Dashboard() {
                                 </div>
                               )}
 
+                              {/* 핵심 포인트 — 불릿 없이 "앵커 — 설명" 한 줄, 앵커만 세미볼드(4채널 공통) */}
                               {digest.key_points?.length > 0 && (
                                 <div style={{ marginBottom: 14 }}>
                                   <div style={{
-                                    fontSize: 11, color: 'var(--text-tertiary)',
-                                    fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
+                                    fontSize: 11, color: 'var(--text-muted)',
+                                    fontWeight: 600, marginBottom: 9, letterSpacing: 0.6,
                                   }}>
                                     {t('history.keyPoints')}
                                   </div>
-                                  <ul style={{ margin: 0, paddingLeft: 18 }}>
-                                    {digest.key_points.map((p, i) => (
-                                      <li key={i} style={{
+                                  {digest.key_points.map((p, i) => {
+                                    const { prefix, rest } = splitKeyPointPrefix(p)
+                                    return (
+                                      <div key={i} style={{
                                         fontSize: 13, color: 'var(--text-secondary)',
-                                        marginBottom: 4, lineHeight: 1.6,
-                                      }}>{p}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {/* summary는 마커('## ' 소제목, 빈 줄 문단) 해석 렌더 — 마커 없는 기존 데이터는 문단 1개 */}
-                              {!digest.fail_reason && (
-                                <div style={{ marginBottom: 14 }}>
-                                  <div style={{
-                                    fontSize: 11, color: 'var(--text-tertiary)',
-                                    fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
-                                  }}>
-                                    {t('history.detailSummary')}
-                                  </div>
-                                  <div style={{
-                                    fontSize: 14, color: 'var(--text-secondary)',
-                                    lineHeight: 1.7,
-                                  }}>
-                                    {parseSummaryBlocks(digest.summary || '').map((b, i) =>
-                                      b.type === 'heading' ? (
-                                        <div key={i} style={{
-                                          fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-                                          marginTop: i === 0 ? 0 : 10, marginBottom: 4,
-                                        }}>
-                                          {b.text}
-                                        </div>
-                                      ) : (
-                                        <div key={i} style={{ marginBottom: 10 }}>
-                                          {splitBoldSegments(b.text).map((seg, j) =>
-                                            seg.bold
-                                              ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
-                                              : <span key={j}>{seg.text}</span>
-                                          )}
-                                        </div>
-                                      )
-                                    )}
-                                  </div>
+                                        marginBottom: 9, lineHeight: 1.6,
+                                      }}>
+                                        {prefix && (
+                                          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                            {splitBoldSegments(prefix).map((seg, j) => (
+                                              <span key={j}>{seg.text}</span>
+                                            ))}
+                                            {' — '}
+                                          </span>
+                                        )}
+                                        {splitBoldSegments(rest).map((seg, j) =>
+                                          seg.bold
+                                            ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
+                                            : <span key={j}>{seg.text}</span>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               )}
 
                               {digest.timeline?.length > 0 && (
                                 <div style={{ marginBottom: 14 }}>
                                   <div style={{
-                                    fontSize: 11, color: 'var(--text-tertiary)',
-                                    fontWeight: 600, marginBottom: 8, letterSpacing: 0.3,
+                                    fontSize: 11, color: 'var(--text-muted)',
+                                    fontWeight: 600, marginBottom: 9, letterSpacing: 0.6,
                                   }}>
                                     {t('history.timeline')}
                                   </div>
