@@ -59,11 +59,12 @@ function escapeHtml(s: string): string {
 
 // summary(앵커 문단 형식)를 이메일 HTML로: 문단(\n\n) 분리 + `**앵커.**` → <strong>.
 // 이스케이프 먼저 → 볼드 마커 변환 순서 준수. 마커 없는 과거 데이터는 통짜 문단으로 렌더(하위 호환).
+// 앵커에 색을 직접 지정한다 — 미지정 시 본문 회색(#525252)을 상속해 강조가 죽는다.
 function renderSummaryHtml(summary: string): string {
   const paras = String(summary ?? '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
   if (!paras.length) return ''
   return paras
-    .map((p, i) => `<div${i < paras.length - 1 ? ' style="margin-bottom:8px;"' : ''}>${boldMarkersToHtml(escapeHtml(p), 'strong')}</div>`)
+    .map((p, i) => `<div${i < paras.length - 1 ? ' style="margin-bottom:8px;"' : ''}>${boldMarkersToHtml(escapeHtml(p), 'strong', 'color:#1a1a1c;')}</div>`)
     .join('')
 }
 

@@ -1,4 +1,5 @@
 import { logApiUsage, SYSTEM_USER_ID } from '@/lib/api-usage'
+import { stripTimeMarkers } from '@/lib/summary-format'
 import type { Locale } from './i18n/translations'
 
 // Cloudflare 호환: process.env는 요청 처리 시점에 채워지므로 모듈 최상단에서 읽지 않고
@@ -78,6 +79,13 @@ function normalizeAnchorParagraphs(summary: string): string {
   return pre ? `${pre}\n\n${body}` : body
 }
 
+// 본문에 섞인 [m:ss] 시각 표기 제거(프롬프트 지시의 코드 안전망).
+// 제거 결과가 빈 문자열이면 과도 제거로 보고 원본을 유지한다.
+function stripTimes(text: string): string {
+  const out = stripTimeMarkers(text)
+  return out || text
+}
+
 const LOCALE_LANGUAGE_NAMES: Record<Locale, string> = {
   ko: '한국어',
   en: 'English',
@@ -119,7 +127,7 @@ summary는 2~5개 문단으로 나눈다(영상이 아무리 길어도 5개를 �
 - 그 문단의 내용을 압축한 20자 이내의 명사구 또는 짧은 구절. 영상 주제·장르에 맞게 만들 것(고정 라벨 반복 금지).
 - 문단마다 서로 다른 층위를 담을 것: 무엇을 다루는지, 원인이나 방법, 그것이 갖는 의미나 파장, 결론이나 조언 등에서 영상 성격에 맞게 고른다.
 - '요약', '내용', '설명', '정리' 같은 일반어 금지. 제목이나 tldr 문구를 그대로 반복하지 말 것.
-keyPoints는 근거 3~5개(논점이 적으면 3개, 많으면 5개까지. 억지로 5개를 채우지 말 것). 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제.`
+keyPoints는 근거 3~5개(논점이 적으면 3개, 많으면 5개까지. 억지로 5개를 채우지 말 것). **각 항목은 '핵심 내용 — 부연' 형태로 쓰고, 구분자는 반드시 em dash(—) 하나를 사용한다**(하이픈 -, 콜론 : 금지). 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제.`
   } else if (description && description.length > 20) {
     content = `영상 설명:\n${description.slice(0, 2000)}`
     summaryBasis = '영상 설명 기반 요약'
@@ -156,6 +164,7 @@ ${content || '(자막 및 설명 없음)'}
 - 제공되지 않은 수치, 통계, 인용, 사실을 절대 지어내지 마세요. 정보가 부족하면 무리해서 길게 쓰지 말고 아는 만큼만 쓰세요.
 - 자막은 음성 인식으로 만들어져 오탈자가 있을 수 있습니다. 문맥상 명백한 인식 오류(예: '출회'가 '추회'로, 종목명·인명 오기)는 올바른 표기로 고쳐 쓰세요. 무슨 말인지 확신이 서지 않는 단어는 아예 쓰지 말 것.
 - 구체적으로: 자막/설명에 등장하는 고유명사, 수치, 핵심 주장을 가능한 한 살려서 요약하세요. 수치가 있는 항목은 '대폭', '크게' 같은 모호한 표현 대신 실제 수치(예: '300만원까지 상승')를 사용하고, 같은 사실을 summary와 keyPoints에서 다룰 때는 양쪽 모두 동일한 구체적 수치로 표현해 불일치가 없도록 하세요. 특히 한쪽은 '4~5년치 일감', 다른 쪽은 '30조 원 수주 잔고'처럼 같은 사실을 서로 다른 지표로 바꿔 쓰지 마세요 — 자막에 나온 지표 하나를 골라 양쪽에서 일관되게 쓸 것.
+- 시각 표기는 timeline의 time 필드에만 쓰세요. tldr·keyPoints·summary 본문에는 [5:45] 같은 시각을 절대 넣지 마세요(자막에 삽입된 [m:ss] 앵커는 timeline 작성용 참고일 뿐 인용 대상이 아닙니다).
 - **수치는 자릿수와 단위를 자막 그대로 옮길 것.** 임의로 자릿수를 줄이거나(300만 원 → 30만 원), 단위를 바꾸거나(장부가 90만 원 → ROE 90%), 반올림하지 마세요. 하나의 수치가 tldr·summary·keyPoints에 여러 번 등장하면 전부 같은 값이어야 합니다. 수치를 쓸 때마다 자막의 원래 표기와 대조해 자릿수·단위가 맞는지 확인하고, 확신이 서지 않으면 그 수치는 쓰지 마세요.
 - ${lengthGuide}${langInstruction}
 - **tldr은 "제목이 던진 질문에 대한 직접적인 답"이다.** 먼저 제목이 독자에게 무엇을 묻고 있는지 파악하고(예: "언제 팔아야 하나?", "왜 저평가인가?", "어디를 사야 하나?"), 그 질문에 정면으로 답하는 한 문장을 쓰세요. 영상 전체의 총평·조언·마무리 제언으로 흐르지 말 것 — 독자가 제목을 보고 궁금해한 바로 그 한 가지에만 답합니다.
@@ -354,10 +363,21 @@ async function callGeminiModel(
 
       console.log(`⏱ [summarizeVideo total] ${Date.now() - fnStart}ms (model=${model}, basis=${summaryBasis})`)
       // tldr이 없거나 문자열이 아니면 '' 폴백 (timeline: [] 폴백과 동일한 방어)
-      const tldr = typeof parsed.tldr === 'string' ? parsed.tldr : ''
+      const tldr = stripTimes(typeof parsed.tldr === 'string' ? parsed.tldr : '')
       // 앵커 문단 정규화(모델이 빈 줄을 빠뜨린 인라인 붕괴 방어) — 문자열일 때만.
-      const summary = typeof parsed.summary === 'string' ? normalizeAnchorParagraphs(parsed.summary) : parsed.summary
-      return { kind: 'done', result: { ...parsed, tldr, summary, summaryBasis, model, attempts: attempt } }
+      const summary = typeof parsed.summary === 'string'
+        ? stripTimes(normalizeAnchorParagraphs(parsed.summary))
+        : parsed.summary
+      // 본문 시각 표기 제거 — timeline의 time은 실제 시각이므로 보존하고 content만 정리.
+      const keyPoints = Array.isArray(parsed.keyPoints)
+        ? parsed.keyPoints.map((p: unknown) => (typeof p === 'string' ? stripTimes(p) : p))
+        : parsed.keyPoints
+      const timeline = Array.isArray(parsed.timeline)
+        ? parsed.timeline.map((t: { time?: string; content?: string }) =>
+            t && typeof t.content === 'string' ? { ...t, content: stripTimes(t.content) } : t
+          )
+        : parsed.timeline
+      return { kind: 'done', result: { ...parsed, tldr, summary, keyPoints, timeline, summaryBasis, model, attempts: attempt } }
     } catch (e) {
       const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
       const isRetryable = errorInfo.includes('503') || errorInfo.includes('429')

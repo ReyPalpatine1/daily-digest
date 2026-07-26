@@ -99,6 +99,20 @@ export function splitKeyPointPrefix(text: string): { prefix: string | null; rest
 
 // 이미 HTML 이스케이프된 문자열의 `**볼드**`를 <strong>/<b>로 변환 — 이메일/텔레그램(HTML)용.
 // 마커 `**`는 이스케이프에 영향받지 않으므로 반드시 이스케이프 후 호출할 것.
-export function boldMarkersToHtml(escaped: string, tag: 'strong' | 'b' = 'strong'): string {
-  return String(escaped ?? '').replace(/\*\*([^*\n]{1,40}?)\*\*/g, `<${tag}>$1</${tag}>`)
+// style: 인라인 스타일(선택). 이메일은 CSS 상속으로 앵커가 본문색을 따라가므로 색을 직접 지정할 때 쓴다.
+// 미전달 시 기존과 동일한 `<tag>` 출력(텔레그램 등 기존 호출부 동작 불변).
+export function boldMarkersToHtml(escaped: string, tag: 'strong' | 'b' = 'strong', style?: string): string {
+  const open = style ? `<${tag} style="${style}">` : `<${tag}>`
+  return String(escaped ?? '').replace(/\*\*([^*\n]{1,40}?)\*\*/g, `${open}$1</${tag}>`)
+}
+
+// 본문에 섞여 나온 대괄호 시각 표기(`[5:45]`, `[12:03]`, `[1:02:30]`)를 제거한다.
+// 자막에 삽입된 [m:ss] 앵커는 timeline 작성용 참고인데 모델이 간헐적으로 본문에 인용해 붙인다(프롬프트 방어의 보완).
+// 문단 구분(\n\n)은 보존해야 하므로 가로 공백(스페이스·탭)만 정리하고 줄바꿈은 건드리지 않는다.
+export function stripTimeMarkers(text: string): string {
+  return String(text ?? '')
+    .replace(/[ \t]*\[\d{1,2}:\d{2}(?::\d{2})?\][ \t]*/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .trim()
 }
