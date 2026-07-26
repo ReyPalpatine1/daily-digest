@@ -334,6 +334,7 @@ async function runDigest(
             video_url: item.video.url,
             published_at: item.video.publishedAt,
             summary: item.summary.summary,
+            tldr: item.summary.tldr ?? null,
             key_points: keyPoints,
             timeline: item.summary.timeline,
             is_breaking: item.isBreaking,

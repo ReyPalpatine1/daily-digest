@@ -413,31 +413,9 @@ export default function Dashboard() {
     setChannels(sortedChs)
     setSettings(sets)
 
-    // digests 테이블엔 tldr이 없으므로 공유 풀(video_summaries)에서 tldr을 병합한다.
-    // 매칭 locale은 요약이 생성된 언어(=settings.locale)로 잡아 표시 요약과 언어를 일치시킨다.
-    // 실패·미존재 시 tldr은 undefined로 두어 기존 동작 유지(역피라미드에서 자동 생략).
-    const digestList = (digs ?? []) as HistoryDigest[]
-    const videoIds = Array.from(new Set(digestList.map(d => d.video_id).filter(Boolean)))
-    if (videoIds.length) {
-      const digestLocale =
-        sets?.locale === 'en' || sets?.locale === 'zh' || sets?.locale === 'ja' ? sets.locale : 'ko'
-      const { data: sums } = await supabase
-        .from('video_summaries')
-        .select('video_id, tldr')
-        .in('video_id', videoIds)
-        .eq('locale', digestLocale)
-      if (sums?.length) {
-        const tldrByVideo = new Map<string, string>()
-        for (const s of sums) {
-          if (s?.tldr) tldrByVideo.set(s.video_id, s.tldr)
-        }
-        for (const d of digestList) {
-          const tl = tldrByVideo.get(d.video_id)
-          if (tl) d.tldr = tl
-        }
-      }
-    }
-    setDigests(digestList)
+    // tldr은 발송 시점에 digests.tldr로 함께 기록되므로 그대로 사용한다.
+    // (과거엔 video_summaries에서 병합했으나 그 테이블은 RLS SELECT 정책이 없어 브라우저 조회가 항상 빈 결과였다)
+    setDigests((digs ?? []) as HistoryDigest[])
   }
 
   // 프로필만 재로드 (관리자 토글로 plan 변경 후 isPro 갱신용)
@@ -2324,6 +2302,7 @@ export default function Dashboard() {
                                 <div style={{
                                   fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
                                   lineHeight: 1.6, marginBottom: 10,
+                                  borderLeft: '2px solid var(--text-primary)', paddingLeft: 11,
                                 }}>
                                   {digest.tldr}
                                 </div>

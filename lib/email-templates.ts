@@ -180,7 +180,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         ${escapeHtml(et(locale, failKey))}
       </div>` : `
       ${item.summary.tldr ? `
-      <div style="font-size:14px;font-weight:600;color:#0A0A0A;line-height:1.6;margin-bottom:12px;">${escapeHtml(item.summary.tldr)}</div>` : ''}
+      <div style="font-size:14px;font-weight:600;color:#0A0A0A;line-height:1.6;margin-bottom:12px;border-left:2px solid #1a1a1c;padding-left:11px;">${escapeHtml(item.summary.tldr)}</div>` : ''}
       ${kp.length > 0 ? `
         <div style="margin-bottom:12px;">
           <div style="${SECTION_LABEL_STYLE}">${et(locale, 'digest.keyPoints')}</div>
