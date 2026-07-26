@@ -57,6 +57,27 @@ function extractBalancedJson(text: string): string | null {
   return null
 }
 
+// 앵커 문단 정규화: 모델이 빈 줄(\n\n)을 빠뜨려 `**앵커.**`를 한 줄에 이어 붙인 경우
+// (초장편 자막에서 간헐 발생), 각 앵커 마커를 문단 경계로 되살린다. 앵커가 0~1개면 원문 유지.
+// 이미 \n\n로 분리된 정상 출력에는 사실상 무해(동일 결과). 프롬프트 준수를 코드로 보증하는 안전망.
+function normalizeAnchorParagraphs(summary: string): string {
+  if (!summary) return summary
+  const t = summary.trim()
+  const re = /\*\*[^*\n]{1,28}?\.\*\*/g
+  const idxs: number[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(t)) !== null) idxs.push(m.index)
+  if (idxs.length < 2) return t // 앵커가 없거나 1개뿐이면 나눌 문단이 없음
+  const pre = t.slice(0, idxs[0]).trim() // 첫 앵커 이전 도입부(있으면 보존)
+  const paras: string[] = []
+  for (let i = 0; i < idxs.length; i++) {
+    const end = i + 1 < idxs.length ? idxs[i + 1] : t.length
+    paras.push(t.slice(idxs[i], end).trim())
+  }
+  const body = paras.join('\n\n')
+  return pre ? `${pre}\n\n${body}` : body
+}
+
 const LOCALE_LANGUAGE_NAMES: Record<Locale, string> = {
   ko: '한국어',
   en: 'English',
@@ -92,11 +113,17 @@ export async function summarizeVideo(
     content = `자막:\n${sliced}`
     summaryBasis = '자동 생성 자막 기반 요약'
     const t = sentenceTarget(sliced.length)
-    lengthGuide = `이 영상은 자막 ${sliced.length.toLocaleString()}자 분량의 ${t.label}입니다. **summary는 반드시 ${t.min}~${t.max}문장으로 쓰세요**(이 범위는 권장이 아니라 지켜야 할 분량입니다. ${t.min}문장 미만은 정보 누락입니다). 다만 분량을 채우려고 같은 말을 반복하거나 자막에 없는 일반론으로 늘리지는 마세요 — 영상이 실제로 다룬 서로 다른 논점을 빠짐없이 담아 자연스럽게 그 분량을 채우세요. keyPoints는 근거 3~5개(논점이 적으면 3개, 많으면 5개까지. 억지로 5개를 채우지 말 것). 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제.`
+    lengthGuide = `이 영상은 자막 ${sliced.length.toLocaleString()}자 분량의 ${t.label}입니다. **summary는 반드시 ${t.min}~${t.max}문장으로 쓰세요**(이 범위는 권장이 아니라 지켜야 할 분량입니다. ${t.min}문장 미만은 정보 누락입니다). 다만 분량을 채우려고 같은 말을 반복하거나 자막에 없는 일반론으로 늘리지는 마세요 — 영상이 실제로 다룬 서로 다른 논점을 빠짐없이 담아 자연스럽게 그 분량을 채우세요.
+summary는 2~5개 문단으로 나눈다(영상이 아무리 길어도 5개를 넘기지 말 것). **각 문단은 반드시 빈 줄(\\n\\n)로 분리하고, 앵커를 한 줄에 여러 개 이어 붙이지 말 것.** 각 문단은 \`**앵커.**\` 형식(마크다운 볼드 + 마침표)으로 시작하고, 공백 하나 뒤에 본문 2문장 이상을 이어 쓴다.
+앵커 규칙:
+- 그 문단의 내용을 압축한 20자 이내의 명사구 또는 짧은 구절. 영상 주제·장르에 맞게 만들 것(고정 라벨 반복 금지).
+- 문단마다 서로 다른 층위를 담을 것: 무엇을 다루는지, 원인이나 방법, 그것이 갖는 의미나 파장, 결론이나 조언 등에서 영상 성격에 맞게 고른다.
+- '요약', '내용', '설명', '정리' 같은 일반어 금지. 제목이나 tldr 문구를 그대로 반복하지 말 것.
+keyPoints는 근거 3~5개(논점이 적으면 3개, 많으면 5개까지. 억지로 5개를 채우지 말 것). 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제.`
   } else if (description && description.length > 20) {
     content = `영상 설명:\n${description.slice(0, 2000)}`
     summaryBasis = '영상 설명 기반 요약'
-    lengthGuide = "summary는 3~4문장. keyPoints는 3~4개, '핵심 내용 — 부연' 형태. timeline은 빈 배열 []."
+    lengthGuide = "summary는 3~4문장을 1~2개 문단으로 나누고, 문단 사이는 빈 줄(\\n\\n)로 분리하며 각 문단은 `**앵커.**`(20자 이내 명사구, 마크다운 볼드+마침표) 형식으로 시작한다. keyPoints는 3~4개, '핵심 내용 — 부연' 형태. timeline은 빈 배열 []."
   } else {
     // 자막·설명 모두 없음 → 제목만으로는 요약하지 않는다 (환각 위험). Gemini 미호출 즉시 실패.
     console.log(`❌ 자막·설명 없음 → 요약 불가 (no_source): ${title}`)
@@ -328,7 +355,9 @@ async function callGeminiModel(
       console.log(`⏱ [summarizeVideo total] ${Date.now() - fnStart}ms (model=${model}, basis=${summaryBasis})`)
       // tldr이 없거나 문자열이 아니면 '' 폴백 (timeline: [] 폴백과 동일한 방어)
       const tldr = typeof parsed.tldr === 'string' ? parsed.tldr : ''
-      return { kind: 'done', result: { ...parsed, tldr, summaryBasis, model, attempts: attempt } }
+      // 앵커 문단 정규화(모델이 빈 줄을 빠뜨린 인라인 붕괴 방어) — 문자열일 때만.
+      const summary = typeof parsed.summary === 'string' ? normalizeAnchorParagraphs(parsed.summary) : parsed.summary
+      return { kind: 'done', result: { ...parsed, tldr, summary, summaryBasis, model, attempts: attempt } }
     } catch (e) {
       const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
       const isRetryable = errorInfo.includes('503') || errorInfo.includes('429')
