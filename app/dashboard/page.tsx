@@ -65,8 +65,8 @@ const channelIcons: Record<ChannelId, typeof Mail> = {
 // 로드 시 video_summaries.tldr(locale 매칭)을 병합해 역피라미드 최상단에 노출한다.
 type HistoryDigest = Digest & { tldr?: string | null }
 
-// 기록 항목의 요약 상태 라벨 키 (fail_reason 우선, 없으면 summary_basis 기반).
-// 매칭 없으면 null → 라벨 생략 (과거 데이터 호환: fail_reason/summary_basis 없는 행).
+// 기록 항목의 실패·대기·라이브 사유 라벨 키 (카드 상단).
+// 매칭 없으면 null → 라벨 생략 (과거 데이터 호환: fail_reason 없는 행).
 function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
   switch (d.fail_reason) {
     case 'no_source': return { labelKey: 'history.failNoSourceLabel', noteKey: 'history.failNoSourceNote' }
@@ -75,6 +75,13 @@ function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | 
     case 'live': return { labelKey: 'history.failLiveLabel', noteKey: 'history.failLiveNote' }
     case 'pro_only': return { labelKey: 'history.proOnlyLabel', noteKey: 'history.proOnlyNote' }
   }
+  return null
+}
+
+// 요약 기반(자막/설명) 표기 키 — 이메일과 동일하게 카드 맨 아래에 둔다(성공 케이스 전용).
+// 실패·대기 항목은 상단 사유 라벨이 설명하므로 표시하지 않는다.
+function summaryBasisKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
+  if (d.fail_reason) return null
   const basis = d.summary_basis ?? ''
   if (basis.includes('자막')) return { labelKey: 'history.basisTranscriptLabel' }
   if (basis.includes('설명')) return { labelKey: 'history.basisDescriptionLabel', noteKey: 'history.basisDescriptionNote' }
@@ -2251,7 +2258,7 @@ export default function Dashboard() {
                               padding: '14px 16px 16px',
                               borderTop: '0.5px solid var(--border-light)',
                             }}>
-                              {/* 요약 상태 라벨 (자막/설명 기반, 실패·대기·라이브 사유) */}
+                              {/* 실패·대기·라이브 사유 라벨 (요약 기반 표기는 카드 맨 아래 — 이메일과 동일) */}
                               {(() => {
                                 const status = summaryStatusKeys(digest)
                                 if (!status) return null
@@ -2299,18 +2306,26 @@ export default function Dashboard() {
                               {/* 상세 요약은 열람기록에서 표시하지 않는다(이메일 전용) — 데이터는 계속 저장됨 */}
                               {/* 실패·대기·라이브 항목은 tldr/요약이 없어 아래 블록이 모두 생략되고 위 라벨이 사유를 설명 */}
                               {!digest.fail_reason && digest.tldr && (
-                                <div style={{
-                                  fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
-                                  lineHeight: 1.6, marginBottom: 10,
-                                  borderLeft: '2px solid var(--text-primary)', paddingLeft: 11,
-                                }}>
-                                  {digest.tldr}
+                                <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+                                  <div style={{
+                                    width: 3, borderRadius: 2,
+                                    background: 'var(--text-primary)', flexShrink: 0,
+                                  }} />
+                                  <div style={{
+                                    fontSize: 14.5, fontWeight: 600,
+                                    color: 'var(--text-primary)', lineHeight: 1.6,
+                                  }}>
+                                    {digest.tldr}
+                                  </div>
                                 </div>
                               )}
 
                               {/* 핵심 포인트 — 불릿 없이 "앵커 — 설명" 한 줄, 앵커만 세미볼드(4채널 공통) */}
                               {digest.key_points?.length > 0 && (
-                                <div style={{ marginBottom: 14 }}>
+                                <div style={{
+                                  background: 'var(--bg-subtle)', borderRadius: 8,
+                                  padding: '14px 15px', marginBottom: 20,
+                                }}>
                                   <div style={{
                                     fontSize: 11, color: 'var(--text-muted)',
                                     fontWeight: 600, marginBottom: 9, letterSpacing: 0.6,
@@ -2344,7 +2359,7 @@ export default function Dashboard() {
                               )}
 
                               {digest.timeline?.length > 0 && (
-                                <div style={{ marginBottom: 14 }}>
+                                <div style={{ marginBottom: 20 }}>
                                   <div style={{
                                     fontSize: 11, color: 'var(--text-muted)',
                                     fontWeight: 600, marginBottom: 9, letterSpacing: 0.6,
@@ -2403,6 +2418,22 @@ export default function Dashboard() {
                                   </button>
                                 )}
                               </div>
+
+                              {/* 요약 기반 표기 — 이메일과 동일하게 카드 맨 아래(영상 보기 버튼 아래) */}
+                              {(() => {
+                                const basis = summaryBasisKeys(digest)
+                                if (!basis) return null
+                                return (
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 14 }}>
+                                    {t(basis.labelKey)}
+                                    {basis.noteKey && (
+                                      <div style={{ lineHeight: 1.6, marginTop: 3 }}>
+                                        {t(basis.noteKey)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </div>
                           )}
                         </div>

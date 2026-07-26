@@ -180,18 +180,23 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         ${escapeHtml(et(locale, failKey))}
       </div>` : `
       ${item.summary.tldr ? `
-      <div style="font-size:14px;font-weight:600;color:#0A0A0A;line-height:1.6;margin-bottom:12px;border-left:2px solid #1a1a1c;padding-left:11px;">${escapeHtml(item.summary.tldr)}</div>` : ''}
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:20px;">
+        <tr>
+          <td style="width:3px;"><div style="width:3px;min-height:44px;border-radius:2px;background:#1a1a1c;"></div></td>
+          <td style="padding-left:12px;font-size:14.5px;font-weight:600;color:#1a1a1c;line-height:1.6;">${escapeHtml(item.summary.tldr)}</td>
+        </tr>
+      </table>` : ''}
       ${kp.length > 0 ? `
-        <div style="margin-bottom:12px;">
+        <div style="background:#F5F5F5;border-radius:8px;padding:14px 15px;margin-bottom:20px;">
           <div style="${SECTION_LABEL_STYLE}">${et(locale, 'digest.keyPoints')}</div>
           ${kp.map(p => renderKeyPointHtml(p)).join('')}
         </div>` : ''}
       <div style="${SECTION_LABEL_STYLE}">${et(locale, 'digest.detailSummary')}</div>
-      <div style="font-size:13px;color:#525252;line-height:1.7;margin-bottom:12px;">
+      <div style="font-size:13px;color:#525252;line-height:1.8;margin-bottom:20px;">
         ${renderSummaryHtml(item.summary.summary)}
       </div>
       ${tl.length > 0 ? `
-        <div style="margin-bottom:12px;">
+        <div style="margin-bottom:20px;">
           <div style="${SECTION_LABEL_STYLE}">${et(locale, 'digest.timeline')}</div>
           ${tl.map(tt => {
             // 챕터 목록 관행: 줄 전체(시각+설명)가 해당 지점 딥링크.
