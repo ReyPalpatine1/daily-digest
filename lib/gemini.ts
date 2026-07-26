@@ -139,7 +139,7 @@ keyPoints는 근거 3~5개(논점이 적으면 3개, 많으면 5개까지. 억�
   }
 
   const langInstruction = locale !== 'ko'
-    ? `\n- 다음 언어로 요약: ${LOCALE_LANGUAGE_NAMES[locale]} (summary, keyPoints, timeline 모두 해당 언어로 작성)`
+    ? `\n- 다음 언어로 요약: ${LOCALE_LANGUAGE_NAMES[locale]} (tldr, summary, keyPoints, timeline 모두 해당 언어로 작성. 앵커 문구도 해당 언어로 쓸 것)`
     : ''
 
   const prompt = `다음은 유튜브 영상의 정보입니다.
