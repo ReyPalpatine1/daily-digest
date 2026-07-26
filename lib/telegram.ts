@@ -6,6 +6,7 @@ import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
 import { et, type EmailLocale } from './i18n/email-translations'
 import { youtubeDeepLink } from '@/lib/video-time'
+import { boldMarkersToHtml } from '@/lib/summary-format'
 
 // 발송 결과 로그용 (서버 전용 service client) — mailer 를 건드리지 않기 위해 별도 lazy 생성.
 let _supabase: SupabaseClient | null = null
@@ -146,7 +147,7 @@ function itemLines(item: DigestItem, lc: EmailLocale): string[] {
   }
   if (item.summary.summary) {
     lines.push(`<b>${et(lc, 'digest.detailSummary')}</b>`)
-    lines.push(escapeHtml(item.summary.summary))
+    lines.push(boldMarkersToHtml(escapeHtml(item.summary.summary), 'b'))
   }
   // timeline: 줄 전체(시각+설명)가 해당 지점 딥링크 (다이제스트 전용 — 속보는 별도 조립이라 미적용).
   // 텔레그램은 CSS 미지원이라 줄 전체가 링크색으로 표시된다(챕터 목록 관행).
@@ -227,7 +228,7 @@ export async function sendBreakingTelegram(
   lines.push(`${escapeHtml(et(lc, 'breaking.publishedAt'))}: ${escapeHtml(published)}`)
   if (item.summary.summary) {
     lines.push('')
-    lines.push(escapeHtml(item.summary.summary))
+    lines.push(boldMarkersToHtml(escapeHtml(item.summary.summary), 'b'))
   }
   if (item.summary.keyPoints?.length) {
     lines.push(`<b>${et(lc, 'breaking.keyPoints')}</b>`)

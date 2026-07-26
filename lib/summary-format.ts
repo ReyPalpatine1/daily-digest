@@ -66,3 +66,26 @@ export function splitSentences(summary: string): string[] {
   }
   return out.length ? out : [text]
 }
+
+// summary의 `**볼드**` 마크다운(앵커 `**앵커.**` 포함)을 볼드/일반 세그먼트로 분리 — React 렌더용.
+// 마커가 없으면 통짜 1세그먼트로 반환(하위 호환). lookbehind 미사용(Safari15 대응).
+export function splitBoldSegments(text: string): { bold: boolean; text: string }[] {
+  const s = text ?? ''
+  const out: { bold: boolean; text: string }[] = []
+  const re = /\*\*([^*\n]{1,40}?)\*\*/g
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) out.push({ bold: false, text: s.slice(last, m.index) })
+    out.push({ bold: true, text: m[1] })
+    last = m.index + m[0].length
+  }
+  if (last < s.length) out.push({ bold: false, text: s.slice(last) })
+  return out.length ? out : [{ bold: false, text: s }]
+}
+
+// 이미 HTML 이스케이프된 문자열의 `**볼드**`를 <strong>/<b>로 변환 — 이메일/텔레그램(HTML)용.
+// 마커 `**`는 이스케이프에 영향받지 않으므로 반드시 이스케이프 후 호출할 것.
+export function boldMarkersToHtml(escaped: string, tag: 'strong' | 'b' = 'strong'): string {
+  return String(escaped ?? '').replace(/\*\*([^*\n]{1,40}?)\*\*/g, `<${tag}>$1</${tag}>`)
+}

@@ -5,6 +5,7 @@ import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
 import { youtubeDeepLink } from '@/lib/video-time'
 import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
+import { boldMarkersToHtml } from '@/lib/summary-format'
 
 export type { EmailLocale }
 
@@ -54,6 +55,16 @@ function escapeHtml(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+}
+
+// summary(앵커 문단 형식)를 이메일 HTML로: 문단(\n\n) 분리 + `**앵커.**` → <strong>.
+// 이스케이프 먼저 → 볼드 마커 변환 순서 준수. 마커 없는 과거 데이터는 통짜 문단으로 렌더(하위 호환).
+function renderSummaryHtml(summary: string): string {
+  const paras = String(summary ?? '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+  if (!paras.length) return ''
+  return paras
+    .map((p, i) => `<div${i < paras.length - 1 ? ' style="margin-bottom:8px;"' : ''}>${boldMarkersToHtml(escapeHtml(p), 'strong')}</div>`)
+    .join('')
 }
 
 // JSONB에서 읽은 값이 배열이 아닐 수 있어(문자열/객체/null) .map 호출 전 안전 변환.
@@ -164,7 +175,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         </div>` : ''}
       <div style="font-size:12px;font-weight:600;color:#0A0A0A;margin-bottom:6px;">${et(locale, 'digest.detailSummary')}</div>
       <div style="font-size:13px;color:#525252;line-height:1.7;margin-bottom:12px;">
-        ${escapeHtml(item.summary.summary)}
+        ${renderSummaryHtml(item.summary.summary)}
       </div>
       ${tl.length > 0 ? `
         <div style="background:#FAFAFA;border-radius:7px;padding:12px 14px;margin-bottom:12px;">

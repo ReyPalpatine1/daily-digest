@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { X, Copy, Check, MessageCircle, Share2, Link, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
-import { splitSentences } from '@/lib/summary-format'
+import { splitSentences, splitBoldSegments } from '@/lib/summary-format'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -44,7 +44,9 @@ function AnnRow(props: { time?: string; text: string; highlighted: boolean; onTo
         color: highlighted ? 'var(--text-primary)' : 'var(--text-secondary)',
         fontWeight: highlighted ? 500 : 400,
       }}>
-        {text}
+        {splitBoldSegments(text).map((seg, i) =>
+          seg.bold ? <strong key={i} style={{ fontWeight: 600 }}>{seg.text}</strong> : <span key={i}>{seg.text}</span>
+        )}
       </span>
     </div>
   )

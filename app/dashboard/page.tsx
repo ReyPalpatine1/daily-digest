@@ -16,7 +16,7 @@ import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2 } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
-import { parseSummaryBlocks } from '@/lib/summary-format'
+import { parseSummaryBlocks, splitBoldSegments } from '@/lib/summary-format'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -2369,7 +2369,13 @@ export default function Dashboard() {
                                           {b.text}
                                         </div>
                                       ) : (
-                                        <div key={i} style={{ marginBottom: 10 }}>{b.text}</div>
+                                        <div key={i} style={{ marginBottom: 10 }}>
+                                          {splitBoldSegments(b.text).map((seg, j) =>
+                                            seg.bold
+                                              ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
+                                              : <span key={j}>{seg.text}</span>
+                                          )}
+                                        </div>
                                       )
                                     )}
                                   </div>

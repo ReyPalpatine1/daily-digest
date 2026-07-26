@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { MessageSquareQuote, ShieldOff, Sparkles } from 'lucide-react'
 import { getShareByToken } from '@/lib/share'
-import { splitSentences } from '@/lib/summary-format'
+import { splitSentences, splitBoldSegments } from '@/lib/summary-format'
 import ShareVideo from '@/components/ShareVideo'
 
 // 공개 공유 페이지 — 로그인 불필요, 매 요청 조회 (토큰 만료/조회수 반영)
@@ -322,7 +322,11 @@ export default async function SharePage({ params }: PageProps) {
                       const active = activeSumTexts.has(s)
                       return (
                         <div key={si} style={active ? highlightStyle : { padding: '2px 8px' }}>
-                          {s}
+                          {splitBoldSegments(s).map((seg, bi) =>
+                            seg.bold
+                              ? <strong key={bi} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
+                              : <span key={bi}>{seg.text}</span>
+                          )}
                         </div>
                       )
                     })}
