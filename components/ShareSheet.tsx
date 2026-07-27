@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Copy, Check, MessageCircle, Share2, Link, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
-import { splitBoldSegments } from '@/lib/summary-format'
+import type { CSSProperties, ReactNode } from 'react'
+import { X, Copy, Check, MessageCircle, Share2, Link, RefreshCw } from 'lucide-react'
+import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
 type Props = {
   videoId: string
   videoTitle: string // 현재 미사용(호출부 유지용으로 시그니처에 잔존)
+  tldr?: string // 열람기록과 동일하게 상단에 표시(강조 대상 아님)
   keyPoints: string[]
   summary: string // 요약 섹션 제거로 미사용(호출부 유지용으로 시그니처에 잔존)
   timeline: { time: string; content: string }[]
@@ -17,22 +19,50 @@ type Props = {
   onClose: () => void
 }
 
-// 강조 가능한 한 줄 항목(핵심 포인트·요약 문장·타임라인 공용).
-// 줄 클릭 = 강조 토글(다중). 체크 아이콘 없음 — 배경/좌측 바로만 상태 표시.
-function AnnRow(props: { time?: string; text: string; highlighted: boolean; onToggle: () => void }) {
-  const { time, text, highlighted, onToggle } = props
+// 섹션 라벨 — 열람기록과 동일한 스타일.
+const sectionLabelStyle: CSSProperties = {
+  fontSize: 11, color: 'var(--text-muted)',
+  fontWeight: 600, letterSpacing: 0.6, marginBottom: 9,
+}
+
+// 핵심 포인트 한 줄 렌더 — 열람기록과 동일 경로.
+// 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만.
+// 마커가 없는 과거 형식('앵커 — 부연')만 splitKeyPointPrefix로 앞부분을 굵게.
+function KeyPointText({ text }: { text: string }) {
+  const segs = splitBoldSegments(text)
+  const legacy = segs.some(s => s.bold) ? null : splitKeyPointPrefix(text)
+  return (
+    <>
+      {legacy?.prefix && (
+        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+          {legacy.prefix}{' — '}
+        </span>
+      )}
+      {(legacy ? splitBoldSegments(legacy.rest) : segs).map((seg, i) =>
+        seg.bold
+          ? <strong key={i} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
+          : <span key={i}>{seg.text}</span>
+      )}
+    </>
+  )
+}
+
+// 강조 가능한 한 줄 항목(핵심 포인트·타임라인 공용). 줄 클릭 = 강조 토글(다중).
+// 강조 표시는 배경만 — 체크 아이콘·세로 바 없음.
+// 좌우 -9px로 박스/카드 여백보다 살짝 넓게 칠해 항목 단위임을 드러낸다.
+function AnnRow(props: { time?: string; highlighted: boolean; onToggle: () => void; children: ReactNode }) {
+  const { time, highlighted, onToggle, children } = props
   return (
     <div
       onClick={onToggle}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 8,
-        padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
-        background: highlighted ? 'rgba(255,205,0,0.16)' : 'transparent',
-        boxShadow: highlighted ? 'inset 2px 0 0 var(--text-primary)' : 'none',
+        margin: '0 -9px', padding: '7px 9px', borderRadius: 6, cursor: 'pointer',
+        background: highlighted ? 'rgba(255,205,0,0.20)' : 'transparent',
       }}>
       {time !== undefined && (
         <span style={{
-          fontSize: 12, fontWeight: 600, flexShrink: 0, minWidth: 34,
+          fontSize: 12, fontWeight: 600, flexShrink: 0, minWidth: 42,
           fontVariantNumeric: 'tabular-nums', marginTop: 1,
           color: highlighted ? 'var(--text-primary)' : 'var(--text-tertiary)',
         }}>
@@ -40,66 +70,23 @@ function AnnRow(props: { time?: string; text: string; highlighted: boolean; onTo
         </span>
       )}
       <span style={{
-        fontSize: 12.5, lineHeight: 1.5, flex: 1,
+        fontSize: 13, lineHeight: 1.6, flex: 1,
         color: highlighted ? 'var(--text-primary)' : 'var(--text-secondary)',
-        fontWeight: highlighted ? 500 : 400,
       }}>
-        {splitBoldSegments(text).map((seg, i) =>
-          seg.bold ? <strong key={i} style={{ fontWeight: 600 }}>{seg.text}</strong> : <span key={i}>{seg.text}</span>
-        )}
+        {children}
       </span>
     </div>
   )
 }
 
-// 접이식 섹션(기본 닫힘). 헤더 클릭 시 해당 섹션만 토글(다른 섹션 영향 없음).
-// 라벨 옆에 선택 개수(N개 선택)를 표시.
-function CollapsibleSection(props: {
-  label: string
-  count: number
-  open: boolean
-  onToggle: () => void
-  children: React.ReactNode
-}) {
-  const { label, count, open, onToggle, children } = props
-  return (
-    <div>
-      <button
-        onClick={onToggle}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 8, padding: '11px 13px', borderRadius: 8,
-          border: '0.5px solid var(--border)', background: 'var(--bg-card)',
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
-          {count > 0 && (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{count}개 선택</span>
-          )}
-        </span>
-        {open
-          ? <ChevronUp size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-          : <ChevronDown size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />}
-      </button>
-      {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 6 }}>
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// 요약 공유 시트 — 접이식 통합 구조. 상단 메모 1개 + 핵심 포인트·타임라인 2개 접이식 섹션.
-// 상세 요약은 공유 페이지에 표시하지 않으므로 강조 대상에서 제외(요약 섹션 없음).
-// 각 섹션 항목 클릭으로 다중 강조. 링크 생성 후에도 (a)~(d) 내용은 유지하고 하단 버튼만 전환.
+// 요약 공유 시트 — 열람기록과 같은 화면 구성(펼침). 상단 메모 + tldr·핵심 포인트·타임라인.
+// 상세 요약은 공유 페이지에 표시하지 않으므로 강조 대상에서 제외.
+// 항목 클릭으로 다중 강조. 링크 생성 후에도 위 내용은 유지하고 하단 버튼만 전환.
 // ※ 문구는 우선 한국어 하드코딩(i18n 키 추가는 백로그 — 수정 파일 범위 제한).
-export default function ShareSheet({ videoId, keyPoints, timeline, t, onClose }: Props) {
+export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onClose }: Props) {
   const [comment, setComment] = useState('')
   const [kpSel, setKpSel] = useState<Set<number>>(new Set())   // 핵심 포인트 인덱스
   const [tlSel, setTlSel] = useState<Set<string>>(new Set())   // 타임라인 시각(time)
-  const [open, setOpen] = useState<{ kp: boolean; tl: boolean }>({ kp: false, tl: false })
   const [creating, setCreating] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -254,48 +241,66 @@ export default function ShareSheet({ videoId, keyPoints, timeline, t, onClose }:
           />
         </div>
 
-        {/* (c) 안내 + (d) 접이식 섹션 3개 */}
-        {hasSelectable && (
-          <>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              강조할 부분을 골라주세요 (선택)
-            </div>
+        {/* (c) 안내 + 구분선 + (d) 요약 내용(열람기록과 동일 구성) */}
+        {(tldr || hasSelectable) && (
+          <div>
+            {hasSelectable && (
+              <>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 18 }}>
+                  강조할 부분을 선택해주세요.
+                </div>
+                <div style={{ height: 1, background: 'rgba(128,128,128,0.16)', marginBottom: 18 }} />
+              </>
+            )}
+
+            {/* tldr — 둥근 바 + 본문. 강조 대상이 아니므로 클릭 불가 */}
+            {tldr && (
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+                <div style={{
+                  width: 3, borderRadius: 2,
+                  background: 'var(--text-primary)', flexShrink: 0,
+                }} />
+                <div style={{
+                  fontSize: 14.5, fontWeight: 600,
+                  color: 'var(--text-primary)', lineHeight: 1.6,
+                }}>
+                  {tldr}
+                </div>
+              </div>
+            )}
 
             {keyPoints.length > 0 && (
-              <CollapsibleSection
-                label="핵심 포인트"
-                count={kpSel.size}
-                open={open.kp}
-                onToggle={() => setOpen((o) => ({ ...o, kp: !o.kp }))}>
+              <div style={{
+                background: 'var(--bg-subtle)', borderRadius: 8,
+                padding: '14px 15px', marginBottom: 20,
+              }}>
+                <div style={sectionLabelStyle}>{t('history.keyPoints')}</div>
                 {keyPoints.map((text, i) => (
                   <AnnRow
                     key={i}
-                    text={text}
                     highlighted={kpSel.has(i)}
-                    onToggle={() => toggleNum(kpSel, setKpSel, i)}
-                  />
+                    onToggle={() => toggleNum(kpSel, setKpSel, i)}>
+                    <KeyPointText text={text} />
+                  </AnnRow>
                 ))}
-              </CollapsibleSection>
+              </div>
             )}
 
             {timeline.length > 0 && (
-              <CollapsibleSection
-                label="타임라인"
-                count={tlSel.size}
-                open={open.tl}
-                onToggle={() => setOpen((o) => ({ ...o, tl: !o.tl }))}>
+              <div>
+                <div style={sectionLabelStyle}>{t('history.timeline')}</div>
                 {timeline.map((item, i) => (
                   <AnnRow
                     key={i}
                     time={item.time}
-                    text={item.content}
                     highlighted={tlSel.has(item.time)}
-                    onToggle={() => toggleStr(tlSel, setTlSel, item.time)}
-                  />
+                    onToggle={() => toggleStr(tlSel, setTlSel, item.time)}>
+                    {item.content}
+                  </AnnRow>
                 ))}
-              </CollapsibleSection>
+              </div>
             )}
-          </>
+          </div>
         )}
 
         {errorMsg && (

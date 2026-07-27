@@ -118,7 +118,7 @@ export default function Dashboard() {
   const [newKeyword, setNewKeyword] = useState('')
   const [expandedDigest, setExpandedDigest] = useState<string | null>(null)
   // 열람기록 요약 카드 "공유" 시트 대상 (null이면 닫힘)
-  const [shareTarget, setShareTarget] = useState<null | { videoId: string; title: string; summary: string; timeline: { time: string; content: string }[]; keyPoints: string[] }>(null)
+  const [shareTarget, setShareTarget] = useState<null | { videoId: string; title: string; tldr: string; summary: string; timeline: { time: string; content: string }[]; keyPoints: string[] }>(null)
 
   const [newChannel, setNewChannel] = useState({ url: '', alias: '', emoji: '📺', category_id: '' })
   const [newCategory, setNewCategory] = useState({ name: '', color: '#4da6ff' })
@@ -2403,6 +2403,7 @@ export default function Dashboard() {
                                     onClick={() => setShareTarget({
                                       videoId: digest.video_id,
                                       title: digest.video_title,
+                                      tldr: digest.tldr ?? '',
                                       summary: digest.summary ?? '',
                                       timeline: digest.timeline ?? [],
                                       keyPoints: digest.key_points ?? [],
@@ -2525,6 +2526,7 @@ export default function Dashboard() {
         <ShareSheet
           videoId={shareTarget.videoId}
           videoTitle={shareTarget.title}
+          tldr={shareTarget.tldr}
           keyPoints={shareTarget.keyPoints}
           summary={shareTarget.summary}
           timeline={shareTarget.timeline}
