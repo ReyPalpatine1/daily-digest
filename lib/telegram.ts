@@ -6,7 +6,7 @@ import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
 import { et, type EmailLocale } from './i18n/email-translations'
 import { youtubeDeepLink } from '@/lib/video-time'
-import { boldMarkersToHtml, splitKeyPointPrefix } from '@/lib/summary-format'
+import { boldMarkersToHtml, splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 
 // 발송 결과 로그용 (서버 전용 service client) — mailer 를 건드리지 않기 위해 별도 lazy 생성.
 let _supabase: SupabaseClient | null = null
@@ -73,10 +73,15 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// 핵심 포인트 한 줄 — "앵커 — 설명"에서 앵커만 <b>로 강조(4채널 공통).
-// '—'가 없는 항목은 분리 없이 그대로 출력.
+// 핵심 포인트 한 줄 — 앵커만 <b>로 강조(4채널 공통).
+// 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만 하고 추가 분리는 하지 않는다.
+// 마커가 없는 과거 형식('앵커 — 부연')만 splitKeyPointPrefix로 앞부분을 굵게(하위 호환).
 function keyPointLine(point: string): string {
-  const { prefix, rest } = splitKeyPointPrefix(point)
+  const p = String(point ?? '')
+  if (splitBoldSegments(p).some(seg => seg.bold)) {
+    return `• ${boldMarkersToHtml(escapeHtml(p), 'b')}`
+  }
+  const { prefix, rest } = splitKeyPointPrefix(p)
   const restHtml = escapeHtml(rest)
   return prefix ? `• <b>${escapeHtml(prefix)}</b> — ${restHtml}` : `• ${restHtml}`
 }

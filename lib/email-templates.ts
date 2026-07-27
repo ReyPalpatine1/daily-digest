@@ -5,7 +5,7 @@ import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
 import { youtubeDeepLink } from '@/lib/video-time'
 import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
-import { boldMarkersToHtml, splitKeyPointPrefix } from '@/lib/summary-format'
+import { boldMarkersToHtml, splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 
 export type { EmailLocale }
 
@@ -71,15 +71,23 @@ function renderSummaryHtml(summary: string): string {
 // 요약 섹션 라벨 공통 스타일(핵심 포인트·상세 요약·타임라인 — 4채널 통일).
 const SECTION_LABEL_STYLE = 'font-size:11px;color:#8a8a8e;font-weight:600;letter-spacing:0.6px;margin-bottom:9px;'
 
-// 핵심 포인트 한 줄 — 불릿/박스 없이 "앵커 — 설명", 앵커만 세미볼드(4채널 공통 B안).
-// 이스케이프 먼저 → 볼드 마커 변환 순서 준수. '—'가 없는 항목은 분리 없이 그대로 렌더.
+// 핵심 포인트 한 줄 — 불릿/박스 없이 앵커만 세미볼드(4채널 공통).
+// 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만 하고 추가 분리는 하지 않는다.
+// 과거 형식('앵커 — 부연')은 마커가 없으므로 splitKeyPointPrefix로 앞부분을 굵게(하위 호환).
+// 이스케이프 먼저 → 볼드 마커 변환 순서 준수.
 function renderKeyPointHtml(point: string): string {
-  const { prefix, rest } = splitKeyPointPrefix(point)
+  const p = String(point ?? '')
+  const wrap = (inner: string) =>
+    `<div style="font-size:13px;color:#525252;line-height:1.6;margin-bottom:9px;">${inner}</div>`
+  if (splitBoldSegments(p).some(seg => seg.bold)) {
+    return wrap(boldMarkersToHtml(escapeHtml(p), 'strong', 'color:#1a1a1c;'))
+  }
+  const { prefix, rest } = splitKeyPointPrefix(p)
   const restHtml = boldMarkersToHtml(escapeHtml(rest), 'strong')
   const prefixHtml = prefix
-    ? `<span style="color:#1a1a1c;font-weight:600;">${boldMarkersToHtml(escapeHtml(prefix), 'strong')} — </span>`
+    ? `<span style="color:#1a1a1c;font-weight:600;">${escapeHtml(prefix)} — </span>`
     : ''
-  return `<div style="font-size:13px;color:#525252;line-height:1.6;margin-bottom:9px;">${prefixHtml}${restHtml}</div>`
+  return wrap(`${prefixHtml}${restHtml}`)
 }
 
 // JSONB에서 읽은 값이 배열이 아닐 수 있어(문자열/객체/null) .map 호출 전 안전 변환.
@@ -182,7 +190,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       ${item.summary.tldr ? `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:20px;">
         <tr>
-          <td style="width:3px;"><div style="width:3px;min-height:44px;border-radius:2px;background:#1a1a1c;"></div></td>
+          <td style="width:3px;background:#1a1a1c;border-radius:2px;font-size:0;line-height:0;">&nbsp;</td>
           <td style="padding-left:12px;font-size:14.5px;font-weight:600;color:#1a1a1c;line-height:1.6;">${escapeHtml(item.summary.tldr)}</td>
         </tr>
       </table>` : ''}

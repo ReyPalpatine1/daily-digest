@@ -290,22 +290,22 @@ export default async function SharePage({ params }: PageProps) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                 {summary.keyPoints.map((p, i) => {
                   const active = activeKpIdx.has(i)
-                  const { prefix, rest } = splitKeyPointPrefix(p)
+                  // 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만.
+                  // 마커가 없는 과거 형식('앵커 — 부연')만 splitKeyPointPrefix로 앞부분을 굵게.
+                  const segs = splitBoldSegments(p)
+                  const legacy = segs.some(s => s.bold) ? null : splitKeyPointPrefix(p)
                   return (
                     <div key={i} style={{
                       fontSize: 13.5, lineHeight: 1.6,
                       color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
                       ...(active ? highlightStyle : {}),
                     }}>
-                      {prefix && (
+                      {legacy?.prefix && (
                         <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                          {splitBoldSegments(prefix).map((seg, bi) => (
-                            <span key={bi}>{seg.text}</span>
-                          ))}
-                          {' — '}
+                          {legacy.prefix}{' — '}
                         </span>
                       )}
-                      {splitBoldSegments(rest).map((seg, bi) =>
+                      {(legacy ? splitBoldSegments(legacy.rest) : segs).map((seg, bi) =>
                         seg.bold
                           ? <strong key={bi} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
                           : <span key={bi}>{seg.text}</span>

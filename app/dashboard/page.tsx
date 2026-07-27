@@ -2333,7 +2333,11 @@ export default function Dashboard() {
                                     {t('history.keyPoints')}
                                   </div>
                                   {digest.key_points.map((p, i) => {
-                                    const { prefix, rest } = splitKeyPointPrefix(p)
+                                    // 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만.
+                                    // 마커가 없는 과거 형식('앵커 — 부연')만 splitKeyPointPrefix로 앞부분을 굵게.
+                                    const segs = splitBoldSegments(p)
+                                    const legacy = segs.some(s => s.bold) ? null : splitKeyPointPrefix(p)
+                                    const prefix = legacy?.prefix
                                     return (
                                       <div key={i} style={{
                                         fontSize: 13, color: 'var(--text-secondary)',
@@ -2341,13 +2345,10 @@ export default function Dashboard() {
                                       }}>
                                         {prefix && (
                                           <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                                            {splitBoldSegments(prefix).map((seg, j) => (
-                                              <span key={j}>{seg.text}</span>
-                                            ))}
-                                            {' — '}
+                                            {prefix}{' — '}
                                           </span>
                                         )}
-                                        {splitBoldSegments(rest).map((seg, j) =>
+                                        {(legacy ? splitBoldSegments(legacy.rest) : segs).map((seg, j) =>
                                           seg.bold
                                             ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
                                             : <span key={j}>{seg.text}</span>
