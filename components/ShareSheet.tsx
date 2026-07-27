@@ -89,6 +89,9 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
   const [tlSel, setTlSel] = useState<Set<string>>(new Set())   // 타임라인 시각(time)
   const [creating, setCreating] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  // 링크를 만든 시점의 입력값 스냅샷. 현재 값과 다를 때만 "새 링크 만들기"를 노출한다
+  // (항상 노출하면 기존 링크가 무효가 되는 것처럼 오해할 수 있음).
+  const [createdSig, setCreatedSig] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [kakaoNotice, setKakaoNotice] = useState(false)
@@ -105,6 +108,14 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
     else next.add(v)
     setter(next)
   }
+
+  // 메모 + 강조 선택을 하나의 문자열로 요약 — 생성 시점 값과 비교해 변경 여부를 판정한다.
+  const inputSig = JSON.stringify({
+    comment: comment.trim(),
+    kp: [...kpSel].sort((a, b) => a - b),
+    tl: [...tlSel].sort(),
+  })
+  const changedSinceCreate = createdSig !== null && createdSig !== inputSig
 
   // 링크 생성(및 "새 링크 만들기" 재호출). 항상 새 토큰을 발급한다.
   const create = async () => {
@@ -134,6 +145,7 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.url) {
         setShareUrl(data.url)
+        setCreatedSig(inputSig) // 이 값으로 만들었음 → 버튼 숨김(이후 수정하면 다시 노출)
         // 생성 즉시 자동 복사 — await 뒤 clipboard는 사파리/모바일에서 막힐 수 있으므로 실패해도 무시(아래 복사 버튼이 안전망)
         try {
           await navigator.clipboard.writeText(data.url)
@@ -345,21 +357,23 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
                 {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? '복사됨' : '복사'}
               </button>
             </div>
-            {/* 새 링크 만들기 + 카카오톡 */}
+            {/* 새 링크 만들기(내용을 수정했을 때만) + 카카오톡 */}
             <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={create}
-                disabled={creating}
-                style={{
-                  flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '10px 14px', borderRadius: 8,
-                  background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-                  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
-                  cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit',
-                  opacity: creating ? 0.6 : 1,
-                }}>
-                <RefreshCw size={15} /> {creating ? '생성 중…' : '새 링크 만들기'}
-              </button>
+              {changedSinceCreate && (
+                <button
+                  onClick={create}
+                  disabled={creating}
+                  style={{
+                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '10px 14px', borderRadius: 8,
+                    background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
+                    cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit',
+                    opacity: creating ? 0.6 : 1,
+                  }}>
+                  <RefreshCw size={15} /> {creating ? '생성 중…' : '수정한 내용으로 새 링크 만들기'}
+                </button>
+              )}
               <button
                 onClick={() => {
                   setKakaoNotice(true)

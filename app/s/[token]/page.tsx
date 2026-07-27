@@ -60,19 +60,26 @@ const cardStyle: CSSProperties = {
   padding: 18,
 }
 
+// 섹션 라벨 — 열람기록(대시보드)과 동일 스타일. 문구도 같은 형태로 맞춘다(서버 컴포넌트라 t() 미사용).
 const sectionLabelStyle: CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6,
   fontSize: 11, fontWeight: 600, letterSpacing: 0.6,
-  color: 'var(--text-muted)', marginBottom: 10,
+  color: 'var(--text-muted)', marginBottom: 9,
 }
 
-// 공유자가 강조한 항목(핵심 포인트·요약 문장·타임라인 공통) 하이라이트 스타일
+// 메모 배너 라벨 — 아이콘과 함께 한 줄로.
+const bannerLabelStyle: CSSProperties = {
+  ...sectionLabelStyle,
+  display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 0,
+}
+
+// 공유자가 강조한 항목(핵심 포인트·타임라인 공통) 하이라이트 — 노란 배경만.
+// 세로 바·체크 없이, 좌우로 살짝 넓게 칠해 항목 단위임을 드러낸다(공유 시트와 동일).
 const highlightStyle: CSSProperties = {
-  background: 'rgba(255,205,0,0.18)',
-  boxShadow: 'inset 2px 0 0 var(--text-primary)',
-  borderRadius: 5,
+  background: 'rgba(255,205,0,0.20)',
+  borderRadius: 6,
   color: 'var(--text-primary)',
-  padding: '6px 8px',
+  margin: '0 -9px',
+  padding: '7px 9px',
 }
 
 // 문제 신고 mailto 링크 (공유 토큰을 제목에 포함)
@@ -239,16 +246,16 @@ export default async function SharePage({ params }: PageProps) {
 
   return (
     <Shell>
-      {/* (a) 공유자 메모 배너 */}
+      {/* (1) 공유자 메모 배너 */}
       {data.comment && (
         <div style={{
           ...cardStyle,
           background: 'var(--bg-subtle)',
           display: 'flex', flexDirection: 'column', gap: 6,
         }}>
-          <span style={{ ...sectionLabelStyle, marginBottom: 0 }}>
+          <span style={bannerLabelStyle}>
             <MessageSquareQuote size={12} />
-            {data.sharerName ? `${data.sharerName}님의 메모` : '익명의 메모'}
+            {data.sharerName ? `${data.sharerName}님의 메모` : '공유자 메모'}
           </span>
           <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.6 }}>
             {data.comment}
@@ -256,81 +263,96 @@ export default async function SharePage({ params }: PageProps) {
         </div>
       )}
 
-      {/* (b) 영상 제목 + 채널명 (임베드는 요약 아래로 이동) */}
+      {/* (2)~(6) 요약 카드 하나 — 열람기록과 동일하게 섹션별 박스 없이 여백·라벨로만 구분.
+          순서: 임베드 → 제목(폴백) → tldr → 타임라인 → 핵심 포인트.
+          타임라인은 클릭 시 플레이어가 그 시점으로 이동하므로 임베드 가까이 둔다(ShareVideo가 함께 렌더).
+          상세 요약은 공유 페이지에서 표시하지 않는다(이메일 전용) — 데이터는 계속 저장됨. */}
       <div style={cardStyle}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.45 }}>
-          {video.title}
-        </div>
-        {video.channelName && (
-          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>
-            {video.channelName}
+        <ShareVideo videoId={video.videoId} watchUrl={watchUrl} timeline={timelineItems}>
+          {/* (3) 영상 제목 — 임베드가 차단된 경우의 폴백 링크 */}
+          <a
+            href={watchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'block', marginBottom: 18,
+              fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5,
+              textDecoration: 'none',
+            }}>
+            {video.title}{video.channelName ? ` · ${video.channelName}` : ''}
+          </a>
+
+          {/* (4) tldr — 둥근 바 + 본문 (배경 없음) */}
+          {summary?.tldr && (
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+              <div style={{
+                width: 3, borderRadius: 2,
+                background: 'var(--text-primary)', flexShrink: 0,
+              }} />
+              <div style={{
+                fontSize: 14.5, fontWeight: 600,
+                color: 'var(--text-primary)', lineHeight: 1.6,
+              }}>
+                {summary.tldr}
+              </div>
+            </div>
+          )}
+        </ShareVideo>
+
+        {/* (6) 핵심 포인트 — 옅은 박스. 강조된 항목만 노란 배경 */}
+        {summary && summary.keyPoints.length > 0 && (
+          <div style={{
+            background: 'var(--bg-subtle)', borderRadius: 8,
+            padding: '14px 15px',
+          }}>
+            <div style={sectionLabelStyle}>📌 핵심 포인트</div>
+            {summary.keyPoints.map((p, i) => {
+              const active = activeKpIdx.has(i)
+              // 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만.
+              // 마커가 없는 과거 형식('앵커 — 부연')만 splitKeyPointPrefix로 앞부분을 굵게.
+              const segs = splitBoldSegments(p)
+              const legacy = segs.some(s => s.bold) ? null : splitKeyPointPrefix(p)
+              return (
+                <div key={i} style={{
+                  fontSize: 13, lineHeight: 1.6,
+                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  ...(active ? highlightStyle : {}),
+                  marginBottom: 9,
+                }}>
+                  {legacy?.prefix && (
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {legacy.prefix}{' — '}
+                    </span>
+                  )}
+                  {(legacy ? splitBoldSegments(legacy.rest) : segs).map((seg, bi) =>
+                    seg.bold
+                      ? <strong key={bi} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
+                      : <span key={bi}>{seg.text}</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {!summary && (
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            이 영상의 요약을 불러올 수 없어요. 위 영상에서 직접 확인해 주세요.
           </div>
         )}
       </div>
 
-      {summary ? (
-        <>
-          {/* (c) TL;DR 강조 박스 */}
-          {summary.tldr && (
-            <div style={{
-              ...cardStyle,
-              borderLeft: '3px solid var(--accent)',
-              fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.6,
-            }}>
-              {summary.tldr}
-            </div>
-          )}
-
-          {/* 역피라미드(이메일과 통일): tldr → 핵심 포인트 → 임베드 → 타임라인 */}
-          {/* 상세 요약은 공유 페이지에서 표시하지 않는다(이메일 전용) — 데이터는 계속 저장됨 */}
-          {/* (d) 핵심 포인트 — 불릿 없이 "앵커 — 설명" 한 줄, 앵커만 세미볼드. 강조된 항목만 하이라이트 */}
-          {summary.keyPoints.length > 0 && (
-            <div style={cardStyle}>
-              <div style={sectionLabelStyle}>핵심 포인트</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {summary.keyPoints.map((p, i) => {
-                  const active = activeKpIdx.has(i)
-                  // 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만.
-                  // 마커가 없는 과거 형식('앵커 — 부연')만 splitKeyPointPrefix로 앞부분을 굵게.
-                  const segs = splitBoldSegments(p)
-                  const legacy = segs.some(s => s.bold) ? null : splitKeyPointPrefix(p)
-                  return (
-                    <div key={i} style={{
-                      fontSize: 13.5, lineHeight: 1.6,
-                      color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      ...(active ? highlightStyle : {}),
-                    }}>
-                      {legacy?.prefix && (
-                        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                          {legacy.prefix}{' — '}
-                        </span>
-                      )}
-                      {(legacy ? splitBoldSegments(legacy.rest) : segs).map((seg, bi) =>
-                        seg.bold
-                          ? <strong key={bi} style={{ color: 'var(--text-primary)' }}>{seg.text}</strong>
-                          : <span key={bi}>{seg.text}</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <div style={{ ...cardStyle, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          이 영상의 요약을 불러올 수 없어요. 아래 영상에서 직접 확인해 주세요.
-        </div>
-      )}
-
-      {/* (f) 유튜브 임베드 + 타임라인(클릭 시 해당 시각 재생) */}
-      <ShareVideo videoId={video.videoId} watchUrl={watchUrl} timeline={timelineItems} />
-
-      {/* (g) 하단 가입 CTA */}
+      {/* (7) 하단 가입 CTA */}
       <SignupCta />
 
-      {/* (h) 푸터 — 문제 신고 */}
-      <div style={{ textAlign: 'center', paddingTop: 2 }}>
+      {/* (8) 푸터 — 유효기간 안내 + 문제 신고 */}
+      <div style={{
+        textAlign: 'center', paddingTop: 2,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+      }}>
+        <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+          공유 링크는 생성 후 14일간 유효해요
+        </span>
         <ReportLink token={token} />
       </div>
     </Shell>
