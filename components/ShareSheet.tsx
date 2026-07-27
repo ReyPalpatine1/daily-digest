@@ -191,7 +191,7 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
         role="dialog"
         aria-modal="true"
         style={{
-          width: '100%', maxWidth: 440,
+          width: '100%', maxWidth: 560,
           maxHeight: 'calc(100dvh - 28px)', overflowY: 'auto',
           background: 'var(--bg-card)',
           border: '0.5px solid var(--border)',

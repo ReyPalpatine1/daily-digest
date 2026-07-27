@@ -6,6 +6,7 @@ import { MessageSquareQuote, ShieldOff, Sparkles } from 'lucide-react'
 import { getShareByToken } from '@/lib/share'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import ShareVideo from '@/components/ShareVideo'
+import ScrollTopButton from '@/components/ScrollTopButton'
 
 // 공개 공유 페이지 — 로그인 불필요, 매 요청 조회 (토큰 만료/조회수 반영)
 export const dynamic = 'force-dynamic'
@@ -255,7 +256,7 @@ export default async function SharePage({ params }: PageProps) {
         }}>
           <span style={bannerLabelStyle}>
             <MessageSquareQuote size={12} />
-            {data.sharerName ? `${data.sharerName}님의 메모` : '공유자 메모'}
+            공유자 메모
           </span>
           <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.6 }}>
             {data.comment}
@@ -264,40 +265,40 @@ export default async function SharePage({ params }: PageProps) {
       )}
 
       {/* (2)~(6) 요약 카드 하나 — 열람기록과 동일하게 섹션별 박스 없이 여백·라벨로만 구분.
-          순서: 임베드 → 제목(폴백) → tldr → 타임라인 → 핵심 포인트.
+          순서: 임베드 → 제목 캡션 → 타임라인 → tldr → 핵심 포인트.
           타임라인은 클릭 시 플레이어가 그 시점으로 이동하므로 임베드 가까이 둔다(ShareVideo가 함께 렌더).
           상세 요약은 공유 페이지에서 표시하지 않는다(이메일 전용) — 데이터는 계속 저장됨. */}
       <div style={cardStyle}>
         <ShareVideo videoId={video.videoId} watchUrl={watchUrl} timeline={timelineItems}>
-          {/* (3) 영상 제목 — 임베드가 차단된 경우의 폴백 링크 */}
+          {/* (3) 영상 제목 — 임베드가 차단된 경우의 폴백 캡션(채널명은 표시하지 않음) */}
           <a
             href={watchUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              display: 'block', marginBottom: 18,
-              fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5,
+              display: 'block', marginTop: 7,
+              fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.5,
               textDecoration: 'none',
             }}>
-            {video.title}{video.channelName ? ` · ${video.channelName}` : ''}
+            {video.title}
           </a>
-
-          {/* (4) tldr — 둥근 바 + 본문 (배경 없음) */}
-          {summary?.tldr && (
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-              <div style={{
-                width: 3, borderRadius: 2,
-                background: 'var(--text-primary)', flexShrink: 0,
-              }} />
-              <div style={{
-                fontSize: 14.5, fontWeight: 600,
-                color: 'var(--text-primary)', lineHeight: 1.6,
-              }}>
-                {summary.tldr}
-              </div>
-            </div>
-          )}
         </ShareVideo>
+
+        {/* (5) tldr — 둥근 바 + 본문 (배경 없음) */}
+        {summary?.tldr && (
+          <div style={{ display: 'flex', gap: 12, marginBottom: 22 }}>
+            <div style={{
+              width: 3, borderRadius: 2,
+              background: 'var(--text-primary)', flexShrink: 0,
+            }} />
+            <div style={{
+              fontSize: 14.5, fontWeight: 600,
+              color: 'var(--text-primary)', lineHeight: 1.6,
+            }}>
+              {summary.tldr}
+            </div>
+          </div>
+        )}
 
         {/* (6) 핵심 포인트 — 옅은 박스. 강조된 항목만 노란 배경 */}
         {summary && summary.keyPoints.length > 0 && (
@@ -355,6 +356,9 @@ export default async function SharePage({ params }: PageProps) {
         </span>
         <ReportLink token={token} />
       </div>
+
+      {/* 맨 위로 — 열람기록과 동일한 공용 버튼 */}
+      <ScrollTopButton label="맨 위로" />
     </Shell>
   )
 }

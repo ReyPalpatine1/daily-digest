@@ -127,19 +127,19 @@ export async function createShare(params: {
 }
 
 // ── 공개 공유 페이지(/s/[token])용 조회 ──────────────────────────────
+// 공유 페이지 메모 라벨이 고정 문구('공유자 메모')가 되어 공유자 이름은 조회하지 않는다.
+// 채널명(channels.alias)도 사용자 별칭이라 공개 페이지에 부적절 — 원 채널명은 임베드에 표시된다.
+// show_name 컬럼은 DB에 남겨두되(기존 데이터 보존) 코드에서는 사용하지 않는다.
 export type ShareData = {
   expired: boolean
   blocked?: boolean // 운영 정책상 비공개 처리(blocked_at) — 만료보다 우선
   comment: string | null
   highlightTime: string | null
   annotations: ShareAnnotations | null
-  showName: boolean
-  sharerName: string | null // show_name=false거나 프로필 조회 실패 시 null(익명 처리)
   video: {
     videoId: string
     title: string
     description: string | null
-    channelName: string | null
   } | null
   summary: {
     tldr: string | null
@@ -160,18 +160,16 @@ export async function getShareByToken(
     const supabase = getSupabase()
     const { data: shareRow } = await supabase
       .from('shared_summaries')
-      .select('token, video_id, shared_by, comment, highlight_time, annotations, show_name, expires_at, blocked_at')
+      .select('token, video_id, comment, highlight_time, annotations, expires_at, blocked_at')
       .eq('token', token)
       .maybeSingle()
     if (!shareRow) return null
 
     const share = shareRow as {
       video_id: string
-      shared_by: string
       comment: string | null
       highlight_time: string | null
       annotations: unknown
-      show_name: boolean
       expires_at: string | null
       blocked_at: string | null
     }
@@ -181,16 +179,16 @@ export async function getShareByToken(
       return {
         blocked: true,
         expired: false,
-        comment: null, highlightTime: null, annotations: null, showName: false,
-        sharerName: null, video: null, summary: null,
+        comment: null, highlightTime: null, annotations: null,
+        video: null, summary: null,
       }
     }
 
     if (share.expires_at && new Date(share.expires_at) <= new Date()) {
       return {
         expired: true,
-        comment: null, highlightTime: null, annotations: null, showName: false,
-        sharerName: null, video: null, summary: null,
+        comment: null, highlightTime: null, annotations: null,
+        video: null, summary: null,
       }
     }
 
@@ -209,36 +207,21 @@ export async function getShareByToken(
       }
     }
 
-    // 영상 + 요약 + 공유자 이름 병렬 조회 (요약은 ko 우선, 없으면 임의 1행)
-    const [videoRes, summaryRes, profileRes] = await Promise.all([
+    // 영상 + 요약 병렬 조회 (요약은 ko 우선, 없으면 임의 1행)
+    const [videoRes, summaryRes] = await Promise.all([
       supabase.from('videos')
-        .select('video_id, title, channel_id, description')
+        .select('video_id, title, description')
         .eq('video_id', share.video_id)
         .maybeSingle(),
       supabase.from('video_summaries')
         .select('locale, tldr, summary, key_points, timeline, summary_basis')
         .eq('video_id', share.video_id)
         .limit(10),
-      share.show_name
-        ? supabase.from('profiles').select('name').eq('id', share.shared_by).maybeSingle()
-        : Promise.resolve({ data: null }),
     ])
 
     const videoRow = videoRes.data as {
-      video_id: string; title: string | null; channel_id: string | null; description: string | null
+      video_id: string; title: string | null; description: string | null
     } | null
-
-    // 채널명: channels는 사용자별 행이라 channel_id로 임의 1행의 alias 사용 (error-log.ts 패턴)
-    let channelName: string | null = null
-    if (videoRow?.channel_id) {
-      try {
-        const { data: ch } = await supabase
-          .from('channels').select('alias').eq('channel_id', videoRow.channel_id).limit(1)
-        channelName = (ch?.[0] as { alias?: string } | undefined)?.alias ?? null
-      } catch {
-        // 무시
-      }
-    }
 
     type SummaryRow = {
       locale: string | null
@@ -264,23 +247,16 @@ export async function getShareByToken(
         )
       : []
 
-    const sharerName = share.show_name
-      ? ((profileRes.data as { name?: string } | null)?.name?.trim() || null)
-      : null
-
     return {
       expired: false,
       comment: share.comment,
       highlightTime: share.highlight_time,
       annotations: validateAnnotations(share.annotations),
-      showName: share.show_name,
-      sharerName,
       video: videoRow
         ? {
             videoId: videoRow.video_id,
             title: videoRow.title ?? '(제목 없음)',
             description: videoRow.description,
-            channelName,
           }
         : null,
       summary: picked

@@ -19,6 +19,7 @@ import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { usePending } from '@/lib/use-pending'
 import { SkeletonList } from '@/components/Skeleton'
+import ScrollTopButton from '@/components/ScrollTopButton'
 
 // 진행 중 버튼 표기 — "지금 바로 실행" 버튼의 비활성 처리와 동일 토큰.
 const pendingBtnStyle: React.CSSProperties = {
@@ -115,7 +116,6 @@ export default function Dashboard() {
   // PRO 전용 채널 클릭 시 잠깐 뜨는 안내 문구(결제창 이동 없음)
   const [channelNotice, setChannelNotice] = useState<string | null>(null)
   // 열람 기록 "맨 위로" 버튼: 일정량 스크롤 시 노출
-  const [showScrollTop, setShowScrollTop] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [showAddChannel, setShowAddChannel] = useState(false)
@@ -287,14 +287,6 @@ export default function Dashboard() {
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
-  }, [])
-
-  // "맨 위로" 버튼: 400px 이상 스크롤 시 노출
-  useEffect(() => {
-    const onScroll = () => setShowScrollTop(window.scrollY > 400)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   useEffect(() => {
@@ -2577,24 +2569,8 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* 열람 기록 "맨 위로" 버튼 (히스토리 탭 + 일정량 스크롤 시) */}
-      {activeTab === 'history' && showScrollTop && (
-        <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          aria-label={t('history.scrollTop')}
-          title={t('history.scrollTop')}
-          style={{
-            position: 'fixed', right: 20, bottom: 20, zIndex: 60,
-            width: 40, height: 40, borderRadius: '50%',
-            background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-            color: 'var(--text-tertiary)', fontSize: 16,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', fontFamily: 'inherit',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-          }}>
-          ↑
-        </button>
-      )}
+      {/* 열람 기록 "맨 위로" 버튼 (히스토리 탭 + 일정량 스크롤 시) — 공유 페이지와 공용 컴포넌트 */}
+      <ScrollTopButton label={t('history.scrollTop')} enabled={activeTab === 'history'} />
 
       {/* 요약 공유 시트 */}
       {shareTarget && (
