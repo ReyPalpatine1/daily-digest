@@ -7,6 +7,7 @@ import type { Profile } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
+import HelpPopup from '@/components/HelpPopup'
 
 // 공통 상단바 — 대시보드 헤더와 동일한 모양/동작을 하위 페이지(profile/pricing)에서 재사용.
 // 대시보드 전용 네비(채널/발송설정/열람기록)는 포함하지 않는다 (A안: 하위 페이지엔 네비 없음).
@@ -47,6 +48,10 @@ export function AppHeader({
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 언어 하위 메뉴: 데스크탑은 옆 플라이아웃, 모바일은 인라인 아코디언으로 분기
   const [isMobile, setIsMobile] = useState(false)
+  // 도움말 팝업 — onHelpClick을 주지 않는 페이지(약관·의견 등)에서 헤더가 직접 띄운다.
+  // null = help_seen 미조회. HelpPopup은 initialDontShow를 마운트 시점에만 읽으므로 조회 후 렌더한다.
+  const [showHelp, setShowHelp] = useState(false)
+  const [helpSeen, setHelpSeen] = useState<boolean | null>(null)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
 
@@ -140,6 +145,37 @@ export function AppHeader({
   async function logout() {
     await supabase.auth.signOut()
     window.location.href = '/'
+  }
+
+  // 헤더 자체 도움말 열기 (onHelpClick 미전달 페이지 전용).
+  // help_seen은 처음 열 때 1회만 조회하고 이후엔 로컬 값을 재사용한다. 조회 실패 시 false로 열어준다.
+  function openOwnHelp() {
+    if (!user) return // 도움말 항목은 로그인 전용 (방어적 재확인)
+    setShowHelp(true)
+    if (helpSeen !== null) return
+    supabase
+      .from('settings')
+      .select('help_seen')
+      .eq('user_id', user.id)
+      .single()
+      .then(
+        ({ data }) => setHelpSeen((data as { help_seen?: boolean } | null)?.help_seen ?? false),
+        () => setHelpSeen(false)
+      )
+  }
+
+  // 헤더 자체 도움말 닫기 — 대시보드 closeHelp와 동일: 값이 바뀐 경우에만 저장.
+  // 저장 실패해도 팝업은 닫힌 상태를 유지한다.
+  async function closeOwnHelp(dontShowAgain: boolean) {
+    setShowHelp(false)
+    if (!user) return
+    if ((helpSeen ?? false) === dontShowAgain) return // 변경 없으면 저장 생략
+    setHelpSeen(dontShowAgain)
+    try {
+      await supabase.from('settings').update({ help_seen: dontShowAgain }).eq('user_id', user.id)
+    } catch {
+      // 저장 실패는 무시 (다음 열람 시 다시 시도)
+    }
   }
 
   // === 공통 스타일 토큰 (대시보드와 동일) ===
@@ -261,7 +297,7 @@ export function AppHeader({
         {/* 도움말·의견 보내기는 로그인(온보딩) 전용 → 비로그인 숨김 */}
         {isLoggedIn && (
           <>
-            <button style={dropdownItemStyle} onClick={() => { closeMenu(); if (onHelpClick) onHelpClick(); else router.push('/dashboard') }}>
+            <button style={dropdownItemStyle} onClick={() => { closeMenu(); if (onHelpClick) onHelpClick(); else openOwnHelp() }}>
               {t('settings.help')}
             </button>
             <button style={dropdownItemStyle} onClick={() => { closeMenu(); router.push('/feedback') }}>
@@ -483,6 +519,11 @@ export function AppHeader({
         <div ref={settingsMenuRef} style={dropdownStyle}>
           {renderSettingsItems(() => setSettingsOpen(false))}
         </div>
+      )}
+
+      {/* 헤더 자체 도움말 — onHelpClick을 전달한 페이지(대시보드·프로필)는 자기 팝업을 쓰므로 여기선 열리지 않는다 */}
+      {showHelp && helpSeen !== null && (
+        <HelpPopup t={t} isMobile={isMobile} initialDontShow={helpSeen} onClose={closeOwnHelp} />
       )}
     </>
   )
