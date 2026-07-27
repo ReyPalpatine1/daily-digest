@@ -18,6 +18,7 @@ import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2 } f
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { usePending } from '@/lib/use-pending'
+import { SkeletonList } from '@/components/Skeleton'
 
 // 진행 중 버튼 표기 — "지금 바로 실행" 버튼의 비활성 처리와 동일 토큰.
 const pendingBtnStyle: React.CSSProperties = {
@@ -126,6 +127,8 @@ export default function Dashboard() {
   const [historyDate, setHistoryDate] = useState('')
   const [historyChannel, setHistoryChannel] = useState('')
   const [historyCategory, setHistoryCategory] = useState('')
+  // 첫 진입 데이터 로딩(인증→프로필→loadData) 구간. runDigestNow용 loading과 별개.
+  const [initialLoading, setInitialLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [msgKey, setMsgKey] = useState<{ key: string; params?: Record<string, string | number>; ok?: boolean } | null>(null)
   const [newKeyword, setNewKeyword] = useState('')
@@ -208,69 +211,75 @@ export default function Dashboard() {
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
+      // 리다이렉트 경로는 화면이 곧 사라지므로 스켈레톤을 유지한 채 빠진다.
       if (!data.user) { window.location.href = '/'; return }
-      setUser(data.user)
-      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
-      const isAdminUser = adminEmails.includes(data.user.email?.toLowerCase() ?? '')
-      setIsAdmin(isAdminUser)
+      try {
+        setUser(data.user)
+        const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
+        const isAdminUser = adminEmails.includes(data.user.email?.toLowerCase() ?? '')
+        setIsAdmin(isAdminUser)
 
-      // 프로필 없으면 자동 생성 (신규 가입자는 plan='free')
-      const { data: profileRow } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single()
+        // 프로필 없으면 자동 생성 (신규 가입자는 plan='free')
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single()
 
-      if (!profileRow) {
-        const email = data.user.email ?? ''
-        const newProfile = {
-          id: data.user.id,
-          name: data.user.user_metadata?.full_name ?? email,
-          email,
-          plan: 'free' as const,
+        if (!profileRow) {
+          const email = data.user.email ?? ''
+          const newProfile = {
+            id: data.user.id,
+            name: data.user.user_metadata?.full_name ?? email,
+            email,
+            plan: 'free' as const,
+          }
+          await supabase.from('profiles').insert(newProfile)
+          setProfile({
+            ...newProfile,
+            plan_expires_at: null,
+            vip_granted_by: null,
+            vip_granted_at: null,
+            plan_status: 'none',
+            trial_used: false,
+          })
+          // 기본 설정 자동 생성
+          await supabase.from('settings').insert({
+            user_id: data.user.id,
+            send_time: '07:00',
+            email: data.user.email,
+            breaking_keywords: ['속보'],
+            breaking_alert: true,
+            active: true,
+          })
+          // 기본 카테고리 1개 자동 생성
+          await supabase.from('categories').insert([
+            { user_id: data.user.id, name: '기본 카테고리', color: '#4da6ff' },
+          ])
+        } else {
+          setProfile(profileRow as Profile)
+          const row = profileRow as Record<string, any>
+          setTrialFlags({
+            trial_ending_notified_at: row.trial_ending_notified_at ?? null,
+            trial_ended_notified_at: row.trial_ended_notified_at ?? null,
+            trial_ending_popup_seen_at: row.trial_ending_popup_seen_at ?? null,
+            trial_ended_popup_seen_at: row.trial_ended_popup_seen_at ?? null,
+          })
         }
-        await supabase.from('profiles').insert(newProfile)
-        setProfile({
-          ...newProfile,
-          plan_expires_at: null,
-          vip_granted_by: null,
-          vip_granted_at: null,
-          plan_status: 'none',
-          trial_used: false,
-        })
-        // 기본 설정 자동 생성
-        await supabase.from('settings').insert({
-          user_id: data.user.id,
-          send_time: '07:00',
-          email: data.user.email,
-          breaking_keywords: ['속보'],
-          breaking_alert: true,
-          active: true,
-        })
-        // 기본 카테고리 1개 자동 생성
-        await supabase.from('categories').insert([
-          { user_id: data.user.id, name: '기본 카테고리', color: '#4da6ff' },
-        ])
-      } else {
-        setProfile(profileRow as Profile)
-        const row = profileRow as Record<string, any>
-        setTrialFlags({
-          trial_ending_notified_at: row.trial_ending_notified_at ?? null,
-          trial_ended_notified_at: row.trial_ended_notified_at ?? null,
-          trial_ending_popup_seen_at: row.trial_ending_popup_seen_at ?? null,
-          trial_ended_popup_seen_at: row.trial_ended_popup_seen_at ?? null,
-        })
+
+        // 마지막 접속 기록 (실패해도 무시 - 통계용)
+        supabase
+          .from('profiles')
+          .update({ last_active_at: new Date().toISOString() })
+          .eq('id', data.user.id)
+          .then(() => {}, () => {})
+
+        await loadData(data.user.id)
+      } finally {
+        // 실패해도 스켈레톤이 남지 않도록 반드시 해제
+        setInitialLoading(false)
       }
-
-      // 마지막 접속 기록 (실패해도 무시 - 통계용)
-      supabase
-        .from('profiles')
-        .update({ last_active_at: new Date().toISOString() })
-        .eq('id', data.user.id)
-        .then(() => {}, () => {})
-
-      loadData(data.user.id)
-    })
+    }).catch(() => setInitialLoading(false))
   }, [])
 
   useEffect(() => {
@@ -1021,8 +1030,13 @@ export default function Dashboard() {
 
         {/* 각 탭이 자체 헤더(타이틀+서브타이틀)를 갖는다. 공통 헤더는 제거. */}
 
+        {/* 첫 진입 데이터 로딩 구간 — 헤더·탭 바는 그대로 두고 본문 자리에만 뼈대를 표시 */}
+        {initialLoading && (
+          <SkeletonList count={activeTab === 'schedule' ? 2 : 3} />
+        )}
+
         {/* =============== 채널 탭 (Phase 3: 새 디자인) =============== */}
-        {activeTab === 'channels' && (() => {
+        {!initialLoading && activeTab === 'channels' && (() => {
           const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '사용자'
           const todayStr = kstDateStr(0)
           const yesterdayStr = kstDateStr(1)
@@ -1629,7 +1643,7 @@ export default function Dashboard() {
         })()}
 
         {/* =============== 발송 설정 탭 (Phase 4: 새 디자인) =============== */}
-        {activeTab === 'schedule' && (() => {
+        {!initialLoading && activeTab === 'schedule' && (() => {
           const cardStyle: React.CSSProperties = {
             background: 'var(--bg-card)',
             border: '0.5px solid var(--border)',
@@ -2073,7 +2087,7 @@ export default function Dashboard() {
         })()}
 
         {/* =============== 열람 기록 탭 (Phase 4: 새 디자인) =============== */}
-        {activeTab === 'history' && (() => {
+        {!initialLoading && activeTab === 'history' && (() => {
           const cardStyle: React.CSSProperties = {
             background: 'var(--bg-card)',
             border: '0.5px solid var(--border)',
@@ -2536,7 +2550,7 @@ export default function Dashboard() {
         })()}
 
         {/* 광고 카드 + 의견 보내기 스트립 — 채널 탭 최하단 한정 (발송 설정·열람기록 탭에는 없음) */}
-        {activeTab === 'channels' && (
+        {!initialLoading && activeTab === 'channels' && (
           <>
             {/* 의견 보내기 스트립 — 채널 탭 최하단 한정 (채널 목록 바로 아래 이어짐) */}
             <div style={{

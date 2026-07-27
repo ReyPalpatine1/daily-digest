@@ -1,29 +1,21 @@
 // 라우트 전환 중 뼈대 화면 — 공유 페이지 골격(메모 + 요약(tldr·핵심 포인트) + 타임라인).
-
-const block = (style: React.CSSProperties): React.CSSProperties => ({
-  background: 'var(--bg-subtle)',
-  borderRadius: 8,
-  animation: 'dd-skeleton 1.4s ease-in-out infinite',
-  ...style,
-})
+import { SkeletonBlock } from '@/components/Skeleton'
 
 const card: React.CSSProperties = {
   background: 'var(--bg-card)',
   border: '0.5px solid var(--border)',
   borderRadius: 14,
   padding: 18,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 9,
 }
 
 export default function ShareLoading() {
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)' }}>
-      <style>{'@keyframes dd-skeleton{0%,100%{opacity:1}50%{opacity:.6}}'}</style>
-
-      <header style={{
-        borderBottom: '0.5px solid var(--border-light)',
-        padding: '14px 20px',
-      }}>
-        <div style={block({ width: 150, height: 20 })} />
+      <header style={{ borderBottom: '0.5px solid var(--border-light)', padding: '14px 20px' }}>
+        <SkeletonBlock height={20} width={150} />
       </header>
 
       <main style={{
@@ -32,38 +24,40 @@ export default function ShareLoading() {
       }}>
         {/* 메모 */}
         <div style={{ ...card, background: 'var(--bg-subtle)' }}>
-          <div style={block({ width: 110, height: 12, marginBottom: 10 })} />
-          <div style={block({ width: '70%', height: 13 })} />
+          <SkeletonBlock height={12} width={110} />
+          <SkeletonBlock height={13} width="70%" />
         </div>
 
         {/* 제목 */}
         <div style={card}>
-          <div style={block({ width: '85%', height: 18, marginBottom: 8 })} />
-          <div style={block({ width: 100, height: 12 })} />
+          <SkeletonBlock height={18} width="85%" />
+          <SkeletonBlock height={12} width={100} />
         </div>
 
-        {/* 요약(tldr) */}
+        {/* tldr */}
         <div style={card}>
-          <div style={block({ width: '92%', height: 14, marginBottom: 8 })} />
-          <div style={block({ width: '64%', height: 14 })} />
+          <SkeletonBlock height={14} width="92%" />
+          <SkeletonBlock height={14} width="64%" />
         </div>
 
         {/* 핵심 포인트 */}
         <div style={card}>
-          <div style={block({ width: 84, height: 12, marginBottom: 12 })} />
-          <div style={block({ width: '100%', height: 13, marginBottom: 9 })} />
-          <div style={block({ width: '88%', height: 13, marginBottom: 9 })} />
-          <div style={block({ width: '94%', height: 13 })} />
+          <SkeletonBlock height={12} width={84} />
+          <div style={{ height: 3 }} />
+          <SkeletonBlock height={13} />
+          <SkeletonBlock height={13} width="88%" />
+          <SkeletonBlock height={13} width="94%" />
         </div>
 
         {/* 임베드 + 타임라인 */}
         <div style={card}>
-          <div style={block({ width: '100%', height: 180, marginBottom: 14 })} />
-          <div style={block({ width: 70, height: 12, marginBottom: 12 })} />
+          <SkeletonBlock height={180} />
+          <div style={{ height: 5 }} />
+          <SkeletonBlock height={12} width={70} />
           {[0, 1, 2].map(i => (
-            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 9 }}>
-              <div style={block({ width: 42, height: 12, flexShrink: 0 })} />
-              <div style={block({ flex: 1, height: 12 })} />
+            <div key={i} style={{ display: 'flex', gap: 10 }}>
+              <SkeletonBlock height={12} width={42} />
+              <SkeletonBlock height={12} />
             </div>
           ))}
         </div>

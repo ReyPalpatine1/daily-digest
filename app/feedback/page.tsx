@@ -6,6 +6,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import { supabase } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
 import { usePending } from '@/lib/use-pending'
+import { SkeletonBlock } from '@/components/Skeleton'
 import { Star, CheckCircle } from 'lucide-react'
 
 type FeedbackType = 'general' | 'bug' | 'feature'
@@ -14,7 +15,8 @@ export default function FeedbackPage() {
   const router = useRouter()
   const { t, locale } = useTranslation()
 
-  const [ready, setReady] = useState(false)
+  // 첫 진입 사용자 정보 로딩 구간(해제 전까지 입력 영역 자리에 뼈대 표시)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [rating, setRating] = useState(0) // 0 = 미선택
   const [type, setType] = useState<FeedbackType>('general')
   const [message, setMessage] = useState('')
@@ -28,9 +30,10 @@ export default function FeedbackPage() {
     let cancelled = false
     supabase.auth.getUser().then(({ data }) => {
       if (cancelled) return
+      // 리다이렉트 경로는 화면이 곧 사라지므로 뼈대를 유지한 채 빠진다.
       if (!data.user) { router.push('/'); return }
-      setReady(true)
-    })
+      setInitialLoading(false)
+    }).catch(() => { if (!cancelled) setInitialLoading(false) })
     return () => { cancelled = true }
   }, [router])
 
@@ -82,8 +85,28 @@ export default function FeedbackPage() {
     })
   }
 
-  if (!ready) {
-    return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />
+  // 로딩 중에는 빈 화면 대신 입력 영역 자리의 뼈대를 보여준다(레이아웃 동일).
+  if (initialLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
+        fontFamily: 'var(--font-sans)',
+      }}>
+        <AppHeader showBack />
+        <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 20px 64px' }}>
+          <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <SkeletonBlock height={22} width="52%" />
+            <SkeletonBlock height={13} width="80%" />
+            <div style={{ height: 8 }} />
+            <SkeletonBlock height={36} width={180} />
+            <SkeletonBlock height={140} />
+            <SkeletonBlock height={44} />
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
