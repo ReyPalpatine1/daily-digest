@@ -264,27 +264,20 @@ export default async function SharePage({ params }: PageProps) {
         </div>
       )}
 
-      {/* (2)~(6) 요약 카드 하나 — 열람기록과 동일하게 섹션별 박스 없이 여백·라벨로만 구분.
-          순서: 임베드 → 제목 캡션 → 타임라인 → tldr → 핵심 포인트.
-          타임라인은 클릭 시 플레이어가 그 시점으로 이동하므로 임베드 가까이 둔다(ShareVideo가 함께 렌더).
+      {/* (2)~(4) 요약 카드 하나 — 열람기록과 동일하게 섹션별 박스 없이 여백·라벨로만 구분.
+          순서: 임베드 + 타임라인(ShareVideo) → tldr → 핵심 포인트.
+          타임라인은 클릭 시 플레이어가 그 시점으로 이동하므로 임베드 바로 아래에 둔다.
           상세 요약은 공유 페이지에서 표시하지 않는다(이메일 전용) — 데이터는 계속 저장됨. */}
       <div style={cardStyle}>
-        <ShareVideo videoId={video.videoId} watchUrl={watchUrl} timeline={timelineItems}>
-          {/* (3) 영상 제목 — 임베드가 차단된 경우의 폴백 캡션(채널명은 표시하지 않음) */}
-          <a
-            href={watchUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'block', marginTop: 7,
-              fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.5,
-              textDecoration: 'none',
-            }}>
-            {video.title}
-          </a>
-        </ShareVideo>
+        {/* (2) 임베드 + 제목 캡션 + 타임라인 */}
+        <ShareVideo
+          videoId={video.videoId}
+          videoTitle={video.title}
+          watchUrl={watchUrl}
+          timeline={timelineItems}
+        />
 
-        {/* (5) tldr — 둥근 바 + 본문 (배경 없음) */}
+        {/* (3) tldr — 둥근 바 + 본문 (배경 없음) */}
         {summary?.tldr && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 22 }}>
             <div style={{
@@ -300,7 +293,7 @@ export default async function SharePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* (6) 핵심 포인트 — 옅은 박스. 강조된 항목만 노란 배경 */}
+        {/* (4) 핵심 포인트 — 옅은 박스. 강조된 항목만 노란 배경 */}
         {summary && summary.keyPoints.length > 0 && (
           <div style={{
             background: 'var(--bg-subtle)', borderRadius: 8,
@@ -343,10 +336,10 @@ export default async function SharePage({ params }: PageProps) {
         )}
       </div>
 
-      {/* (7) 하단 가입 CTA */}
+      {/* (5) 하단 가입 CTA */}
       <SignupCta />
 
-      {/* (8) 푸터 — 유효기간 안내 + 문제 신고 */}
+      {/* (6) 푸터 — 유효기간 안내 + 문제 신고 */}
       <div style={{
         textAlign: 'center', paddingTop: 2,
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
