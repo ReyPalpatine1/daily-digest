@@ -85,7 +85,11 @@ export default function FeedbackPage() {
     })
   }
 
-  // 로딩 중에는 빈 화면 대신 입력 영역 자리의 뼈대를 보여준다(레이아웃 동일).
+  // 로딩 중에는 본문(제목·별점·유형·입력·버튼) 대신 뼈대를 렌더한다.
+  // 문구가 나중에 채워져 보이지 않도록, 번역 언어가 확정된 뒤에만 본문을 그린다:
+  // LocaleProvider가 마운트 이펙트에서 localStorage/브라우저 언어를 적용하고,
+  // initialLoading은 그보다 늦은 auth 응답 시점에 해제되므로 본문은 확정 언어로 한 번에 그려진다.
+  // 모양은 app/feedback/loading.tsx와 동일(전환 → 데이터 로딩 구간이 이어져 보이게).
   if (initialLoading) {
     return (
       <div style={{
@@ -96,11 +100,21 @@ export default function FeedbackPage() {
       }}>
         <AppHeader showBack />
         <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 20px 64px' }}>
-          <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <SkeletonBlock height={22} width="52%" />
-            <SkeletonBlock height={13} width="80%" />
-            <div style={{ height: 8 }} />
-            <SkeletonBlock height={36} width={180} />
+          <div style={{ marginBottom: 20 }}>
+            <SkeletonBlock height={22} width="46%" />
+          </div>
+          <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <SkeletonBlock height={13} width={120} />
+            <SkeletonBlock height={28} width={180} />
+            <div style={{ height: 12 }} />
+            <SkeletonBlock height={13} width={90} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SkeletonBlock height={36} />
+              <SkeletonBlock height={36} />
+              <SkeletonBlock height={36} />
+            </div>
+            <div style={{ height: 12 }} />
+            <SkeletonBlock height={13} width={90} />
             <SkeletonBlock height={140} />
             <SkeletonBlock height={44} />
           </div>
