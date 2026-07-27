@@ -17,6 +17,19 @@ import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2 } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
+import { usePending } from '@/lib/use-pending'
+
+// 진행 중 버튼 표기 — "지금 바로 실행" 버튼의 비활성 처리와 동일 토큰.
+const pendingBtnStyle: React.CSSProperties = {
+  cursor: 'not-allowed',
+  background: 'var(--bg-subtle)',
+  color: 'var(--text-muted)',
+}
+// 아이콘/텍스트 링크형 동작(✓ ✕ 등)은 라벨 교체가 불가 → 진행 중엔 흐리게 + 클릭 차단.
+const pendingIconStyle: React.CSSProperties = {
+  opacity: 0.45,
+  pointerEvents: 'none',
+}
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -141,6 +154,23 @@ export default function Dashboard() {
   const telegramPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const telegramCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const telegramExpiryRef = useRef<number>(0)
+
+  // 서버 호출 버튼 진행 표시 — 동작별 인스턴스(하나의 pending이 무관한 버튼을 잠그지 않도록 분리).
+  // 200ms 안에 끝나는 응답에서는 pending이 켜지지 않아 깜빡임이 없다(lib/use-pending.ts).
+  const chAdd = usePending()
+  const chUpdate = usePending()
+  const chDelete = usePending()
+  const chMove = usePending()
+  const catAdd = usePending()
+  const catRename = usePending()
+  const catDelete = usePending()
+  const kwAdd = usePending()
+  const kwRemove = usePending()
+  const sendTimeSave = usePending()
+  const emailSave = usePending()
+  const tgConnect = usePending()
+  const tgDisconnect = usePending()
+  const planSwitch = usePending()
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   // 처음 사용자 도움말 팝업: 진입 시 help_seen===false 자동 노출 / 설정에서 재열기
@@ -897,7 +927,7 @@ export default function Dashboard() {
         breakingUnread={breakingUnread}
         onOpenSidebar={() => setSidebarOpen(true)}
         adminPlanMode={isPro ? 'pro' : 'free'}
-        onAdminPlanModeChange={(mode) => switchPlanMode(mode)}
+        onAdminPlanModeChange={(mode) => planSwitch.run(() => switchPlanMode(mode))}
         onHelpClick={() => setShowHelp(true)}
       />
 
@@ -1239,14 +1269,17 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8 }}>
                     <input value={newCategory.name}
                       onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
-                      onKeyDown={e => e.key === 'Enter' && addCategory()}
+                      onKeyDown={e => e.key === 'Enter' && catAdd.run(addCategory)}
                       onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                       onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                       placeholder={t('channels.categoryName')}
                       style={{ ...inputStyle, flex: 1 }} />
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                       <button onClick={() => { setShowAddCategory(false); setNewCategory({ name: '', color: '' }) }} style={secondaryBtn}>{t('common.cancel')}</button>
-                      <button onClick={addCategory} style={primaryBtn}>{t('common.add')}</button>
+                      <button onClick={() => catAdd.run(addCategory)} disabled={catAdd.pending}
+                        style={catAdd.pending ? { ...primaryBtn, ...pendingBtnStyle } : primaryBtn}>
+                        {catAdd.pending ? t('common.adding') : t('common.add')}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1296,7 +1329,10 @@ export default function Dashboard() {
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <button onClick={() => setShowAddChannel(false)} style={secondaryBtn}>{t('common.cancel')}</button>
-                    <button onClick={addChannel} style={primaryBtn}>{t('common.addSubmit')}</button>
+                    <button onClick={() => chAdd.run(addChannel)} disabled={chAdd.pending}
+                      style={chAdd.pending ? { ...primaryBtn, ...pendingBtnStyle } : primaryBtn}>
+                      {chAdd.pending ? t('common.adding') : t('common.addSubmit')}
+                    </button>
                   </div>
                 </div>
               )}
@@ -1326,7 +1362,7 @@ export default function Dashboard() {
                               value={editingCatName}
                               onChange={e => setEditingCatName(e.target.value)}
                               onKeyDown={e => {
-                                if (e.key === 'Enter') updateCategoryName(cat.id, editingCatName)
+                                if (e.key === 'Enter') catRename.run(() => updateCategoryName(cat.id, editingCatName))
                                 if (e.key === 'Escape') setEditingCat(null)
                               }}
                               style={{
@@ -1335,8 +1371,11 @@ export default function Dashboard() {
                                 fontFamily: 'inherit',
                               }}
                             />
-                            <span onClick={() => updateCategoryName(cat.id, editingCatName)}
-                              style={{ cursor: 'pointer', color: 'var(--success)', fontSize: 12 }}>✓</span>
+                            <span onClick={() => catRename.run(() => updateCategoryName(cat.id, editingCatName))}
+                              style={{
+                                cursor: 'pointer', color: 'var(--success)', fontSize: 12,
+                                ...(catRename.pending ? pendingIconStyle : {}),
+                              }}>✓</span>
                             <span onClick={() => setEditingCat(null)}
                               style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>✕</span>
                           </div>
@@ -1360,10 +1399,11 @@ export default function Dashboard() {
                                 cursor: 'pointer', fontSize: 10, padding: '0 2px',
                                 color: active ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)',
                               }}>✎</span>
-                            <span onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id) }}
+                            <span onClick={(e) => { e.stopPropagation(); catDelete.run(() => deleteCategory(cat.id)) }}
                               style={{
                                 cursor: 'pointer', fontSize: 10, padding: '0 2px',
                                 color: active ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)',
+                                ...(catDelete.pending ? pendingIconStyle : {}),
                               }}>✕</span>
                           </span>
                         </button>
@@ -1481,7 +1521,10 @@ export default function Dashboard() {
                           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, justifyContent: 'flex-end' }}>
                             <button onClick={() => { setEditingChannel(null); setEditChannelData({ alias: '', emoji: '', url: '' }) }}
                               style={secondaryBtn}>{t('common.cancel')}</button>
-                            <button onClick={() => updateChannel(ch.id)} style={primaryBtn}>{t('common.save')}</button>
+                            <button onClick={() => chUpdate.run(() => updateChannel(ch.id))} disabled={chUpdate.pending}
+                              style={chUpdate.pending ? { ...primaryBtn, ...pendingBtnStyle } : primaryBtn}>
+                              {chUpdate.pending ? t('common.saving') : t('common.save')}
+                            </button>
                           </div>
                         </div>
                       )
@@ -1553,8 +1596,9 @@ export default function Dashboard() {
                             <select
                               autoFocus
                               defaultValue={ch.category_id ?? ''}
-                              onChange={e => moveChannel(ch.id, e.target.value)}
+                              onChange={e => chMove.run(() => moveChannel(ch.id, e.target.value))}
                               onBlur={() => setMovingChannel(null)}
+                              disabled={chMove.pending}
                               style={{
                                 background: 'var(--bg-card)',
                                 border: '0.5px solid var(--accent)',
@@ -1570,7 +1614,9 @@ export default function Dashboard() {
                           )}
                           <button onClick={() => { setEditingChannel(ch.id); setEditChannelData({ alias: ch.alias, emoji: ch.emoji, url: ch.url }) }}
                             title={t('channels.editChannelTitle')} style={rowActionBtn}>✎</button>
-                          <button onClick={() => deleteChannel(ch.id)} title={t('channels.deleteChannel')} style={rowActionBtn}>✕</button>
+                          <button onClick={() => chDelete.run(() => deleteChannel(ch.id))} disabled={chDelete.pending}
+                            title={t('channels.deleteChannel')}
+                            style={chDelete.pending ? { ...rowActionBtn, ...pendingIconStyle } : rowActionBtn}>✕</button>
                         </div>
                       </div>
                     )
@@ -1695,9 +1741,11 @@ export default function Dashboard() {
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
-                  <button onClick={saveSendTime} disabled={!sendTimeChanged}
-                    style={sendTimeChanged ? primaryBtn : disabledBtn}>
-                    {t('common.save')}
+                  <button onClick={() => sendTimeSave.run(saveSendTime)} disabled={!sendTimeChanged || sendTimeSave.pending}
+                    style={sendTimeSave.pending
+                      ? { ...primaryBtn, ...pendingBtnStyle }
+                      : sendTimeChanged ? primaryBtn : disabledBtn}>
+                    {sendTimeSave.pending ? t('common.saving') : t('common.save')}
                   </button>
                   {sendTimeStatus === 'saved' && (
                     <span style={{ fontSize: 12, color: 'var(--success)' }}>{t('common.saved')}</span>
@@ -1789,9 +1837,11 @@ export default function Dashboard() {
                                 {emailChanged && emailStatus !== 'saved' && (
                                   <span style={{ fontSize: 12, color: 'var(--warning)' }}>{t('common.changed')}</span>
                                 )}
-                                <button onClick={saveEmail} disabled={!emailChanged}
-                                  style={emailChanged ? primaryBtn : disabledBtn}>
-                                  {t('common.save')}
+                                <button onClick={() => emailSave.run(saveEmail)} disabled={!emailChanged || emailSave.pending}
+                                  style={emailSave.pending
+                                    ? { ...primaryBtn, ...pendingBtnStyle }
+                                    : emailChanged ? primaryBtn : disabledBtn}>
+                                  {emailSave.pending ? t('common.saving') : t('common.save')}
                                 </button>
                               </div>
                             </div>
@@ -1811,8 +1861,9 @@ export default function Dashboard() {
                                     {t('schedule.telegramConnected')}
                                   </span>
                                 </div>
-                                <button onClick={disconnectTelegram} style={{ ...secondaryBtn, flexShrink: 0 }}>
-                                  {t('schedule.telegramDisconnect')}
+                                <button onClick={() => tgDisconnect.run(disconnectTelegram)} disabled={tgDisconnect.pending}
+                                  style={{ ...secondaryBtn, ...(tgDisconnect.pending ? pendingBtnStyle : {}), flexShrink: 0 }}>
+                                  {tgDisconnect.pending ? t('common.connecting') : t('schedule.telegramDisconnect')}
                                 </button>
                               </div>
                             ) : linkPending ? (
@@ -1866,9 +1917,13 @@ export default function Dashboard() {
                                     bot: (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? '').replace(/^@/, '') || 'DailyDigest_test_bot',
                                   })}
                                 </div>
-                                <button onClick={connectTelegram} disabled={telegramLinking}
-                                  style={{ ...(telegramLinking ? disabledBtn : primaryBtn), flexShrink: 0 }}>
-                                  {t('schedule.telegramConnect')}
+                                <button onClick={() => tgConnect.run(connectTelegram)} disabled={telegramLinking || tgConnect.pending}
+                                  style={{
+                                    ...(telegramLinking ? disabledBtn : primaryBtn),
+                                    ...(tgConnect.pending ? pendingBtnStyle : {}),
+                                    flexShrink: 0,
+                                  }}>
+                                  {tgConnect.pending ? t('common.connecting') : t('schedule.telegramConnect')}
                                 </button>
                               </div>
                             )}
@@ -1956,8 +2011,11 @@ export default function Dashboard() {
                     }}>
                       <span>{kw}</span>
                       {isPro && (
-                        <span onClick={() => removeKeyword(kw)}
-                          style={{ cursor: 'pointer', fontSize: 10, color: 'var(--text-muted)' }}>✕</span>
+                        <span onClick={() => kwRemove.run(() => removeKeyword(kw))}
+                          style={{
+                            cursor: 'pointer', fontSize: 10, color: 'var(--text-muted)',
+                            ...(kwRemove.pending ? pendingIconStyle : {}),
+                          }}>✕</span>
                       )}
                     </div>
                   ))}
@@ -1967,7 +2025,7 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input value={newKeyword}
                     onChange={e => setNewKeyword(e.target.value)}
-                    onKeyDown={e => isPro && e.key === 'Enter' && addKeyword()}
+                    onKeyDown={e => isPro && e.key === 'Enter' && kwAdd.run(addKeyword)}
                     onFocus={e => isPro && (e.currentTarget.style.borderColor = 'var(--accent)')}
                     onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                     placeholder={isPro ? t('schedule.keywordPlaceholder') : t('schedule.keywordPlaceholderLocked')}
@@ -1978,10 +2036,13 @@ export default function Dashboard() {
                         console.log('[phase4] open upgrade modal — breaking keywords')
                         return
                       }
-                      addKeyword()
+                      kwAdd.run(addKeyword)
                     }}
-                    style={isPro ? primaryBtn : disabledBtn}>
-                    {isPro ? t('common.add') : '🔒 Pro'}
+                    disabled={kwAdd.pending}
+                    style={kwAdd.pending
+                      ? { ...primaryBtn, ...pendingBtnStyle }
+                      : isPro ? primaryBtn : disabledBtn}>
+                    {kwAdd.pending ? t('common.adding') : isPro ? t('common.add') : '🔒 Pro'}
                   </button>
                 </div>
               </div>

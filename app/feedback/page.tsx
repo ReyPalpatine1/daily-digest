@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { supabase } from '@/lib/supabase'
 import { AppHeader } from '@/components/AppHeader'
+import { usePending } from '@/lib/use-pending'
 import { Star, CheckCircle } from 'lucide-react'
 
 type FeedbackType = 'general' | 'bug' | 'feature'
@@ -17,7 +18,8 @@ export default function FeedbackPage() {
   const [rating, setRating] = useState(0) // 0 = 미선택
   const [type, setType] = useState<FeedbackType>('general')
   const [message, setMessage] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  // 제출 진행 표시 — 200ms 이내 응답에선 켜지지 않는다(lib/use-pending.ts)
+  const { pending: submitting, run: runSubmit } = usePending()
   const [submitted, setSubmitted] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
 
@@ -58,8 +60,7 @@ export default function FeedbackPage() {
 
   async function handleSubmit() {
     if (!canSubmit) return
-    setSubmitting(true)
-    try {
+    await runSubmit(async () => {
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,11 +77,9 @@ export default function FeedbackPage() {
         return
       }
       showToast('feedback.errorToast')
-    } catch {
+    }).catch(() => {
       showToast('feedback.errorToast')
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   if (!ready) {
@@ -225,7 +224,7 @@ export default function FeedbackPage() {
               opacity: canSubmit ? 1 : 0.5,
             }}
           >
-            {submitting ? t('feedback.submitting') : t('feedback.submit')}
+            {submitting ? t('common.processing') : t('feedback.submit')}
           </button>
         </div>
         )}
