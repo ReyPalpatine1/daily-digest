@@ -9,32 +9,45 @@ import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
-// 공유자가 강조한 항목 하이라이트(펼친 목록 안) — 노란 배경만. 공유 페이지·시트와 동일.
-const highlightStyle: CSSProperties = {
-  background: 'rgba(255,205,0,0.20)',
-  borderRadius: 6,
-  margin: '0 -9px',
-  padding: '7px 9px',
-}
-
-const rowBase: CSSProperties = {
-  display: 'flex', alignItems: 'flex-start', gap: 8,
-  width: '100%', textAlign: 'left',
-  border: 'none', background: 'transparent',
-  cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-}
-
-const timeStyle: CSSProperties = {
-  fontSize: 12, fontWeight: 600, flexShrink: 0, minWidth: 44,
-  fontVariantNumeric: 'tabular-nums', marginTop: 1,
-  color: 'var(--text-primary)',
-}
-
-const contentStyle: CSSProperties = {
-  fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)',
+// 목록 컨테이너 — 좌우 -9px로 강조 배경이 살짝 넓게 칠해진다.
+// 접힘(강조 구간)·펼침(전체 목록) 두 상태가 같은 규칙을 써야 토글해도 글자가 움직이지 않는다.
+const listStyle: CSSProperties = {
+  marginLeft: -9,
+  marginRight: -9,
 }
 
 type TimelineItem = { time: string; content: string; seconds: number; active: boolean }
+
+// 타임라인 한 줄 — 접힘·펼침 두 상태가 공유한다.
+// 강조 행은 배경색과 내용 글자색만 달라지고, padding·fontSize·minWidth는 동일하다(위치 어긋남 방지).
+function TimelineRow({ item, onSelect }: { item: TimelineItem; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left',
+        border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+        padding: '7px 9px', borderRadius: 6, marginBottom: 4,
+        background: item.active ? 'rgba(255,205,0,0.20)' : 'transparent',
+      }}>
+      <span style={{
+        display: 'inline-block', minWidth: 44,
+        fontVariantNumeric: 'tabular-nums',
+        fontWeight: 600, fontSize: 13,
+        color: 'var(--text-primary)',
+      }}>
+        {item.time}
+      </span>
+      <span style={{
+        fontSize: 13, lineHeight: 1.5,
+        color: item.active ? 'var(--text-primary)' : 'var(--text-secondary)',
+      }}>
+        {item.content}
+      </span>
+    </button>
+  )
+}
 
 export default function ShareVideo({
   videoId, videoTitle, watchUrl, timeline,
@@ -88,21 +101,9 @@ export default function ShareVideo({
         <div style={{ marginTop: 14, marginBottom: 20 }}>
           {/* 강조 구간 — 펼치면 목록 안에 표시되므로 감춘다(중복 방지) */}
           {!expanded && activeItems.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={listStyle}>
               {activeItems.map((item, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => seek(item.seconds)}
-                  style={{
-                    ...rowBase,
-                    background: 'rgba(255,205,0,0.20)',
-                    borderRadius: 8,
-                    padding: '10px 12px',
-                  }}>
-                  <span style={timeStyle}>{item.time}</span>
-                  <span style={contentStyle}>{item.content}</span>
-                </button>
+                <TimelineRow key={i} item={item} onSelect={() => seek(item.seconds)} />
               ))}
             </div>
           )}
@@ -113,7 +114,7 @@ export default function ShareVideo({
             onClick={() => setExpanded(v => !v)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
-              marginTop: !expanded && activeItems.length > 0 ? 10 : 0,
+              marginTop: !expanded && activeItems.length > 0 ? 6 : 0,
               background: 'transparent', border: 'none', padding: 0,
               fontSize: 11.5, color: 'var(--text-muted)',
               cursor: 'pointer', fontFamily: 'inherit',
@@ -124,25 +125,9 @@ export default function ShareVideo({
 
           {/* 펼침: 전체 목록 (강조 항목은 노란 배경) */}
           {expanded && (
-            <div style={{ marginTop: 10 }}>
+            <div style={{ ...listStyle, marginTop: 10 }}>
               {timeline.map((item, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => seek(item.seconds)}
-                  style={{
-                    ...rowBase,
-                    ...(item.active ? highlightStyle : {}),
-                    marginBottom: 6,
-                  }}>
-                  <span style={timeStyle}>{item.time}</span>
-                  <span style={{
-                    ...contentStyle,
-                    color: item.active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  }}>
-                    {item.content}
-                  </span>
-                </button>
+                <TimelineRow key={i} item={item} onSelect={() => seek(item.seconds)} />
               ))}
             </div>
           )}
