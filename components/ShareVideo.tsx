@@ -7,7 +7,6 @@
 // 서식은 열람기록과 통일 — 자체 카드 박스 없이 여백으로만 구분한다(페이지가 카드 하나로 감싼다).
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 
 // 목록 컨테이너 — 좌우 -9px로 강조 배경이 살짝 넓게 칠해진다.
 // 접힘(강조 구간)·펼침(전체 목록) 두 상태가 같은 규칙을 써야 토글해도 글자가 움직이지 않는다.
@@ -104,13 +103,12 @@ export default function ShareVideo({
             type="button"
             onClick={() => setExpanded(v => !v)}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
+              display: 'inline-flex', alignItems: 'center',
               background: 'transparent', border: 'none', padding: 0,
               fontSize: 11.5, color: 'var(--text-muted)',
               cursor: 'pointer', fontFamily: 'inherit',
             }}>
-            {expanded ? '접기' : '전체 타임라인'}
-            {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            {expanded ? '타임라인 접기' : '타임라인 펼치기'}
           </button>
 
           {/* 접힘: 강조 구간만 (펼치면 목록 안에 표시되므로 감춘다 — 중복 방지) */}

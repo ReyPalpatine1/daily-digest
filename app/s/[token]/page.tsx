@@ -283,7 +283,7 @@ export default async function SharePage({ params }: PageProps) {
 
         {/* (3) tldr — 둥근 바 + 본문 (배경 없음) */}
         {summary?.tldr && (
-          <div style={{ display: 'flex', gap: 12, marginBottom: 22 }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
             <div style={{
               width: 3, borderRadius: 2,
               background: 'var(--text-primary)', flexShrink: 0,
