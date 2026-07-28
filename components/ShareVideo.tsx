@@ -28,7 +28,7 @@ function TimelineRow({ item, onSelect }: { item: TimelineItem; onSelect: () => v
       style={{
         display: 'block', width: '100%', textAlign: 'left',
         border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-        padding: '7px 9px', borderRadius: 6, marginBottom: 4,
+        padding: '7px 9px', borderRadius: 6, marginBottom: 3,
         background: item.active ? 'rgba(255,205,0,0.20)' : 'transparent',
       }}>
       <span style={{
@@ -98,23 +98,13 @@ export default function ShareVideo({
       </a>
 
       {timeline.length > 0 && (
-        <div style={{ marginTop: 14, marginBottom: 20 }}>
-          {/* 강조 구간 — 펼치면 목록 안에 표시되므로 감춘다(중복 방지) */}
-          {!expanded && activeItems.length > 0 && (
-            <div style={listStyle}>
-              {activeItems.map((item, i) => (
-                <TimelineRow key={i} item={item} onSelect={() => seek(item.seconds)} />
-              ))}
-            </div>
-          )}
-
-          {/* 토글 — 왼쪽 정렬 텍스트 버튼 */}
+        <div style={{ marginTop: 8, marginBottom: 16 }}>
+          {/* 토글 — 블록 맨 위 고정(왼쪽 정렬). 아래 내용만 늘고 줄어 버튼 y가 움직이지 않는다 */}
           <button
             type="button"
             onClick={() => setExpanded(v => !v)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
-              marginTop: !expanded && activeItems.length > 0 ? 6 : 0,
               background: 'transparent', border: 'none', padding: 0,
               fontSize: 11.5, color: 'var(--text-muted)',
               cursor: 'pointer', fontFamily: 'inherit',
@@ -123,9 +113,18 @@ export default function ShareVideo({
             {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
 
+          {/* 접힘: 강조 구간만 (펼치면 목록 안에 표시되므로 감춘다 — 중복 방지) */}
+          {!expanded && activeItems.length > 0 && (
+            <div style={{ ...listStyle, marginTop: 8 }}>
+              {activeItems.map((item, i) => (
+                <TimelineRow key={i} item={item} onSelect={() => seek(item.seconds)} />
+              ))}
+            </div>
+          )}
+
           {/* 펼침: 전체 목록 (강조 항목은 노란 배경) */}
           {expanded && (
-            <div style={{ ...listStyle, marginTop: 10 }}>
+            <div style={{ ...listStyle, marginTop: 8 }}>
               {timeline.map((item, i) => (
                 <TimelineRow key={i} item={item} onSelect={() => seek(item.seconds)} />
               ))}
