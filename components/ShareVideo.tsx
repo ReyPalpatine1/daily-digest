@@ -28,7 +28,7 @@ function TimelineRow({ item, onSelect }: { item: TimelineItem; onSelect: () => v
       style={{
         display: 'block', width: '100%', textAlign: 'left',
         border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-        padding: '5px 9px', borderRadius: 6, marginBottom: 3,
+        padding: '3px 9px', borderRadius: 6, marginBottom: 5,
         background: item.active ? 'rgba(255,205,0,0.20)' : 'transparent',
       }}>
       <span style={{
@@ -98,7 +98,7 @@ export default function ShareVideo({
       </a>
 
       {timeline.length > 0 && (
-        <div style={{ marginTop: 8, marginBottom: 16 }}>
+        <div style={{ marginTop: 8, marginBottom: 26 }}>
           {/* 토글 — 블록 맨 위 고정(왼쪽 정렬). 아래 내용만 늘고 줄어 버튼 y가 움직이지 않는다 */}
           <button
             type="button"

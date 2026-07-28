@@ -73,14 +73,18 @@ const bannerLabelStyle: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 0,
 }
 
-// 공유자가 강조한 항목(핵심 포인트·타임라인 공통) 하이라이트 — 노란 배경만.
-// 세로 바·체크 없이, 좌우로 살짝 넓게 칠해 항목 단위임을 드러낸다(공유 시트와 동일).
+// 항목 행 공통 — 강조 여부와 무관하게 같은 여백을 줘 강조가 붙어도 글자가 움직이지 않게 한다.
+// 좌우 -9px로 살짝 넓게 칠해 항목 단위임을 드러낸다(공유 시트·타임라인과 동일 규칙).
+const rowStyle: CSSProperties = {
+  margin: '0 -9px',
+  padding: '3px 9px',
+  borderRadius: 6,
+}
+
+// 공유자가 강조한 항목 하이라이트 — 노란 배경만(세로 바·체크 없음).
 const highlightStyle: CSSProperties = {
   background: 'rgba(255,205,0,0.20)',
-  borderRadius: 6,
   color: 'var(--text-primary)',
-  margin: '0 -9px',
-  padding: '7px 9px',
 }
 
 // 문제 신고 mailto 링크 (공유 토큰을 제목에 포함)
@@ -309,9 +313,10 @@ export default async function SharePage({ params }: PageProps) {
               return (
                 <div key={i} style={{
                   fontSize: 13, lineHeight: 1.6,
-                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  color: 'var(--text-secondary)',
+                  ...rowStyle,
                   ...(active ? highlightStyle : {}),
-                  marginBottom: 9,
+                  marginBottom: 5,
                 }}>
                   {legacy?.prefix && (
                     <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>

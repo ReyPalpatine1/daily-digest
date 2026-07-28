@@ -57,8 +57,9 @@ function AnnRow(props: { time?: string; highlighted: boolean; onToggle: () => vo
       onClick={onToggle}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 8,
-        margin: '0 -9px', padding: '7px 9px', borderRadius: 6, cursor: 'pointer',
+        margin: '0 -9px', padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
         background: highlighted ? 'rgba(255,205,0,0.20)' : 'transparent',
+        marginBottom: 5,
       }}>
       {time !== undefined && (
         <span style={{
