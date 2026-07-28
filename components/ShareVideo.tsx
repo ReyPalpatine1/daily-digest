@@ -28,7 +28,7 @@ function TimelineRow({ item, onSelect }: { item: TimelineItem; onSelect: () => v
       style={{
         display: 'block', width: '100%', textAlign: 'left',
         border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-        padding: '7px 9px', borderRadius: 6, marginBottom: 3,
+        padding: '5px 9px', borderRadius: 6, marginBottom: 3,
         background: item.active ? 'rgba(255,205,0,0.20)' : 'transparent',
       }}>
       <span style={{

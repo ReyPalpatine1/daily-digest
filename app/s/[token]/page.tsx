@@ -211,7 +211,7 @@ export default async function SharePage({ params }: PageProps) {
     return (
       <NoticePage
         title="이 공유는 만료되었습니다"
-        desc="공유 링크는 생성 후 14일간 유효해요."
+        desc="공유 링크는 생성 후 14일이 지나면 만료됩니다."
         reportToken={token}
       />
     )
@@ -339,13 +339,14 @@ export default async function SharePage({ params }: PageProps) {
       {/* (5) 하단 가입 CTA */}
       <SignupCta />
 
-      {/* (6) 푸터 — 유효기간 안내 + 문제 신고 */}
+      {/* (6) 푸터 — 만료 안내(좌) + 문제 신고(우) 한 줄. 좁은 화면에선 줄바꿈 */}
       <div style={{
-        textAlign: 'center', paddingTop: 2,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+        paddingTop: 2,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 8,
       }}>
         <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
-          공유 링크는 생성 후 14일간 유효해요
+          이 링크는 14일 후 만료됩니다.
         </span>
         <ReportLink token={token} />
       </div>

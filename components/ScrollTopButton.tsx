@@ -1,11 +1,11 @@
 'use client'
 
 // "맨 위로" 버튼 — 열람기록(대시보드)에서 쓰던 구현을 그대로 공용화한 것.
-// 일정량(400px) 이상 스크롤하면 우하단에 원형 버튼으로 노출된다.
+// 일정량(200px) 이상 스크롤하면 우하단에 원형 버튼으로 노출된다(열람기록·공유 페이지 공통).
 // enabled=false면 스크롤 위치와 무관하게 렌더하지 않는다(대시보드의 탭 조건용).
 import { useEffect, useState } from 'react'
 
-const SHOW_AFTER_PX = 400
+const SHOW_AFTER_PX = 200
 
 export default function ScrollTopButton({
   label,
