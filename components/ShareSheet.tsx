@@ -269,14 +269,14 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
       try {
         const share = window.Kakao?.Share
         if (!share) throw new Error('kakao share unavailable')
-        // 영상 제목은 썸네일로 이미 전달되므로 카드 문구에 넣지 않는다(비슷한 문장 반복 방지).
-        // 메모가 있으면 메모를 제목·tldr을 설명으로, 없으면 tldr만 제목에 둔다(설명 생략).
-        // 둘 다 없을 때만 영상 제목을 제목으로 쓴다.
+        // 제목=메모, 설명=tldr 구성을 메모 유무와 관계없이 유지한다.
+        // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다.
+        // tldr이 없을 때만 설명을 영상 제목으로 대체하고, 그것도 없으면 설명을 생략한다.
         const memo = cardText(comment, KAKAO_TITLE_MAX)
-        const title = memo
-          || cardText(tldr, KAKAO_TITLE_MAX)
-          || cardText(videoTitle, KAKAO_TITLE_MAX)
-        const desc = memo ? cardText(tldr, KAKAO_DESC_MAX) : ''
+        const title = memo || '핵심만 요약했어요'
+        const desc = memo
+          ? cardText(tldr, KAKAO_DESC_MAX)
+          : cardText(tldr, KAKAO_DESC_MAX) || cardText(videoTitle, KAKAO_DESC_MAX)
         const link = { mobileWebUrl: shareUrl, webUrl: shareUrl }
         share.sendDefault({
           objectType: 'feed',
