@@ -286,7 +286,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
             imageUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
             link,
           },
-          buttons: [{ title: '요약 보기', link }],
+          buttons: [{ title: '요약 더보기', link }],
         })
       } catch {
         showKakaoNotice('카카오톡 공유에 실패했어요. 링크를 복사해 붙여넣어 주세요.')
