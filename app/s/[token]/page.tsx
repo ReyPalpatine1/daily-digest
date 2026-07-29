@@ -201,7 +201,7 @@ export default async function SharePage({ params }: PageProps) {
     return (
       <NoticePage
         icon={<ShieldOff size={22} />}
-        title="더 이상 볼 수 없는 공유입니다"
+        title="더 이상 볼 수 없는 공유입니다."
         desc="운영 정책에 따라 비공개 처리되었습니다."
         cta={false}
       />
@@ -210,7 +210,7 @@ export default async function SharePage({ params }: PageProps) {
   if (data.expired || !data.video) {
     return (
       <NoticePage
-        title="이 공유는 만료되었습니다"
+        title="이 공유는 만료되었습니다."
         desc="공유 링크는 생성 후 14일이 지나면 만료됩니다."
         reportToken={token}
       />
