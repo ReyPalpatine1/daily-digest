@@ -25,7 +25,7 @@ type Props = {
 const KAKAO_SDK_SRC = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js'
 const KAKAO_SDK_INTEGRITY = 'sha384-dok87au0gKqJdxs7msEdBPNnKSRT+/mhTVzq+qOhcL464zXwvcrpjeWvyj1kCdq6'
 // 피드 카드는 제목·설명이 각각 두 줄 남짓에서 잘리므로, 표시되는 만큼만 담는다.
-const KAKAO_TITLE_MAX = 45 // 카카오 피드 카드 제목 표시 한도
+const KAKAO_TITLE_MAX = 40 // 카카오 피드 카드 제목 표시 한도
 const KAKAO_DESC_MAX = 60 // 카카오 피드 카드 설명 표시 한도
 
 // 카드 문구 다듬기 — 볼드 마커(**)를 지운 뒤, 상한을 넘으면 상한 이내 마지막 공백에서 자르고
@@ -269,13 +269,14 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
       try {
         const share = window.Kakao?.Share
         if (!share) throw new Error('kakao share unavailable')
-        // 결론이 먼저 보이도록 제목에 tldr(한 줄 요약)을 둔다.
-        // tldr이 없으면 제목이 영상 제목이 되므로, 설명은 공유자 메모로 대체(그것도 없으면 생략).
-        const lead = cardText(tldr, KAKAO_TITLE_MAX)
-        const title = lead || cardText(videoTitle, KAKAO_TITLE_MAX)
-        const desc = lead
-          ? cardText(videoTitle, KAKAO_DESC_MAX)
-          : cardText(comment, KAKAO_DESC_MAX)
+        // 영상 제목은 썸네일로 이미 전달되므로 카드 문구에 넣지 않는다(비슷한 문장 반복 방지).
+        // 메모가 있으면 메모를 제목·tldr을 설명으로, 없으면 tldr만 제목에 둔다(설명 생략).
+        // 둘 다 없을 때만 영상 제목을 제목으로 쓴다.
+        const memo = cardText(comment, KAKAO_TITLE_MAX)
+        const title = memo
+          || cardText(tldr, KAKAO_TITLE_MAX)
+          || cardText(videoTitle, KAKAO_TITLE_MAX)
+        const desc = memo ? cardText(tldr, KAKAO_DESC_MAX) : ''
         const link = { mobileWebUrl: shareUrl, webUrl: shareUrl }
         share.sendDefault({
           objectType: 'feed',
