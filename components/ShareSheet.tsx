@@ -377,10 +377,11 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           <div>
             {hasSelectable && (
               <>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 18 }}>
+                {/* 구분선을 먼저 둬 안내 문구가 메모 설명으로 읽히지 않게 한다(아래 내용에 대한 안내). */}
+                <div style={{ height: 1, background: 'rgba(128,128,128,0.16)', marginBottom: 14 }} />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>
                   강조할 부분을 선택해주세요.
                 </div>
-                <div style={{ height: 1, background: 'rgba(128,128,128,0.16)', marginBottom: 18 }} />
               </>
             )}
 
