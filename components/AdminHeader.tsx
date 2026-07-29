@@ -14,9 +14,9 @@ const ADMIN_BAR_FG = '#FAFAFA'
 const ADMIN_BAR_MUTED = '#71717A'
 const ADMIN_BAR_SUBTLE = '#1F1F1F'
 
-export type AdminNavKey = 'dashboard' | 'users' | 'errors' | 'feedback' | 'content' | 'system' | 'email'
+export type AdminNavKey = 'dashboard' | 'users' | 'errors' | 'reports' | 'feedback' | 'content' | 'system' | 'email'
 
-export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread }: { activeKey: AdminNavKey; feedbackNewCount?: number; errorsUnread?: number }) {
+export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread, reportsNew }: { activeKey: AdminNavKey; feedbackNewCount?: number; errorsUnread?: number; reportsNew?: number }) {
   const router = useRouter()
   const { t } = useTranslation()
 
@@ -49,11 +49,26 @@ export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread }: { act
 
   const errorsBadgeCount = errorsUnread !== undefined ? errorsUnread : errorsCount
 
+  // 미확인(new) 공유 신고 개수 — feedback/errors와 동일 패턴(페이지가 내려주면 자체 fetch 생략).
+  const [reportsCount, setReportsCount] = useState(0)
+  useEffect(() => {
+    if (reportsNew !== undefined) return
+    let cancelled = false
+    fetch('/api/admin/reports/count')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (!cancelled && data) setReportsCount(data.newCount ?? 0) })
+      .catch(() => { /* 무시 */ })
+    return () => { cancelled = true }
+  }, [reportsNew])
+
+  const reportsBadgeCount = reportsNew !== undefined ? reportsNew : reportsCount
+
   const navItems: { key: AdminNavKey; label: string; href?: string }[] = [
     { key: 'dashboard', label: t('admin.menuDashboard'), href: '/admin' },
     { key: 'system', label: t('admin.menuSystem'), href: '/admin/system' },
     { key: 'errors', label: t('admin.menuErrors'), href: '/admin/errors' },
     { key: 'users', label: t('admin.menuUsers'), href: '/admin/users' },
+    { key: 'reports', label: t('admin.menuReports'), href: '/admin/reports' },
     { key: 'feedback', label: t('admin.menuFeedback'), href: '/admin/feedback' },
     { key: 'content', label: t('admin.menuContent'), href: '/admin/content' },
     { key: 'email', label: '📧 Email', href: '/admin/email-preview' },
@@ -120,6 +135,13 @@ export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread }: { act
                   fontSize: 10, fontWeight: 600,
                   padding: '1px 6px', borderRadius: 999,
                 }}>{errorsBadgeCount}</span>
+              )}
+              {item.key === 'reports' && reportsBadgeCount > 0 && (
+                <span style={{
+                  background: 'var(--danger)', color: '#fff',
+                  fontSize: 10, fontWeight: 600,
+                  padding: '1px 6px', borderRadius: 999,
+                }}>{reportsBadgeCount}</span>
               )}
             </button>
           )
