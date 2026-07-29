@@ -273,7 +273,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
         // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다.
         // tldr이 없을 때만 설명을 영상 제목으로 대체하고, 그것도 없으면 설명을 생략한다.
         const memo = cardText(comment, KAKAO_TITLE_MAX)
-        const title = memo || '핵심만 요약했어요'
+        const title = memo || '📌 핵심 포인트'
         const desc = memo
           ? cardText(tldr, KAKAO_DESC_MAX)
           : cardText(tldr, KAKAO_DESC_MAX) || cardText(videoTitle, KAKAO_DESC_MAX)
