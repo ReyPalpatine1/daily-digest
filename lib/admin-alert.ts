@@ -170,7 +170,7 @@ export async function sendAdminFeedbackAlert(feedback: FeedbackAlert): Promise<v
         const ratingLabel = feedback.rating ? `${feedback.rating}★` : '-'
         const preview = feedback.message.length > 300 ? feedback.message.slice(0, 300) + '…' : feedback.message
         const lines: string[] = [
-          '💬 새 피드백이 도착했습니다',
+          '💬 새 의견 도착',
           escapeTg(`유형: ${feedback.type} · 별점: ${ratingLabel}`),
           escapeTg(`작성자: ${feedback.userEmail || '(알 수 없음)'}`),
           escapeTg(preview),
@@ -222,7 +222,7 @@ export async function sendAdminShareReportAlert(report: ShareReportAlert): Promi
         }
         const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
         const lines: string[] = [
-          '🚨 공유 페이지 신고가 접수되었습니다',
+          '🚨 공유 페이지 신고 접수',
           escapeTg(`사유: ${report.reasonLabel}`),
           escapeTg(`영상: ${report.videoTitle ?? '(알 수 없음)'}`),
           escapeTg(`상세: ${report.detail ?? '(없음)'}`),

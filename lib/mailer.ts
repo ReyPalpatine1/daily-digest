@@ -438,11 +438,11 @@ export async function sendAdminFeedbackEmail(feedback: {
 
   const mail = {
     from: `"Daily Video Digest 피드백" <${process.env.MAIL_FROM}>`,
-    subject: '[피드백] 새 의견이 도착했습니다',
+    subject: '[피드백] 새 의견 도착',
     html: `
       <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
         <div style="background:#f8f9fb;border:1px solid #e2e5ea;border-radius:12px;padding:24px">
-          <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px">새 피드백이 도착했습니다</h1>
+          <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px">새 의견 도착</h1>
           <div style="font-size:14px;color:#333;line-height:1.7;margin-bottom:20px">
             <p style="margin:0 0 6px">접수 시각: ${now}</p>
             <p style="margin:0 0 6px">유형: <strong>${typeLabel[feedback.type] ?? feedback.type}</strong></p>
@@ -507,11 +507,11 @@ export async function sendAdminShareReportEmail(report: {
 
   const mail = {
     from: `"Daily Video Digest 공유 신고" <${process.env.MAIL_FROM}>`,
-    subject: '[신고] 공유 페이지 문제 신고가 접수되었습니다',
+    subject: '[신고] 공유 페이지 신고 접수',
     html: `
       <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
         <div style="background:#f8f9fb;border:1px solid #e2e5ea;border-radius:12px;padding:24px">
-          <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px">공유 페이지 신고가 접수되었습니다</h1>
+          <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px">공유 페이지 신고 접수</h1>
           <div style="font-size:14px;color:#333;line-height:1.7;margin-bottom:20px">
             <p style="margin:0 0 6px">접수 시각: ${now}</p>
             <p style="margin:0 0 6px">신고 사유: <strong>${escape(report.reasonLabel)}</strong></p>
