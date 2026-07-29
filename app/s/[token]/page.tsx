@@ -7,6 +7,7 @@ import { getShareByToken } from '@/lib/share'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import ShareVideo from '@/components/ShareVideo'
 import ScrollTopButton from '@/components/ScrollTopButton'
+import ShareReportButton from '@/components/ShareReportButton'
 
 // 공개 공유 페이지 — 로그인 불필요, 매 요청 조회 (토큰 만료/조회수 반영)
 export const dynamic = 'force-dynamic'
@@ -87,14 +88,9 @@ const highlightStyle: CSSProperties = {
   color: 'var(--text-primary)',
 }
 
-// 문제 신고 mailto 링크 (공유 토큰을 제목에 포함)
+// 문제 신고 — 신고 모달(ReportModal)을 여는 버튼. 상태가 필요해 클라이언트 래퍼로 감싼다.
 function ReportLink({ token }: { token: string }) {
-  const href = `mailto:support@dailyvideodigest.com?subject=${encodeURIComponent(`[공유 신고] ${token}`)}`
-  return (
-    <a href={href} style={{ fontSize: 10.5, color: 'var(--text-muted)', textDecoration: 'underline' }}>
-      문제 신고
-    </a>
-  )
+  return <ShareReportButton token={token} />
 }
 
 // 상단 서비스 로고 + 본문 래퍼 (외부인 대상 독립 페이지 — AppHeader 미사용)

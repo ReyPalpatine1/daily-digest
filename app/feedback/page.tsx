@@ -108,10 +108,10 @@ export default function FeedbackPage() {
             <SkeletonBlock height={28} width={180} />
             <div style={{ height: 12 }} />
             <SkeletonBlock height={13} width={90} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <SkeletonBlock height={36} />
-              <SkeletonBlock height={36} />
-              <SkeletonBlock height={36} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <SkeletonBlock height={40} />
+              <SkeletonBlock height={40} />
+              <SkeletonBlock height={40} />
             </div>
             <div style={{ height: 12 }} />
             <SkeletonBlock height={13} width={90} />
@@ -202,35 +202,42 @@ export default function FeedbackPage() {
             </div>
           </div>
 
-          {/* 유형 */}
+          {/* 유형 — 세로 목록(공유 신고 모달의 사유 선택과 같은 규칙) */}
           <div style={{ marginBottom: 20 }}>
             <span style={label}>{t('feedback.typeLabel')}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {typeOptions.map(opt => {
-                const selected = type === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setType(opt.value)}
-                    style={{
-                      flex: 1, padding: '9px 8px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-                      cursor: 'pointer', fontFamily: 'inherit',
-                      background: selected ? 'var(--text-primary)' : 'var(--bg-subtle)',
-                      color: selected ? 'var(--bg-card)' : 'var(--text-secondary)',
-                      border: selected ? 'none' : '0.5px solid var(--border)',
-                    }}
-                  >
-                    {t(opt.labelKey)}
-                  </button>
-                )
-              })}
-            </div>
+            {typeOptions.map(opt => {
+              const selected = type === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setType(opt.value)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left', boxSizing: 'border-box',
+                    padding: '11px 13px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                    cursor: 'pointer', fontFamily: 'inherit', marginBottom: 7,
+                    background: selected ? 'var(--text-primary)' : 'var(--bg-subtle)',
+                    color: selected ? 'var(--bg-card)' : 'var(--text-secondary)',
+                    border: selected ? 'none' : '0.5px solid var(--border)',
+                  }}
+                >
+                  {t(opt.labelKey)}
+                </button>
+              )
+            })}
           </div>
 
-          {/* 내용 */}
+          {/* 내용 — 글자 수는 라벨 줄 오른쪽에 */}
           <div style={{ marginBottom: 20 }}>
-            <span style={label}>{t('feedback.messageLabel')}</span>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 8,
+            }}>
+              <span style={{ ...label, marginBottom: 0 }}>{t('feedback.messageLabel')}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {message.length}/500
+              </span>
+            </div>
             <textarea
               value={message}
               onChange={e => setMessage(e.target.value)}
@@ -243,9 +250,6 @@ export default function FeedbackPage() {
                 fontFamily: 'inherit', outline: 'none',
               }}
             />
-            <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-              {message.length}/500
-            </div>
           </div>
 
           {/* 보내기 */}

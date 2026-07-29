@@ -23,10 +23,10 @@ export default function FeedbackLoading() {
           <SkeletonBlock height={28} width={180} />
           <div style={{ height: 12 }} />
           <SkeletonBlock height={13} width={90} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <SkeletonBlock height={36} />
-            <SkeletonBlock height={36} />
-            <SkeletonBlock height={36} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <SkeletonBlock height={40} />
+            <SkeletonBlock height={40} />
+            <SkeletonBlock height={40} />
           </div>
           <div style={{ height: 12 }} />
           <SkeletonBlock height={13} width={90} />

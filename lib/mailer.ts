@@ -470,6 +470,79 @@ export async function sendAdminFeedbackEmail(feedback: {
   }
 }
 
+// 관리자 공유 신고 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
+export async function sendAdminShareReportEmail(report: {
+  token: string
+  reasonLabel: string
+  detail: string | null
+  sharedBy: string | null
+  commentSnapshot: string | null
+  videoTitle: string | null
+}): Promise<void> {
+  const recipients = resolveAdminRecipients()
+  if (recipients.length === 0) {
+    console.log('⚠️ ADMIN_EMAILS/ADMIN_EMAIL 미설정 — 공유 신고 알림 메일 발송 건너뜀')
+    return
+  }
+
+  // APP_URL은 기존 email-templates 방식과 동일하게 함수 내부에서 읽는다(Cloudflare 호환).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.com').replace(/\/+$/, '')
+  const shareUrl = `${appUrl}/s/${report.token}`
+
+  const now = new Date().toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  // 사용자 입력은 HTML 이스케이프 후 줄바꿈만 <br>로. (피드백 알림과 동일 규칙)
+  const escape = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+
+  const safeDetail = report.detail ? escape(report.detail) : '(상세 내용 없음)'
+  const safeComment = report.commentSnapshot ? escape(report.commentSnapshot) : '(메모 없음)'
+
+  const mail = {
+    from: `"Daily Video Digest 공유 신고" <${process.env.MAIL_FROM}>`,
+    subject: '[신고] 공유 페이지 문제 신고가 접수되었습니다',
+    html: `
+      <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <div style="background:#f8f9fb;border:1px solid #e2e5ea;border-radius:12px;padding:24px">
+          <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px">공유 페이지 신고가 접수되었습니다</h1>
+          <div style="font-size:14px;color:#333;line-height:1.7;margin-bottom:20px">
+            <p style="margin:0 0 6px">접수 시각: ${now}</p>
+            <p style="margin:0 0 6px">신고 사유: <strong>${escape(report.reasonLabel)}</strong></p>
+            <p style="margin:0 0 6px">영상 제목: ${report.videoTitle ? escape(report.videoTitle) : '(알 수 없음)'}</p>
+            <p style="margin:0 0 6px">공유 토큰: ${escape(report.token)}</p>
+            <p style="margin:0 0 6px">공유자 ID: ${report.sharedBy ? escape(report.sharedBy) : '(알 수 없음)'}</p>
+            <p style="margin:0 0 6px">공유 페이지: <a href="${shareUrl}" style="color:#1a1a1a">${shareUrl}</a></p>
+          </div>
+          <div style="font-size:12px;color:#666;margin:0 0 6px">상세 내용</div>
+          <div style="background:#fff;border:1px solid #e2e5ea;border-radius:8px;padding:16px;font-size:14px;color:#333;line-height:1.7;margin-bottom:16px">
+            ${safeDetail}
+          </div>
+          <div style="font-size:12px;color:#666;margin:0 0 6px">공유자 메모(신고 시점)</div>
+          <div style="background:#fff;border:1px solid #e2e5ea;border-radius:8px;padding:16px;font-size:14px;color:#333;line-height:1.7">
+            ${safeComment}
+          </div>
+        </div>
+      </div>
+    `,
+  }
+
+  // Cloudflare API는 단일 수신자 기준 — 수신자별 개별 발송, 하나 실패가 나머지를 막지 않게.
+  for (const to of recipients) {
+    try {
+      await sendViaCloudflare({ ...mail, to })
+    } catch (e) {
+      console.error(`관리자 공유 신고 알림 메일 발송 실패 (${to}):`, e)
+    }
+  }
+}
+
 // 관리자 신규 오류 집계 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
 export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
   const recipients = resolveAdminRecipients()
