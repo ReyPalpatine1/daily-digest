@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { X, Copy, Check, MessageCircle, Share2, Link, RefreshCw } from 'lucide-react'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
+import { usePending } from '@/lib/use-pending'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
 type Props = {
   videoId: string
-  videoTitle: string // 현재 미사용(호출부 유지용으로 시그니처에 잔존)
+  videoTitle: string // 카카오 공유 카드 제목
   tldr?: string // 열람기록과 동일하게 상단에 표시(강조 대상 아님)
   keyPoints: string[]
   summary: string // 요약 섹션 제거로 미사용(호출부 유지용으로 시그니처에 잔존)
@@ -17,6 +18,29 @@ type Props = {
   userName: string // 이름 표시 토글 제거로 미사용(시그니처만 유지)
   t: TFn
   onClose: () => void
+}
+
+// 카카오 JavaScript SDK v2 — src/integrity/crossOrigin은 카카오 공식 문서 값 그대로.
+// 전역 레이아웃이 아니라 이 시트가 열릴 때만 주입한다(공유를 쓰지 않는 사용자에겐 로드 없음).
+const KAKAO_SDK_SRC = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js'
+const KAKAO_SDK_INTEGRITY = 'sha384-dok87au0gKqJdxs7msEdBPNnKSRT+/mhTVzq+qOhcL464zXwvcrpjeWvyj1kCdq6'
+const KAKAO_DESC_MAX = 200 // 카카오 피드 카드 설명 표시 한도
+
+type KakaoLink = { mobileWebUrl: string; webUrl: string }
+type KakaoFeed = {
+  objectType: 'feed'
+  content: { title: string; description?: string; imageUrl: string; link: KakaoLink }
+  buttons?: { title: string; link: KakaoLink }[]
+}
+type KakaoSDK = {
+  init: (jsKey: string) => void
+  isInitialized: () => boolean
+  Share?: { sendDefault: (settings: KakaoFeed) => void }
+}
+declare global {
+  interface Window {
+    Kakao?: KakaoSDK
+  }
 }
 
 // 섹션 라벨 — 열람기록과 동일한 스타일.
@@ -84,7 +108,7 @@ function AnnRow(props: { time?: string; highlighted: boolean; onToggle: () => vo
 // 상세 요약은 공유 페이지에 표시하지 않으므로 강조 대상에서 제외.
 // 항목 클릭으로 다중 강조. 링크 생성 후에도 위 내용은 유지하고 하단 버튼만 전환.
 // ※ 문구는 우선 한국어 하드코딩(i18n 키 추가는 백로그 — 수정 파일 범위 제한).
-export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onClose }: Props) {
+export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timeline, t, onClose }: Props) {
   const [comment, setComment] = useState('')
   const [kpSel, setKpSel] = useState<Set<number>>(new Set())   // 핵심 포인트 인덱스
   const [tlSel, setTlSel] = useState<Set<string>>(new Set())   // 타임라인 시각(time)
@@ -95,7 +119,53 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
   const [createdSig, setCreatedSig] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [kakaoNotice, setKakaoNotice] = useState(false)
+  const [kakaoNotice, setKakaoNotice] = useState<string | null>(null)
+  const [kakaoReady, setKakaoReady] = useState(false)
+  const kakaoSend = usePending()
+
+  const showKakaoNotice = (msg: string) => {
+    setKakaoNotice(msg)
+    setTimeout(() => setKakaoNotice(null), 2500)
+  }
+
+  // 카카오 SDK 주입 + 초기화. 키가 없거나 로드/초기화가 실패하면 kakaoReady=false로 두고
+  // 버튼은 비활성 모양 + 안내 문구로 폴백한다(시트가 깨지지 않도록 전부 try/catch).
+  useEffect(() => {
+    const jsKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY // NEXT_PUBLIC_은 빌드 시 치환되므로 직접 참조
+    if (!jsKey) return
+    let alive = true
+    const init = () => {
+      try {
+        const sdk = window.Kakao
+        if (!sdk) return
+        if (!sdk.isInitialized()) sdk.init(jsKey)
+        if (alive) setKakaoReady(sdk.isInitialized())
+      } catch {
+        // 초기화 실패 → 비활성 유지
+      }
+    }
+    // 이미 로드돼 있으면 재주입하지 않는다.
+    if (window.Kakao) {
+      init()
+      return
+    }
+    let script = document.querySelector<HTMLScriptElement>('script[data-kakao-sdk="1"]')
+    if (!script) {
+      script = document.createElement('script')
+      script.src = KAKAO_SDK_SRC
+      script.integrity = KAKAO_SDK_INTEGRITY
+      script.crossOrigin = 'anonymous'
+      script.async = true
+      script.dataset.kakaoSdk = '1'
+      document.head.appendChild(script)
+    }
+    const el = script
+    el.addEventListener('load', init)
+    return () => {
+      alive = false
+      el.removeEventListener('load', init)
+    }
+  }, [])
 
   const toggleNum = (set: Set<number>, setter: (s: Set<number>) => void, v: number) => {
     const next = new Set(set)
@@ -174,6 +244,36 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
     } catch {
       // 복사 실패 시 폴백 없이 조용히
     }
+  }
+
+  // 카카오톡 공유 — 링크가 만들어진 뒤에만 동작. 실패는 조용히 넘기지 않고 안내 문구로 알린다.
+  const sendKakao = () => {
+    if (!shareUrl) return
+    if (!kakaoReady) {
+      showKakaoNotice('카카오톡 공유를 준비하지 못했어요. 링크를 복사해 붙여넣어 주세요.')
+      return
+    }
+    void kakaoSend.run(async () => {
+      try {
+        const share = window.Kakao?.Share
+        if (!share) throw new Error('kakao share unavailable')
+        // 설명은 tldr 우선, 없으면 공유자 메모, 둘 다 없으면 생략.
+        const desc = (tldr?.trim() || comment.trim()).slice(0, KAKAO_DESC_MAX)
+        const link = { mobileWebUrl: shareUrl, webUrl: shareUrl }
+        share.sendDefault({
+          objectType: 'feed',
+          content: {
+            title: videoTitle,
+            ...(desc ? { description: desc } : {}),
+            imageUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            link,
+          },
+          buttons: [{ title: '요약 보기', link }],
+        })
+      } catch {
+        showKakaoNotice('카카오톡 공유에 실패했어요. 링크를 복사해 붙여넣어 주세요.')
+      }
+    })
   }
 
   const hasSelectable = keyPoints.length > 0 || timeline.length > 0
@@ -376,23 +476,23 @@ export default function ShareSheet({ videoId, tldr, keyPoints, timeline, t, onCl
                 </button>
               )}
               <button
-                onClick={() => {
-                  setKakaoNotice(true)
-                  setTimeout(() => setKakaoNotice(false), 2500)
-                }}
+                onClick={sendKakao}
+                disabled={kakaoSend.pending}
                 style={{
                   flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   padding: '10px 14px', borderRadius: 8,
                   background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-                  color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer', fontFamily: 'inherit', opacity: 0.6,
+                  color: kakaoReady ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+                  fontSize: 13, fontWeight: 600,
+                  cursor: kakaoSend.pending ? 'default' : 'pointer', fontFamily: 'inherit',
+                  opacity: kakaoReady && !kakaoSend.pending ? 1 : 0.6,
                 }}>
-                <MessageCircle size={15} /> 카카오톡으로 보내기
+                <MessageCircle size={15} /> {kakaoSend.pending ? '여는 중…' : '카카오톡으로 보내기'}
               </button>
             </div>
             {kakaoNotice && (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
-                카카오톡 공유는 준비 중이에요. 링크를 복사해 붙여넣어 주세요.
+                {kakaoNotice}
               </div>
             )}
           </div>
