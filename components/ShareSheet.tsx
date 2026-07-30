@@ -340,8 +340,9 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           </button>
         </div>
 
-        {/* (b) 메모 남기기 */}
-        <div style={{ marginBottom: -3 }}>
+        {/* (b) 메모 남기기 — 아래는 구분선 없이 여백만으로 나눈다.
+            부모 flex gap 14 + marginBottom 6 = 20으로 섹션 간 간격(20)과 맞춘다. */}
+        <div style={{ marginBottom: 6 }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: 3,
@@ -372,19 +373,9 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           />
         </div>
 
-        {/* (c) 안내 + 구분선 + (d) 요약 내용(열람기록과 동일 구성) */}
+        {/* (c) 요약 내용(열람기록과 동일 구성) */}
         {(tldr || hasSelectable) && (
           <div>
-            {hasSelectable && (
-              <>
-                {/* 구분선을 먼저 둬 안내 문구가 메모 설명으로 읽히지 않게 한다(아래 내용에 대한 안내). */}
-                <div style={{ height: 1, background: 'rgba(128,128,128,0.16)', marginBottom: 14 }} />
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>
-                  강조할 부분을 선택해주세요.
-                </div>
-              </>
-            )}
-
             {/* tldr — 둥근 바 + 본문. 강조 대상이 아니므로 클릭 불가 */}
             {tldr && (
               <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
@@ -398,6 +389,13 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
                 }}>
                   {tldr}
                 </div>
+              </div>
+            )}
+
+            {/* 안내 문구 — 실제 선택 가능한 영역 바로 위에 둬 메모 설명으로 읽히지 않게 한다. */}
+            {hasSelectable && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 9 }}>
+                강조할 부분을 선택해주세요.
               </div>
             )}
 
