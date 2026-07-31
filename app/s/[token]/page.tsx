@@ -183,7 +183,7 @@ function NoticePage({
   title, desc, icon, cta = true, reportToken,
 }: {
   title: string
-  desc: string
+  desc?: string
   icon?: React.ReactNode
   cta?: boolean
   reportToken?: string
@@ -198,10 +198,12 @@ function NoticePage({
             {icon}
           </div>
         )}
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: desc ? 8 : 0 }}>
           {title}
         </div>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{desc}</div>
+        {desc && (
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{desc}</div>
+        )}
         {reportToken && (
           <div style={{ marginTop: 14 }}>
             <ReportLink token={reportToken} />
@@ -224,10 +226,7 @@ export default async function SharePage({ params }: PageProps) {
 
   if (!data) {
     return (
-      <NoticePage
-        title="존재하지 않는 공유입니다"
-        desc="링크가 잘못되었거나 삭제된 공유예요."
-      />
+      <NoticePage title="존재하지 않는 공유입니다" />
     )
   }
   if (data.blocked) {
