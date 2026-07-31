@@ -24,6 +24,21 @@ function isBotUA(ua: string): boolean {
   return /bot|crawl|spider|slurp|scrap|preview|facebookexternalhit|whatsapp|telegram|discord|embed/i.test(ua)
 }
 
+// 링크 미리보기(OG/트위터) 문구 한도 — 카카오 피드 카드(ShareSheet)와 같은 값.
+// 링크를 그대로 붙여넣었을 때도 카카오 카드와 비슷하게 보이도록 맞춘다.
+const CARD_TITLE_MAX = 40
+const CARD_DESC_MAX = 60
+
+// 카드 문구 다듬기 — 볼드 마커(**)를 지운 뒤, 상한을 넘으면 상한 이내 마지막 공백에서 자르고
+// '…'을 붙인다(공백이 없으면 상한에서 그대로 자름). ShareSheet의 cardText와 동일 규칙.
+function cardText(raw: string | null | undefined, max: number): string {
+  const s = (raw ?? '').replace(/\*\*/g, '').trim()
+  if (s.length <= max) return s
+  const head = s.slice(0, max)
+  const sp = head.lastIndexOf(' ')
+  return `${(sp > 0 ? head.slice(0, sp) : head).trim()}…`
+}
+
 // "m:ss" / "h:mm:ss" → 초 (파싱 실패 시 0)
 function toSeconds(time: string): number {
   const parts = time.split(':').map(p => parseInt(p, 10))
@@ -46,11 +61,29 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description =
     (data.summary?.tldr || data.summary?.summary || '').slice(0, 160) || '유튜브 영상 AI 요약 공유'
   const thumb = `https://i.ytimg.com/vi/${data.video.videoId}/hqdefault.jpg`
+
+  // 미리보기 카드는 카카오 카드와 같은 구성 — 제목=공유자 메모, 설명=tldr.
+  // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다.
+  // tldr이 없을 때만 설명을 영상 제목으로 대체하고, 그것도 없으면 설명을 생략한다.
+  // 브라우저 탭 제목(title)은 영상 제목 그대로 — 미리보기 제목과 분리한다.
+  const cardTitle = cardText(data.comment, CARD_TITLE_MAX) || '📌 핵심 포인트'
+  const cardDesc = cardText(data.summary?.tldr, CARD_DESC_MAX) || cardText(title, CARD_DESC_MAX)
+
   return {
     title: `${title} — 요약 | Daily Video Digest`,
     description,
-    openGraph: { title, description, images: [thumb], type: 'article' },
-    twitter: { card: 'summary_large_image', title, description, images: [thumb] },
+    openGraph: {
+      title: cardTitle,
+      ...(cardDesc ? { description: cardDesc } : {}),
+      images: [thumb],
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: cardTitle,
+      ...(cardDesc ? { description: cardDesc } : {}),
+      images: [thumb],
+    },
   }
 }
 
