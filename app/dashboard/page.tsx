@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
 import { normalizeChannelUrl } from '@/lib/channel-url'
+import { recordSignupRef } from '@/lib/signup-ref'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
@@ -266,6 +267,13 @@ export default function Dashboard() {
             trial_ended_popup_seen_at: row.trial_ended_popup_seen_at ?? null,
           })
         }
+
+        // 공유 링크 유입 기록 (신규 가입 1회 - 통계용).
+        // 프로필이 보장된 직후에 호출하며, 실패는 조용히 무시하고 진입을 막지 않는다.
+        void recordSignupRef(
+          data.user.id,
+          profileRow ? (profileRow as Record<string, any>) : null,
+        )
 
         // 마지막 접속 기록 (실패해도 무시 - 통계용)
         supabase

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Mail } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { captureSignupRef } from '@/lib/signup-ref'
 
 // 전화번호 조각 (스팸 수집기 방어: 완성 문자열을 소스·초기 DOM에 두지 않음)
 const PHONE_PARTS = ['010', '8791', '9498'] // ← 배포 시 실제 번호 조각으로 교체
@@ -12,6 +13,11 @@ export default function Home() {
   const { t } = useTranslation()
   const [isMobile, setIsMobile] = useState(false)
   const [showPhone, setShowPhone] = useState(false)
+
+  // 공유 페이지 유입 표시(?ref=share&t=...) 보관 — 로그인 리다이렉트보다 먼저 저장한다.
+  useEffect(() => {
+    captureSignupRef(window.location.search)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {

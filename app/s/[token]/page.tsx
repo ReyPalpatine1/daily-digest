@@ -151,7 +151,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 // 하단 가입 CTA
-function SignupCta() {
+// token을 알 수 있으면 어느 공유에서 왔는지까지 남긴다(없으면 ref=share만).
+function SignupCta({ token }: { token?: string }) {
+  const href = token ? `/?ref=share&t=${encodeURIComponent(token)}` : '/?ref=share'
   return (
     <div style={{
       ...cardStyle, textAlign: 'center', padding: 24,
@@ -166,7 +168,7 @@ function SignupCta() {
         <br />
         매일 아침 메일함으로 보내드려요.
       </div>
-      <Link href="/" style={{
+      <Link href={href} style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         marginTop: 4, padding: '10px 22px', borderRadius: 8,
         background: 'var(--accent)', color: 'var(--bg-card)',
@@ -180,13 +182,15 @@ function SignupCta() {
 
 // 없음/만료/차단 공통 안내
 function NoticePage({
-  title, desc, icon, cta = true, reportToken,
+  title, desc, icon, cta = true, reportToken, ctaToken,
 }: {
   title: string
   desc?: string
   icon?: React.ReactNode
   cta?: boolean
   reportToken?: string
+  // 실제로 존재하는 공유일 때만 넘긴다(없는 공유의 토큰은 의미가 없어 ref=share만 붙임).
+  ctaToken?: string
 }) {
   return (
     <Shell>
@@ -210,7 +214,7 @@ function NoticePage({
           </div>
         )}
       </div>
-      {cta && <SignupCta />}
+      {cta && <SignupCta token={ctaToken} />}
     </Shell>
   )
 }
@@ -245,6 +249,7 @@ export default async function SharePage({ params }: PageProps) {
         title="이 공유는 만료되었습니다."
         desc="공유 링크는 생성 후 14일이 지나면 만료됩니다."
         reportToken={token}
+        ctaToken={token}
       />
     )
   }
@@ -370,7 +375,7 @@ export default async function SharePage({ params }: PageProps) {
       </div>
 
       {/* (5) 하단 가입 CTA */}
-      <SignupCta />
+      <SignupCta token={token} />
 
       {/* (6) 푸터 — 만료 안내(좌) + 문제 신고(우) 한 줄. 좁은 화면에선 줄바꿈 */}
       <div style={{
