@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 
 const REF_KEY = 'ddv_ref'
 // 보관 유효기간 — 이 시간이 지난 값은 읽을 때 무시하고 삭제한다.
-const REF_TTL_MS = 60 * 60 * 1000 // 1시간
+const REF_TTL_MS = 24 * 60 * 60 * 1000 // 24시간
 // "최근에 생성된 프로필" 판정 폭 — 이보다 오래된 프로필은 기존 사용자로 보고 태깅하지 않는다.
 const NEW_PROFILE_WINDOW_MS = 10 * 60 * 1000 // 10분
 
