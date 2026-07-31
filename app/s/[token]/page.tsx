@@ -226,7 +226,7 @@ export default async function SharePage({ params }: PageProps) {
 
   if (!data) {
     return (
-      <NoticePage title="존재하지 않는 공유입니다" />
+      <NoticePage title="존재하지 않는 공유입니다." />
     )
   }
   if (data.blocked) {
