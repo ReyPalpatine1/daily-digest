@@ -33,6 +33,14 @@ type AdClickStats = {
   partner: { today: number; total: number }
   bots: number
 }
+// 공유 기능 집계 (/api/admin/share-stats 응답)
+type ShareStats = {
+  alive: number
+  total: number
+  views: number
+  signups: number
+  recent7d: number
+}
 
 export default function AdminSystemPage() {
   const router = useRouter()
@@ -40,6 +48,7 @@ export default function AdminSystemPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [adStats, setAdStats] = useState<AdClickStats | null>(null)
+  const [shareStats, setShareStats] = useState<ShareStats | null>(null)
   const [loading, setLoading] = useState(true)
 
   const loadStats = useCallback(async () => {
@@ -67,6 +76,18 @@ export default function AdminSystemPage() {
     }
   }, [])
 
+  // 공유 집계 — 광고 집계와 동일하게 실패해도 페이지는 뜨고 0으로 표시(?? 0).
+  const loadShareStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/share-stats')
+      if (res.ok) {
+        setShareStats(await res.json())
+      }
+    } catch (e) {
+      console.error('[admin/system] loadShareStats failed:', e)
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     async function checkAdminAndLoad() {
@@ -80,11 +101,11 @@ export default function AdminSystemPage() {
         return
       }
       setIsAdmin(true)
-      await Promise.all([loadStats(), loadAdStats()])
+      await Promise.all([loadStats(), loadAdStats(), loadShareStats()])
     }
     checkAdminAndLoad()
     return () => { cancelled = true }
-  }, [router, loadStats, loadAdStats])
+  }, [router, loadStats, loadAdStats, loadShareStats])
 
   const nf = new Intl.NumberFormat(locale === 'ko' ? 'ko-KR' : 'en-US')
   const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
@@ -216,6 +237,27 @@ export default function AdminSystemPage() {
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('adminSystem.adTotal')}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{nf.format(c.stat?.total ?? 0)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ===== 공유 현황 (공유 링크 생성·조회·유입) ===== */}
+        <section style={{ marginTop: 28 }}>
+          <h2 style={sectionTitleStyle}>{t('adminSystem.shareSection')}</h2>
+          <div style={gridStyle}>
+            {([
+              { key: 'alive', label: t('adminSystem.shareAlive'), value: shareStats?.alive },
+              { key: 'total', label: t('adminSystem.shareTotal'), value: shareStats?.total },
+              { key: 'views', label: t('adminSystem.shareViews'), value: shareStats?.views },
+              { key: 'signups', label: t('adminSystem.shareSignups'), value: shareStats?.signups },
+              { key: 'recent7d', label: t('adminSystem.shareRecent7d'), value: shareStats?.recent7d },
+            ]).map(c => (
+              <div key={c.key} style={cardStyle}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginTop: 10, letterSpacing: -0.3 }}>
+                  {nf.format(c.value ?? 0)}
                 </div>
               </div>
             ))}
