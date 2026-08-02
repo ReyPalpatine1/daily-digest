@@ -12,6 +12,7 @@ import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
 import { isDescriptionBasedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
+import { isCronRequest, getAuthedUser, isAdminEmail } from '@/lib/route-auth'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워진다. 최상단에서 createClient를 호출하면 키가 undefined가 되어
@@ -54,6 +55,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 })
   }
 
+  // 인증 이원화 — cron은 CRON_SECRET Bearer, 수동은 세션(본인 또는 관리자)만 허용.
+  if (trigger === 'cron') {
+    if (!isCronRequest(req)) {
+      console.warn(`🚫 [digest] cron 인증 실패 → 401 (userId=${userId})`)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  } else {
+    const user = await getAuthedUser()
+    if (!user) {
+      console.warn(`🚫 [digest] 수동 발송 미인증 → 401 (userId=${userId})`)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    // 관리자는 지정 userId 실행 허용 (운영 도구), 그 외엔 본인 것만.
+    if (user.id !== userId && !isAdminEmail(user.email)) {
+      console.warn(`🚫 [digest] 타인 userId 수동 발송 시도 → 403 (caller=${user.id}, target=${userId})`)
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   // 자동(cron) 호출은 즉시 202를 반환하고 무거운 처리는 after()로 백그라운드 실행한다.
   // → 호출자(/api/cron)가 digest 완료를 기다리며 자신의 60초(Hobby 상한)를 소진하는 문제를 방지.
   //   각 digest 인보케이션은 자기만의 60초 budget에서 메일까지 완료한다
@@ -73,6 +93,21 @@ export async function POST(req: Request) {
   // 수동 발송은 완료까지 기다렸다가 결과(처리 건수 등)를 반환 — UI가 사용.
   const { status, body: respBody } = await runDigest(userId, trigger)
   return NextResponse.json(respBody, { status })
+}
+
+// 첫 정기 발송 시각 기록 (미리보기 제공 여부 판정용).
+// .is('first_digest_at', null) 필터로 최초 1회만 기록된다(덮어쓰기 없음).
+// 기록 실패가 발송 흐름을 막지 않도록 예외는 로깅만 한다.
+async function markFirstDigest(userId: string) {
+  try {
+    await supabase
+      .from('profiles')
+      .update({ first_digest_at: new Date().toISOString() })
+      .eq('id', userId)
+      .is('first_digest_at', null)
+  } catch (e) {
+    console.error('[digest] first_digest_at 기록 실패:', e)
+  }
 }
 
 async function runDigest(
@@ -192,6 +227,9 @@ async function runDigest(
       if (trigger === 'cron' && settings.notify_when_empty !== false) {
         try {
           await deliverEmptyDigest(settings, userName, userLocale, userId)
+          // 정기 발송이 실제로 나갔으므로 첫 발송 시각 기록 (Cloudflare에서 floating promise는
+          // 완료 보장이 안 되므로 await).
+          await markFirstDigest(userId)
         } catch (e) {
           console.error(`[digest] 빈 다이제스트 메일 발송 실패 userId=${userId}:`, e)
           await logErrorEvent({ source: 'digest', failReason: 'send_error', failDetail: `빈 다이제스트 발송 실패 (userId=${userId}): ${String(e)}` })
@@ -286,6 +324,8 @@ async function runDigest(
       } else {
         await deliverDigest(settings, userName, digestItems, userLocale, userId, isPro)
       }
+      // 정기 발송(스킵 포함 = 오늘 이미 발송됨) 완료 → 첫 발송 시각 기록.
+      if (trigger === 'cron') await markFirstDigest(userId)
     }
 
     // 속보 표시 영상은 속보 메일도 (Pro & breaking_alert 켜짐) — 사용자별 키워드 기준.

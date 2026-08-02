@@ -129,6 +129,9 @@ export async function GET(req: Request) {
     // === 진단: 발송 대상이 있는데 APP_URL이 비어있으면 fetch가 전부 실패한다 ===
     // 끝의 슬래시를 제거해 '//api/...' 중복 슬래시 방지
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+    // 내부 호출용 인증 헤더 — /api/digest·/api/breaking이 cron 호출임을 확인하는 데 쓴다.
+    // (빠뜨리면 두 라우트가 401을 돌려줘 정기 발송이 전멸한다)
+    const cronAuth = `Bearer ${process.env.CRON_SECRET}`
     if (digestUsers.length > 0 && !appUrl) {
       console.error(
         `❌ [cron] NEXT_PUBLIC_APP_URL 미설정 → /api/digest 호출 불가. ` +
@@ -144,7 +147,7 @@ export async function GET(req: Request) {
             try {
               const res = await fetch(target, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: cronAuth },
                 body: JSON.stringify({ userId, trigger: 'cron' }),
               })
               const text = await res.text()
@@ -169,7 +172,7 @@ export async function GET(req: Request) {
             // background:true → /api/breaking이 즉시 202 후 백그라운드 처리 (cron 60초 미점유)
             fetch(`${appUrl}/api/breaking`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', Authorization: cronAuth },
               body: JSON.stringify({ userId, background: true }),
             }).then(res => res.json())
           )

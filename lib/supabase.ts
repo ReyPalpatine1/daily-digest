@@ -37,6 +37,9 @@ export type Profile = {
   vip_granted_at: string | null
   plan_status: 'none' | 'trialing' | 'active' | 'canceled' | 'onetime'
   trial_used: boolean
+  // 미리보기(가입 직후 1회) 사용 시각 / 첫 정기 발송 시각. 둘 다 없을 때만 미리보기 노출.
+  preview_used_at: string | null
+  first_digest_at: string | null
 }
 
 // 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)

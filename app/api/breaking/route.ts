@@ -9,6 +9,7 @@ import { getRecentPoolVideos, getSummary, summarizeNow, matchesKeyword } from '@
 import type { Locale } from '@/lib/i18n/translations'
 import { tryStartBreaking, markBreakingSent, markBreakingFailed } from '@/lib/send-guard'
 import { nowUtc, startOfDayUtc } from '@/lib/time'
+import { isCronRequest, getAuthedUser, isAdminEmail } from '@/lib/route-auth'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워진다. 최상단에서 createClient를 호출하면 키가 undefined가 되어
@@ -46,6 +47,20 @@ export async function POST(req: Request) {
   const background = body.background === true
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 })
+  }
+
+  // 인증 — cron(CRON_SECRET Bearer)이 아니면 세션 사용자 본인(또는 관리자)만 허용.
+  // breaking에는 trigger 필드가 없으므로 헤더 유무로 cron/사용자 호출을 구분한다.
+  if (!isCronRequest(req)) {
+    const user = await getAuthedUser()
+    if (!user) {
+      console.warn(`🚫 [breaking] 미인증 호출 → 401 (userId=${userId})`)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (user.id !== userId && !isAdminEmail(user.email)) {
+      console.warn(`🚫 [breaking] 타인 userId 호출 시도 → 403 (caller=${user.id}, target=${userId})`)
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
   }
 
   // 자동(cron) 호출은 즉시 202를 반환하고 무거운 처리는 after()로 백그라운드 실행.

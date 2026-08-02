@@ -128,10 +128,10 @@ export default function Dashboard() {
   const [historyDate, setHistoryDate] = useState('')
   const [historyChannel, setHistoryChannel] = useState('')
   const [historyCategory, setHistoryCategory] = useState('')
-  // 첫 진입 데이터 로딩(인증→프로필→loadData) 구간. runDigestNow용 loading과 별개.
+  // 첫 진입 데이터 로딩(인증→프로필→loadData) 구간.
   const [initialLoading, setInitialLoading] = useState(true)
-  const [loading, setLoading] = useState(false)
-  const [msgKey, setMsgKey] = useState<{ key: string; params?: Record<string, string | number>; ok?: boolean } | null>(null)
+  // 미리보기 실행 결과 토스트 (하단 중앙 알약, 2.5초)
+  const [previewToast, setPreviewToast] = useState<string | null>(null)
   const [newKeyword, setNewKeyword] = useState('')
   const [expandedDigest, setExpandedDigest] = useState<string | null>(null)
   // 열람기록 요약 카드 "공유" 시트 대상 (null이면 닫힘)
@@ -175,6 +175,7 @@ export default function Dashboard() {
   const tgConnect = usePending()
   const tgDisconnect = usePending()
   const planSwitch = usePending()
+  const previewRun = usePending()
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   // 처음 사용자 도움말 팝업: 진입 시 help_seen===false 자동 노출 / 설정에서 재열기
@@ -243,6 +244,9 @@ export default function Dashboard() {
             vip_granted_at: null,
             plan_status: 'none',
             trial_used: false,
+            // DB 기본값과 동일하게 null (insert에는 넣지 않는다)
+            preview_used_at: null,
+            first_digest_at: null,
           })
           // 기본 설정 자동 생성
           await supabase.from('settings').insert({
@@ -626,53 +630,44 @@ export default function Dashboard() {
     await saveSettings({ breaking_keywords: keywords })
   }
 
-  async function runDigestNow() {
-    if (!user) return
-    if (loading) return // 중복 클릭 방지
-    setLoading(true)
-    setMsgKey(null)
+  // 토스트 1회 노출 (하단 중앙 알약, 2.5초 — pricing/profile과 동일 패턴)
+  function showPreviewToast(message: string) {
+    setPreviewToast(message)
+    setTimeout(() => setPreviewToast(null), 2500)
+  }
 
+  // 미리보기 실행 — 구독 채널 최신 3개를 지금 요약해 열람 기록에 채운다(메일 발송 없음).
+  // 계정당 1회이며 서버(profiles.preview_used_at)에서 선점·검증한다.
+  async function runPreview() {
+    if (!user) return
     // 서버 maxDuration=60s + 네트워크/콜드스타트 여유 = 90s
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 90_000)
 
     try {
-      const res = await fetch('/api/digest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // trigger='manual': 사용자가 일부러 누른 거니 중복 체크 스킵하고 항상 재처리
-        body: JSON.stringify({ userId: user.id, trigger: 'manual' }),
-        signal: controller.signal,
-      })
+      const res = await fetch('/api/preview', { method: 'POST', signal: controller.signal })
+      const data = await res.json().catch(() => ({}))
 
-      if (!res.ok) {
-        setMsgKey({ key: 'alerts.digestError' })
+      if (res.ok && data.success) {
+        await loadData(user.id)
+        await reloadProfile(user.id)
+        setActiveTab('history')
+        showPreviewToast(t('preview.toastDone', { n: data.saved ?? 0 }))
         return
       }
-
-      const data = await res.json()
-      if (data.success) {
-        if (data.empty) {
-          setMsgKey({ key: 'alerts.digestEmpty', ok: true })
-        } else {
-          const n = data.processed ?? data.succeeded ?? data.sent ?? 0
-          setMsgKey({ key: 'alerts.digestDone', params: { n }, ok: true })
-        }
-      } else {
-        setMsgKey({ key: 'alerts.digestError' })
+      if (res.ok && data.empty) {
+        // 서버가 선점을 해제했으므로 버튼은 그대로 두고 안내만 한다.
+        showPreviewToast(t('preview.toastEmpty'))
+        return
       }
+      showPreviewToast(t('preview.toastError'))
+      await reloadProfile(user.id)
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        setMsgKey({ key: 'alerts.digestTimeout' })
-      } else {
-        setMsgKey({ key: 'alerts.digestError' })
-      }
-      console.error('[runDigestNow] 실패:', err)
+      console.error('[runPreview] 실패:', err)
+      showPreviewToast(err?.name === 'AbortError' ? t('preview.toastTimeout') : t('preview.toastError'))
+      await reloadProfile(user.id)
     } finally {
       clearTimeout(timeoutId)
-      setLoading(false) // 무조건 로딩 해제
-      // 부분 처리됐을 수도 있으니 데이터는 다시 로드
-      loadData(user.id)
     }
   }
 
@@ -1348,6 +1343,23 @@ export default function Dashboard() {
                       {chAdd.pending ? t('common.adding') : t('common.addSubmit')}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* 미리보기 (가입 직후 1회) — 아직 정기 발송을 못 받아본 사용자에게만 노출.
+                  실행 후에는 profile.preview_used_at이 채워져 카드가 사라진다. */}
+              {!profile?.preview_used_at && !profile?.first_digest_at && channels.length >= 1 && (
+                <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                    {t('preview.title')}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.6 }}>
+                    {t('preview.desc')}
+                  </div>
+                  <button onClick={() => previewRun.run(runPreview)} disabled={previewRun.pending}
+                    style={previewRun.pending ? { ...primaryBtn, ...pendingBtnStyle } : primaryBtn}>
+                    {previewRun.pending ? t('preview.running') : t('preview.cta')}
+                  </button>
                 </div>
               )}
 
@@ -2060,28 +2072,6 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
-
-              {/* 지금 바로 실행 */}
-              <div style={cardStyle}>
-                <div style={sectionTitle}>{t('schedule.runNow')}</div>
-                <div style={sectionSubtitle}>{t('schedule.runNowDesc')}</div>
-                {msgKey && (
-                  <div style={{
-                    fontSize: 12, marginBottom: 10,
-                    color: msgKey.ok ? 'var(--success)' : 'var(--danger)',
-                  }}>{t(msgKey.key, msgKey.params)}</div>
-                )}
-                <button onClick={runDigestNow} disabled={loading}
-                  style={{
-                    ...primaryBtn,
-                    padding: '10px 16px',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    background: loading ? 'var(--bg-subtle)' : 'var(--accent)',
-                    color: loading ? 'var(--text-muted)' : 'var(--bg-card)',
-                  }}>
-                  {loading ? t('schedule.running') : t('schedule.runNowCta')}
-                </button>
-              </div>
             </div>
           )
         })()}
@@ -2612,6 +2602,19 @@ export default function Dashboard() {
           onClose={() => closeTrialPopup(false)}
           onSubscribe={() => closeTrialPopup(true)}
         />
+      )}
+
+      {/* 미리보기 결과 토스트 — 결제/PRO 안내 토스트와 동일 스타일(하단 중앙 알약).
+          bg=text-primary / 글씨=bg-card 라 라이트·다크 양쪽에서 자동 반전·대비됨. */}
+      {previewToast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
+          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+          boxShadow: 'var(--shadow-lg)',
+        }}>
+          {previewToast}
+        </div>
       )}
     </div>
   )

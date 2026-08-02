@@ -18,7 +18,7 @@ function getSupabase(): ServiceClient {
   return _supabase
 }
 
-export type ErrorSource = 'summary' | 'digest' | 'breaking' | 'collect'
+export type ErrorSource = 'summary' | 'digest' | 'breaking' | 'collect' | 'preview'
 
 export type ErrorLogEntry = {
   source: ErrorSource

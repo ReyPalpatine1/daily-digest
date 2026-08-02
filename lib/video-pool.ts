@@ -642,6 +642,37 @@ export function matchesKeyword(title: string, keywords: string[] | null | undefi
   return keywords.some(kw => kw && lower.includes(kw.trim().toLowerCase()))
 }
 
+// ── 사용자 채널 즉시 수집 ──────────────────────────────────────
+// 미리보기(가입 직후 1회) 전용. runCollection의 순차 루프와 달리 동시 5개로 처리한다
+// — 미리보기는 사용자가 화면에서 대기하므로 수집 대기 시간이 그대로 노출되기 때문.
+// 채널별 실패는 격리하고(로그만) 계속 진행하며, deadlineTs를 넘기면 남은 채널은 건너뛴다.
+export async function collectChannelsNow(
+  channels: UniqueChannel[],
+  deadlineTs?: number
+): Promise<{ processed: number; collected: number; timedOut: boolean }> {
+  let processed = 0
+  let collected = 0
+  let timedOut = false
+
+  await processInBatches(channels, 5, async (channel) => {
+    if (deadlineTs && Date.now() > deadlineTs) {
+      timedOut = true
+      return
+    }
+    try {
+      collected += await collectChannelVideos(channel)
+    } catch (e) {
+      console.error(`❌ [collectChannelsNow] 채널 수집 실패 (${channel.channelId}):`, e)
+    }
+    processed++
+  })
+
+  if (timedOut) {
+    console.log(`⏱ [collectChannelsNow] 시간 budget 도달 → 채널 ${channels.length - processed}개 스킵`)
+  }
+  return { processed, collected, timedOut }
+}
+
 // ── 오케스트레이터 ────────────────────────────────────────────
 export async function runCollection(): Promise<{
   channels: number

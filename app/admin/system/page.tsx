@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { AdminHeader } from '@/components/AdminHeader'
+import { usePending } from '@/lib/use-pending'
 
 // /admin(대시보드)의 "시스템 상태" 섹션을 분리한 페이지.
 // 데이터는 기존 /api/admin/usage 응답의 system/api를 재사용한다.
@@ -50,6 +51,10 @@ export default function AdminSystemPage() {
   const [adStats, setAdStats] = useState<AdClickStats | null>(null)
   const [shareStats, setShareStats] = useState<ShareStats | null>(null)
   const [loading, setLoading] = useState(true)
+  // 수동 발송 도구 — 본인(관리자) 계정 대상으로만 실행한다.
+  const [adminUserId, setAdminUserId] = useState<string | null>(null)
+  const [runResult, setRunResult] = useState<string | null>(null)
+  const digestRun = usePending()
 
   const loadStats = useCallback(async () => {
     try {
@@ -101,6 +106,7 @@ export default function AdminSystemPage() {
         return
       }
       setIsAdmin(true)
+      setAdminUserId(user.id)
       await Promise.all([loadStats(), loadAdStats(), loadShareStats()])
     }
     checkAdminAndLoad()
@@ -128,6 +134,51 @@ export default function AdminSystemPage() {
   // 사용률 색: 100%↑ 위험, 80%↑ 경고, 그 외 기본(흑백 accent). (--error는 없으므로 --danger 사용)
   const usageColor = (pct: number): string =>
     pct >= 100 ? 'var(--danger)' : pct >= 80 ? 'var(--warning)' : 'var(--accent)'
+  const primaryBtn: React.CSSProperties = {
+    padding: '8px 14px', borderRadius: 8, border: 'none',
+    background: 'var(--accent)', color: 'var(--bg-card)',
+    cursor: 'pointer', fontSize: 13, fontWeight: 600,
+    fontFamily: 'inherit', whiteSpace: 'nowrap',
+  }
+  const pendingBtn: React.CSSProperties = {
+    ...primaryBtn, cursor: 'not-allowed',
+    background: 'var(--bg-subtle)', color: 'var(--text-muted)',
+  }
+
+  // 관리자 본인 계정으로 다이제스트 수동 발송 (다른 사용자 지정 불가).
+  async function runDigestNow() {
+    if (!adminUserId) return
+    setRunResult(null)
+    // 서버 maxDuration=60s + 네트워크/콜드스타트 여유 = 90s
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90_000)
+    try {
+      const res = await fetch('/api/digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: adminUserId, trigger: 'manual' }),
+        signal: controller.signal,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.success) {
+        setRunResult(t('adminSystem.runFailed'))
+        return
+      }
+      if (data.empty) {
+        setRunResult(t('adminSystem.runEmpty'))
+        return
+      }
+      setRunResult(t('adminSystem.runResult', {
+        processed: data.processed ?? data.succeeded ?? 0,
+        total: data.total ?? 0,
+      }))
+    } catch (e: any) {
+      console.error('[admin/system] runDigestNow failed:', e)
+      setRunResult(e?.name === 'AbortError' ? t('adminSystem.runTimeout') : t('adminSystem.runFailed'))
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
 
   if (loading || !isAdmin || !stats) {
     return (
@@ -284,6 +335,23 @@ export default function AdminSystemPage() {
             ))}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>{t('adminSystem.costFooter')}</div>
+        </section>
+
+        {/* ===== 실행 도구 (관리자 본인 계정 수동 발송) ===== */}
+        <section style={{ marginTop: 28 }}>
+          <h2 style={sectionTitleStyle}>{t('adminSystem.runSection')}</h2>
+          <div style={cardStyle}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.6 }}>
+              {t('adminSystem.runDesc')}
+            </div>
+            <button onClick={() => digestRun.run(runDigestNow)} disabled={digestRun.pending}
+              style={digestRun.pending ? pendingBtn : primaryBtn}>
+              {digestRun.pending ? t('adminSystem.runPending') : t('adminSystem.runCta')}
+            </button>
+            {runResult && (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10 }}>{runResult}</div>
+            )}
+          </div>
         </section>
 
         {/* ===== 바로가기 링크 ===== */}
