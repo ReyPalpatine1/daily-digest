@@ -2,6 +2,7 @@
 // 주 흐름(수집·요약·발송)을 절대 막지 않도록 모든 함수는 내부에서 try-catch 하고 실패는 로깅만.
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버에서만 import.
 import { createClient } from '@supabase/supabase-js'
+import { shouldCountShareView } from './visit-guard'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워지므로 첫 사용 시점에 1회 lazy 생성한다. (error-log.ts와 동일 패턴)
@@ -154,7 +155,8 @@ export type ShareData = {
 // countView: true일 때만 view_count +1 (best-effort — 페이지 본문 렌더에서만, 봇/메타 요청은 skip).
 export async function getShareByToken(
   token: string,
-  opts?: { countView?: boolean }
+  // visitorHash: 있으면 같은 방문자의 짧은 간격 재방문을 조회수에서 제외한다(없으면 기존대로 +1).
+  opts?: { countView?: boolean; visitorHash?: string | null }
 ): Promise<ShareData | null> {
   try {
     const supabase = getSupabase()
@@ -194,7 +196,13 @@ export async function getShareByToken(
 
     // view_count +1 — 컬럼 조회/갱신 모두 best-effort(실패해도 페이지 렌더에 영향 없음).
     // 동시 접속 시 레이스로 일부 누락 가능하나 통계용이라 허용.
-    if (opts?.countView) {
+    // 방문자 해시가 있으면 창(30분) 이내 재방문은 집계에서 제외. 해시가 없거나 판정이
+    // 실패하면 shouldCountShareView가 true를 돌려주므로 기존대로 +1 된다.
+    const countView = opts?.countView
+      ? (opts.visitorHash ? await shouldCountShareView(token, opts.visitorHash) : true)
+      : false
+
+    if (countView) {
       try {
         const { data: vc } = await supabase
           .from('shared_summaries').select('view_count').eq('token', token).maybeSingle()
@@ -284,5 +292,23 @@ export async function cleanupExpiredShares(): Promise<void> {
     if (error) console.error(`[share] 만료 공유 정리 실패: ${error.message}`)
   } catch (e) {
     console.error('[share] 만료 공유 정리 예외:', e)
+  }
+
+  // 조회수 중복 판정용 기록(share_views)은 판정 창(30분)보다 넉넉한 24시간만 보관한다.
+  // 별도 try/catch — 여기서 실패해도 위의 공유 정리 결과에는 영향이 없다.
+  try {
+    const viewCutoff = new Date(Date.now() - 24 * 3600_000).toISOString()
+    const { data, error } = await getSupabase()
+      .from('share_views')
+      .delete()
+      .lt('viewed_at', viewCutoff)
+      .select('id')
+    if (error) {
+      console.error(`[share] 공유 조회 기록 정리 실패: ${error.message}`)
+    } else {
+      console.log(`[share] 공유 조회 기록 정리: ${data?.length ?? 0}건 삭제`)
+    }
+  } catch (e) {
+    console.error('[share] 공유 조회 기록 정리 예외:', e)
   }
 }

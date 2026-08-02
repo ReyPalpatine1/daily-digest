@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { partnerLink, PARTNER_LINKS } from '@/lib/ads'
+import { hashVisitor, resolveClientIp, shouldCountAdClick } from '@/lib/visit-guard'
 
 // 광고 클릭 카운터 (인증 없음 — 메일 링크·웹 광고 카드에서 직접 진입).
 // 클릭을 best-effort로 기록한 뒤 목적지로 302 이동시킨다:
@@ -32,10 +33,26 @@ export async function GET(request: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
-    const { error } = await serviceClient
-      .from('ad_clicks')
-      .insert({ slot, source: src, user_agent: userAgent, is_bot: isBot })
-    if (error) console.error('[ad-click] 기록 실패:', error.message)
+
+    // 같은 방문자가 같은 슬롯을 짧은 간격으로 반복 클릭하면 집계에서 제외한다.
+    // 행을 남기고 플래그를 세우는 대신 아예 insert하지 않는다(기존 집계 쿼리를 그대로 쓰기 위함).
+    // 해시·조회가 실패하면 shouldCountAdClick이 true를 돌려주므로 기존대로 기록된다.
+    let visitorHash: string | null = null
+    try {
+      visitorHash = await hashVisitor(resolveClientIp(request))
+    } catch (e) {
+      // 해시 실패 → 중복 판정을 건너뛰고 기존 동작대로 기록한다.
+      console.error('[ad-click] 방문자 해시 계산 실패(중복 판정 생략):', e)
+    }
+
+    if (visitorHash && !(await shouldCountAdClick(visitorHash, slot, destKey))) {
+      console.log(`[ad-click] 중복 클릭 → 집계 스킵 (slot=${slot}, src=${src ?? '-'})`)
+    } else {
+      const { error } = await serviceClient
+        .from('ad_clicks')
+        .insert({ slot, source: src, user_agent: userAgent, is_bot: isBot, visitor_hash: visitorHash })
+      if (error) console.error('[ad-click] 기록 실패:', error.message)
+    }
   } catch (e) {
     console.error('[ad-click] 기록 실패:', e)
   }

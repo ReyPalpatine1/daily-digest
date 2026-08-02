@@ -6,6 +6,7 @@ import {
   type ShareReportReason,
 } from '@/lib/share-report'
 import { sendAdminShareReportAlert } from '@/lib/admin-alert'
+import { hashVisitor, resolveClientIp } from '@/lib/visit-guard'
 
 // 공유 페이지 문제 신고 — 로그인 불필요(외부인이 보는 공개 페이지에서 신고하므로).
 // POST만 export → 다른 메서드는 Next.js가 405로 응답한다.
@@ -15,26 +16,6 @@ const ALLOWED_REASONS: ShareReportReason[] = ['abuse', 'privacy', 'other']
 // 토큰 형식 방어 (generateShareToken은 0-9a-z 12자 — 공유 페이지와 동일하게 8~32자 허용)
 function isValidTokenFormat(token: string): boolean {
   return /^[0-9a-z]{8,32}$/.test(token)
-}
-
-// 신고자 식별용 해시 — 원본 IP는 저장하지 않는다.
-// Cloudflare Workers 호환을 위해 Node 'crypto'가 아닌 Web Crypto 사용(lib/trial-guard.ts와 동일).
-async function hashIp(ip: string): Promise<string> {
-  const data = new TextEncoder().encode(ip)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-// cf-connecting-ip(Cloudflare) 우선, 없으면 x-forwarded-for 첫 값.
-// 둘 다 없으면 고정 문자열 — IP 미상 신고끼리 한 묶음으로 도배 제한을 받는다.
-function resolveClientIp(req: Request): string {
-  const cf = req.headers.get('cf-connecting-ip')?.trim()
-  if (cf) return cf
-  const xff = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  if (xff) return xff
-  return 'unknown'
 }
 
 export async function POST(req: Request) {
@@ -56,7 +37,8 @@ export async function POST(req: Request) {
   }
   const reason = body.reason as ShareReportReason
 
-  const reporterHash = await hashIp(resolveClientIp(req))
+  // 신고자 식별용 해시 — 원본 IP는 저장하지 않는다(해시 알고리즘은 lib/visit-guard.ts 공용).
+  const reporterHash = await hashVisitor(resolveClientIp(req))
 
   const result = await createShareReport({
     token,

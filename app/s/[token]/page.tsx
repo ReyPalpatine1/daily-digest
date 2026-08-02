@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { MessageSquareQuote, ShieldOff, Sparkles } from 'lucide-react'
 import { getShareByToken } from '@/lib/share'
+import { hashVisitor, resolveClientIpFromHeaders } from '@/lib/visit-guard'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import ShareVideo from '@/components/ShareVideo'
 import ScrollTopButton from '@/components/ScrollTopButton'
@@ -222,10 +223,22 @@ function NoticePage({
 export default async function SharePage({ params }: PageProps) {
   const { token } = await params
 
+  // headers()는 한 번만 호출해 봇 판정과 방문자 해시에 함께 쓴다.
+  const h = await headers()
+  const countView = !isBotUA(h.get('user-agent') ?? '')
+
+  // 방문자 해시 — 실패하면 null로 두고 기존대로(중복 판정 없이) 집계한다.
+  let visitorHash: string | null = null
+  if (countView) {
+    try {
+      visitorHash = await hashVisitor(resolveClientIpFromHeaders(h))
+    } catch (e) {
+      console.error('[share] 방문자 해시 계산 실패(중복 판정 생략):', e)
+    }
+  }
+
   const data = isValidTokenFormat(token)
-    ? await getShareByToken(token, {
-        countView: !isBotUA((await headers()).get('user-agent') ?? ''),
-      })
+    ? await getShareByToken(token, { countView, visitorHash })
     : null
 
   if (!data) {
