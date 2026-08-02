@@ -184,7 +184,7 @@ export async function hasDigestSentToday(userId: string): Promise<boolean> {
     .eq('user_id', userId)
     .eq('type', 'digest')
     .eq('status', 'success')
-    .gte('created_at', kstMidnightIso)
+    .gte('sent_at', kstMidnightIso)
     .limit(1)
   if (error) {
     // 조회 실패 시 false(발송 진행) — 이 가드는 보강 장치이므로 조회 장애가 발송 자체를 막으면 안 됨.
