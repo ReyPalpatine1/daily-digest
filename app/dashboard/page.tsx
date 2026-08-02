@@ -15,7 +15,7 @@ import TrialPopup from '@/components/TrialPopup'
 import { AppHeader } from '@/components/AppHeader'
 import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
-import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2 } from 'lucide-react'
+import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { usePending } from '@/lib/use-pending'
@@ -33,6 +33,9 @@ const pendingIconStyle: React.CSSProperties = {
   opacity: 0.45,
   pointerEvents: 'none',
 }
+
+// 열람기록 상단 미리보기 안내 카드를 닫았는지 (기기별 1회 노출용, DB 컬럼 대신 로컬 저장)
+const PREVIEW_GUIDE_KEY = 'ddv_preview_guide_done'
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -132,6 +135,9 @@ export default function Dashboard() {
   const [initialLoading, setInitialLoading] = useState(true)
   // 미리보기 실행 결과 토스트 (하단 중앙 알약, 2.5초)
   const [previewToast, setPreviewToast] = useState<string | null>(null)
+  // 열람기록 상단 미리보기 안내 카드의 "닫음" 상태 (localStorage, 기기별).
+  // 초기값 true = 서버/첫 렌더에서 잠깐 보였다 사라지는 깜빡임 방지.
+  const [previewGuideDone, setPreviewGuideDone] = useState(true)
   const [newKeyword, setNewKeyword] = useState('')
   const [expandedDigest, setExpandedDigest] = useState<string | null>(null)
   // 열람기록 요약 카드 "공유" 시트 대상 (null이면 닫힘)
@@ -292,6 +298,15 @@ export default function Dashboard() {
         setInitialLoading(false)
       }
     }).catch(() => setInitialLoading(false))
+  }, [])
+
+  // 미리보기 안내 카드 닫음 여부 로드 (localStorage 접근은 클라이언트에서만)
+  useEffect(() => {
+    try {
+      setPreviewGuideDone(localStorage.getItem(PREVIEW_GUIDE_KEY) === '1')
+    } catch {
+      setPreviewGuideDone(true) // 접근 차단 환경(사생활 보호 모드 등)에선 노출하지 않음
+    }
   }, [])
 
   useEffect(() => {
@@ -630,6 +645,16 @@ export default function Dashboard() {
     await saveSettings({ breaking_keywords: keywords })
   }
 
+  // 미리보기 안내 카드 닫기 (X · 확인 버튼 공용)
+  function dismissPreviewGuide() {
+    try {
+      localStorage.setItem(PREVIEW_GUIDE_KEY, '1')
+    } catch {
+      // 저장 실패해도 이번 세션에선 닫힌다
+    }
+    setPreviewGuideDone(true)
+  }
+
   // 토스트 1회 노출 (하단 중앙 알약, 2.5초 — pricing/profile과 동일 패턴)
   function showPreviewToast(message: string) {
     setPreviewToast(message)
@@ -652,7 +677,7 @@ export default function Dashboard() {
         await loadData(user.id)
         await reloadProfile(user.id)
         setActiveTab('history')
-        showPreviewToast(t('preview.toastDone', { n: data.saved ?? 0 }))
+        showPreviewToast(t('preview.toastDone'))
         return
       }
       if (res.ok && data.empty) {
@@ -2126,6 +2151,41 @@ export default function Dashboard() {
                   {t('history.subtitle', { days: retentionDays })}
                 </div>
               </div>
+
+              {/* 미리보기 안내 — 미리보기를 쓴 뒤 스팸함 확인을 유도한다.
+                  닫음 상태는 localStorage(기기별)로만 관리 — 새 DB 컬럼을 만들지 않는다. */}
+              {profile?.preview_used_at && !previewGuideDone && (
+                <div style={{ ...cardStyle, position: 'relative' }}>
+                  <button onClick={dismissPreviewGuide}
+                    aria-label={t('previewGuide.done')}
+                    style={{
+                      position: 'absolute', top: 10, right: 10,
+                      background: 'transparent', border: 'none', padding: 4,
+                      cursor: 'pointer', color: 'var(--text-muted)',
+                      display: 'inline-flex', alignItems: 'center', lineHeight: 0,
+                    }}>
+                    <X size={14} />
+                  </button>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10, paddingRight: 24 }}>
+                    {t('previewGuide.title')}
+                  </div>
+                  <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <li style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                      {t('previewGuide.step1')}
+                    </li>
+                    {/* 스팸함 안내는 이 카드의 핵심 → 본문 톤에서 한 단계 강조 */}
+                    <li style={{ fontSize: 12.5, color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.6 }}>
+                      {t('previewGuide.step2')}
+                    </li>
+                    <li style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                      {t('previewGuide.step3')}
+                    </li>
+                  </ol>
+                  <button onClick={dismissPreviewGuide} style={{ ...secondaryBtn, marginTop: 12 }}>
+                    {t('previewGuide.done')}
+                  </button>
+                </div>
+              )}
 
               {/* 필터 카드 */}
               <div style={cardStyle}>

@@ -38,21 +38,23 @@ export async function deliverDigest(
   items: DeliverItem[],
   locale: string | null = 'ko',
   userId: string | null = null,
-  isPro = true
+  isPro = true,
+  // email_logs에 남길 타입. 기본 'digest'(정기·수동 발송), 미리보기만 'preview'.
+  logType: 'digest' | 'preview' = 'digest'
 ): Promise<void> {
   const method = effectiveMethod(settings.delivery_method, isPro)
 
   if (method === 'telegram' && isEnabled('telegram')) {
     const chatId = settings.telegram_chat_id
     if (chatId) {
-      await sendDigestTelegram(chatId, userName, items, locale, userId)
+      await sendDigestTelegram(chatId, userName, items, locale, userId, logType)
       return
     }
     console.warn(`[delivery] telegram 선택됐으나 chat_id 미설정 → 이메일 폴백 (userId=${userId ?? '?'})`)
   }
 
   // email / 준비중 채널(whatsapp·line·kakao) / 주소 미설정 → 이메일 폴백
-  await sendDigestEmail(settings.email, userName, items, locale, userId, isPro)
+  await sendDigestEmail(settings.email, userName, items, locale, userId, isPro, logType)
 }
 
 export async function deliverBreaking(

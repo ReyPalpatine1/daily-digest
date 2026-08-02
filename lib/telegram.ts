@@ -20,7 +20,8 @@ function getSupabase(): SupabaseClient {
   return _supabase
 }
 
-type TelegramLogType = 'digest' | 'breaking'
+// 'preview'는 가입 직후 1회 미리보기 발송 — 정기 발송 중복 판정(type='digest'만 셈)과 분리.
+type TelegramLogType = 'digest' | 'breaking' | 'preview'
 
 // 발송 결과를 email_logs에 기록(이메일과 동일 테이블 재사용). recipient 컬럼엔 chat_id 저장.
 // 실패해도 발송 흐름을 막지 않음.
@@ -182,7 +183,9 @@ export async function sendDigestTelegram(
   userName: string,
   items: DigestItem[],
   locale: string | null = 'ko',
-  userId: string | null = null
+  userId: string | null = null,
+  // email_logs에 남길 타입. 기본 'digest'(정기·수동 발송), 미리보기만 'preview'.
+  logType: TelegramLogType = 'digest'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   const date = new Date().toLocaleDateString(dateLocaleByEmailLocale[lc], {
@@ -208,9 +211,9 @@ export async function sendDigestTelegram(
   try {
     // 다이제스트는 여러 영상을 묶어 보내므로 미리보기 끔
     await sendLongMessage(chatId, lines, true)
-    await logTelegramResult(userId, chatId, 'digest', true)
+    await logTelegramResult(userId, chatId, logType, true)
   } catch (e) {
-    await logTelegramResult(userId, chatId, 'digest', false, String(e))
+    await logTelegramResult(userId, chatId, logType, false, String(e))
     throw e
   }
 }

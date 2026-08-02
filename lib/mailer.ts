@@ -77,7 +77,9 @@ const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
   },
 })
 
-export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome'
+// 'preview'는 가입 직후 1회 미리보기 발송 — 정기 발송 중복 판정(hasDigestSentToday는
+// type='digest'만 센다)에 섞이지 않도록 별도 타입으로 기록한다.
+export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome' | 'preview'
 
 // 발송 결과를 email_logs에 기록. 실패해도 메일 발송 흐름을 막지 않음.
 async function logEmailResult(
@@ -129,7 +131,9 @@ export async function sendDigestEmail(
   locale: string | null = 'ko',
   userId: string | null = null,
   // 기본값 true = 광고 없음. 무료 사용자임이 확실할 때만 false로 광고 노출.
-  isPro = true
+  isPro = true,
+  // email_logs에 남길 타입. 기본 'digest'(정기·수동 발송), 미리보기만 'preview'.
+  logType: EmailLogType = 'digest'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   const date = new Date().toLocaleDateString(dateLocaleByEmailLocale[lc], {
@@ -146,9 +150,9 @@ export async function sendDigestEmail(
       subject: et(lc, 'digest.subject', { date }),
       html: buildDigestHtml(items, userName, lc, to, isPro),
     })
-    await logEmailResult(userId, to, 'digest', true)
+    await logEmailResult(userId, to, logType, true)
   } catch (e) {
-    await logEmailResult(userId, to, 'digest', false, String(e))
+    await logEmailResult(userId, to, logType, false, String(e))
     throw e
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getChannelId } from '@/lib/youtube'
 import { logErrorEvent } from '@/lib/error-log'
+import { deliverDigest } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import {
   collectChannelsNow,
@@ -78,7 +79,7 @@ export async function POST() {
     // 1) 자격 확인 — 이미 정기 발송을 받은 계정은 미리보기 대상이 아니다.
     const { data: profile } = await supabase
       .from('profiles')
-      .select('preview_used_at, first_digest_at, email')
+      .select('preview_used_at, first_digest_at, email, name')
       .eq('id', user.id)
       .single()
 
@@ -109,6 +110,8 @@ export async function POST() {
       settings?.locale === 'en' || settings?.locale === 'zh' || settings?.locale === 'ja'
         ? settings.locale
         : 'ko'
+
+    const userName = profile?.name ?? '사용자'
 
     // 4) 플랜 판정 (digest 라우트와 동일 — 만료 동기화 + 관리자 예외)
     const currentPlan = await syncUserPlan(user.id)
@@ -204,63 +207,103 @@ export async function POST() {
       return NextResponse.json({ empty: true, reason: 'no_summaries' })
     }
 
-    // 9) 열람 기록(digests) 저장 — 항목 구성은 digest 라우트와 동일(발송 결과와 일치시키기 위함).
+    // 9) 항목 구성 — digest 라우트와 동일(메일 본문과 열람 기록이 실제 발송과 일치하도록).
     const keywords: string[] = settings?.breaking_keywords ?? []
-    let saved = 0
-    for (const v of videos) {
-      try {
-        const meta = channelMeta.get(v.channel_id) ?? { alias: '채널', emoji: '📺', category: '미분류' }
-        const s = summaries.get(v.video_id)
-        let failReason: string | null = null
-        if (!s) {
-          failReason = v.fail_reason ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS ? 'temporary' : 'pending')
-        } else if (!isPro && isDescriptionBasedSummary(s.summary_basis)) {
-          // 자막 없는 영상(설명 기반 요약)은 Pro 전용 — 무료 사용자에겐 안내 문구만.
-          failReason = 'pro_only'
-        }
-        const withheld = failReason === 'pro_only'
+    const previewItems = videos.map(v => {
+      const meta = channelMeta.get(v.channel_id) ?? { alias: '채널', emoji: '📺', category: '미분류' }
+      const s = summaries.get(v.video_id)
+      let failReason: string | null = null
+      if (!s) {
+        failReason = v.fail_reason ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS ? 'temporary' : 'pending')
+      } else if (!isPro && isDescriptionBasedSummary(s.summary_basis)) {
+        // 자막 없는 영상(설명 기반 요약)은 Pro 전용 — 무료 사용자에겐 안내 문구만.
+        failReason = 'pro_only'
+      }
+      // pro_only: 요약은 풀에 존재하지만 본문·포인트·타임라인을 메일/digests에 노출하지 않음
+      const withheld = failReason === 'pro_only'
+      return {
+        channel: meta.alias,
+        category: meta.category,
+        emoji: meta.emoji,
+        video: {
+          videoId: v.video_id,
+          title: v.title,
+          publishedAt: v.published_at,
+          channelTitle: meta.alias,
+          url: `https://youtube.com/watch?v=${v.video_id}`,
+        },
+        summary: {
+          tldr: (!withheld && typeof s?.tldr === 'string') ? s.tldr : undefined,
+          summary: (withheld ? null : s?.summary) ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
+          keyPoints: !withheld && Array.isArray(s?.key_points) ? s.key_points : [],
+          timeline: !withheld && Array.isArray(s?.timeline) ? s.timeline : [],
+          summaryBasis: s?.summary_basis ?? '요약',
+          failReason: failReason ?? undefined,
+          failDetail: !s ? (v.fail_detail ?? undefined) : undefined,
+        },
+        isBreaking: matchesKeyword(v.title, keywords),
+      }
+    })
 
+    // 10) 열람 기록(digests) 저장 (upsert, 멱등)
+    let saved = 0
+    for (const item of previewItems) {
+      try {
         // digests.key_points는 text[] 컬럼인데 공유 풀(video_summaries.key_points)은 JSONB라
         // 객체 요소가 섞일 수 있다 → 모든 요소를 문자열로 정규화 (insert 실패 방지).
-        const rawKeyPoints = !withheld && Array.isArray(s?.key_points) ? s.key_points : []
-        const keyPoints = rawKeyPoints.map((p: any) =>
+        const keyPoints = (Array.isArray(item.summary.keyPoints) ? item.summary.keyPoints : []).map((p: any) =>
           typeof p === 'string' ? p : (p?.point ?? p?.text ?? JSON.stringify(p))
         )
-
         const { error } = await supabase.from('digests').upsert(
           {
             user_id: user.id,
-            channel_alias: meta.alias,
-            channel_emoji: meta.emoji,
-            category_name: meta.category,
-            video_id: v.video_id,
-            video_title: v.title,
-            video_url: `https://youtube.com/watch?v=${v.video_id}`,
-            published_at: v.published_at,
-            summary: (withheld ? null : s?.summary) ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
-            tldr: (!withheld && typeof s?.tldr === 'string') ? s.tldr : null,
+            channel_alias: item.channel,
+            channel_emoji: item.emoji,
+            category_name: item.category,
+            video_id: item.video.videoId,
+            video_title: item.video.title,
+            video_url: item.video.url,
+            published_at: item.video.publishedAt,
+            summary: item.summary.summary,
+            tldr: item.summary.tldr ?? null,
             key_points: keyPoints,
-            timeline: !withheld && Array.isArray(s?.timeline) ? s.timeline : [],
-            is_breaking: matchesKeyword(v.title, keywords),
+            timeline: item.summary.timeline,
+            is_breaking: item.isBreaking,
             is_read: false,
-            summary_basis: s?.summary_basis ?? '요약',
-            fail_reason: failReason ?? null,
-            fail_detail: !s ? (v.fail_detail ?? null) : null,
+            summary_basis: item.summary.summaryBasis,
+            fail_reason: item.summary.failReason ?? null,
+            fail_detail: item.summary.failDetail ?? null,
           },
           { onConflict: 'user_id,video_id' }
         )
         if (error) {
-          console.error(`[preview] digests upsert 실패 (${v.video_id}): ${error.message}`)
+          console.error(`[preview] digests upsert 실패 (${item.video.videoId}): ${error.message}`)
         } else {
           saved++
         }
       } catch (e) {
-        console.error(`[preview] digests 기록 예외 (${v.video_id}):`, e)
+        console.error(`[preview] digests 기록 예외 (${item.video.videoId}):`, e)
       }
     }
 
-    console.log(`✅ [preview] 완료 user=${user.id} saved=${saved}/${videos.length}`)
-    return NextResponse.json({ success: true, saved })
+    // 11) 실제 발송 — 사용자가 받게 될 다이제스트와 동일한 메일/텔레그램(채널 분기는 deliverDigest가 담당).
+    //     email_logs에는 'preview'로 기록되어 정기 발송 중복 판정(hasDigestSentToday)과 섞이지 않는다.
+    //     발송 실패는 열람 기록 저장을 되돌리지 않으며 선점도 유지한다(로그만 남기고 정상 응답).
+    let mailed = false
+    try {
+      await deliverDigest(settings, userName, previewItems, userLocale, user.id, isPro, 'preview')
+      mailed = true
+    } catch (e) {
+      console.error(`[preview] 미리보기 발송 실패 (userId=${user.id}):`, e)
+      await logErrorEvent({
+        source: 'preview',
+        failReason: 'send_error',
+        failDetail: `미리보기 발송 실패 (userId=${user.id}): ${String(e)}`,
+      })
+    }
+
+    console.log(`✅ [preview] 완료 user=${user.id} saved=${saved}/${videos.length} mailed=${mailed}`)
+    return NextResponse.json({ success: true, saved, mailed })
   } catch (error) {
     console.error('❌ [preview] 처리 실패:', error)
     await releaseClaim()
