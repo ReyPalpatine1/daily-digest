@@ -1,6 +1,7 @@
 // 공유 링크(shared_summaries) 관련 로직.
 // 주 흐름(수집·요약·발송)을 절대 막지 않도록 모든 함수는 내부에서 try-catch 하고 실패는 로깅만.
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버에서만 import.
+import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { shouldCountShareView } from './visit-guard'
 
@@ -25,6 +26,12 @@ export function generateShareToken(): string {
   const bytes = new Uint8Array(9)
   crypto.getRandomValues(bytes)
   return Array.from(bytes).map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 12)
+}
+
+// 토큰 형식 방어 — generateShareToken이 항상 0-9a-z 12자를 만들고 기존 DB 토큰도 전부 12자다.
+// 공유 페이지·신고 API·관리자 조치가 모두 이 함수를 쓴다(복붙 금지 — 규칙이 갈라지면 방어가 뚫린다).
+export function isValidTokenFormat(token: string): boolean {
+  return /^[0-9a-z]{12}$/.test(token)
 }
 
 // 공유 항목 강조 데이터. keyPoints[i]=핵심포인트 배열 인덱스, summary=요약 문장 원문,
@@ -151,6 +158,20 @@ export type ShareData = {
   } | null
 }
 
+// shared_summaries 단건 조회 — 한 요청 안에서 generateMetadata와 페이지 본문이 각각
+// getShareByToken을 부르므로 같은 토큰을 두 번 조회하게 된다. React cache()로 요청 단위 메모이제이션.
+// ※ cache()는 인자가 같을 때만 재사용되므로 token 외의 인자(countView·visitorHash 등)를 받지 말 것.
+// ※ 요청 컨텍스트 밖(크론 등)에서는 React가 캐시 없이 그대로 실행하므로 동작은 동일하다.
+const getShareRow = cache(async (token: string) => {
+  // 조회 실패(error)는 기존과 같이 무시 — data가 null이면 호출부가 "없는 공유"로 처리한다.
+  const { data } = await getSupabase()
+    .from('shared_summaries')
+    .select('token, video_id, comment, highlight_time, annotations, expires_at, blocked_at')
+    .eq('token', token)
+    .maybeSingle()
+  return data
+})
+
 // 토큰으로 공유 정보 + 영상 + 요약 조회. 없으면 null, 만료면 { expired: true }만 채워 반환.
 // countView: true일 때만 view_count +1 (best-effort — 페이지 본문 렌더에서만, 봇/메타 요청은 skip).
 export async function getShareByToken(
@@ -160,11 +181,7 @@ export async function getShareByToken(
 ): Promise<ShareData | null> {
   try {
     const supabase = getSupabase()
-    const { data: shareRow } = await supabase
-      .from('shared_summaries')
-      .select('token, video_id, comment, highlight_time, annotations, expires_at, blocked_at')
-      .eq('token', token)
-      .maybeSingle()
+    const shareRow = await getShareRow(token)
     if (!shareRow) return null
 
     const share = shareRow as {

@@ -6,17 +6,13 @@ import {
   type ShareReportReason,
 } from '@/lib/share-report'
 import { sendAdminShareReportAlert } from '@/lib/admin-alert'
+import { isValidTokenFormat } from '@/lib/share'
 import { hashVisitor, resolveClientIp } from '@/lib/visit-guard'
 
 // 공유 페이지 문제 신고 — 로그인 불필요(외부인이 보는 공개 페이지에서 신고하므로).
 // POST만 export → 다른 메서드는 Next.js가 405로 응답한다.
 
 const ALLOWED_REASONS: ShareReportReason[] = ['abuse', 'privacy', 'other']
-
-// 토큰 형식 방어 (generateShareToken은 0-9a-z 12자 — 공유 페이지와 동일하게 8~32자 허용)
-function isValidTokenFormat(token: string): boolean {
-  return /^[0-9a-z]{8,32}$/.test(token)
-}
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({})) as {

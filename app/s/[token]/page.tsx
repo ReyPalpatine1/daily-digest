@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import Link from 'next/link'
 import { headers } from 'next/headers'
 import { MessageSquareQuote, ShieldOff, Sparkles } from 'lucide-react'
-import { getShareByToken } from '@/lib/share'
+import { getShareByToken, isValidTokenFormat } from '@/lib/share'
 import { hashVisitor, resolveClientIpFromHeaders } from '@/lib/visit-guard'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import ShareVideo from '@/components/ShareVideo'
@@ -14,11 +14,6 @@ import ShareReportButton from '@/components/ShareReportButton'
 export const dynamic = 'force-dynamic'
 
 type PageProps = { params: Promise<{ token: string }> }
-
-// 토큰 형식 방어 (generateShareToken은 0-9a-z 12자 — 여유를 두고 8~32자 허용)
-function isValidTokenFormat(token: string): boolean {
-  return /^[0-9a-z]{8,32}$/.test(token)
-}
 
 // 크롤러/미리보기 봇 판정 — 메타는 주되 view_count 증가는 skip
 function isBotUA(ua: string): boolean {
@@ -223,6 +218,13 @@ function NoticePage({
 export default async function SharePage({ params }: PageProps) {
   const { token } = await params
 
+  // 형식부터 틀린 토큰은 여기서 끝낸다 — 방문자 해시 계산도, DB 조회도 하지 않는다.
+  if (!isValidTokenFormat(token)) {
+    return (
+      <NoticePage title="존재하지 않는 공유입니다." />
+    )
+  }
+
   // headers()는 한 번만 호출해 봇 판정과 방문자 해시에 함께 쓴다.
   const h = await headers()
   const countView = !isBotUA(h.get('user-agent') ?? '')
@@ -237,9 +239,7 @@ export default async function SharePage({ params }: PageProps) {
     }
   }
 
-  const data = isValidTokenFormat(token)
-    ? await getShareByToken(token, { countView, visitorHash })
-    : null
+  const data = await getShareByToken(token, { countView, visitorHash })
 
   if (!data) {
     return (

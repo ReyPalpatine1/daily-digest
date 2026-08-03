@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { isValidTokenFormat } from '@/lib/share'
 
 // 관리자 공유 신고 조회/상태변경/조치 (share_reports 최신순 + before 커서 페이지네이션)
 // 인증·페이지네이션 패턴은 app/api/admin/feedback/route.ts와 동일하게 맞췄다.
@@ -51,11 +52,6 @@ async function authAdmin(): Promise<
   }
 
   return { serviceClient: createClient(supabaseUrl, supabaseServiceRoleKey) }
-}
-
-// 토큰 형식 방어 — app/api/share-report/route.ts와 동일 규칙(0-9a-z 8~32자).
-function isValidTokenFormat(token: string): boolean {
-  return /^[0-9a-z]{8,32}$/.test(token)
 }
 
 type ShareReportRow = {
