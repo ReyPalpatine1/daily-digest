@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SummaryResult } from './gemini'
 import { VideoItem } from './youtube'
@@ -13,35 +12,8 @@ import {
   buildPassEndedHtml,
 } from './email-templates'
 
-// Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
-// transporter / service client 둘 다 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
-let _transporter: nodemailer.Transporter | null = null
-function getTransporter(): nodemailer.Transporter {
-  if (!_transporter) {
-    _transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    })
-  }
-  return _transporter
-}
-
-// 기존 `transporter.sendMail(...)` 사용처를 그대로 두기 위해 Proxy로 인터페이스 유지.
-// (현재 실제 발송은 전부 sendViaCloudflare 경유 — SMTP 롤백 대비로 남겨둠)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const transporter: nodemailer.Transporter = new Proxy({} as nodemailer.Transporter, {
-  get(_target, prop, receiver) {
-    const t = getTransporter()
-    const value = Reflect.get(t as object, prop, receiver)
-    return typeof value === 'function' ? value.bind(t) : value
-  },
-})
-
 // Cloudflare Email Sending REST API 발송.
-// SMTP(nodemailer 소켓)는 Workers의 global_fetch_strictly_public 제약으로 연결 불가라 HTTPS fetch 사용.
+// SMTP(소켓)는 Workers의 global_fetch_strictly_public 제약으로 연결 불가라 HTTPS fetch 사용.
 // account_id는 공개값이라 상수, 토큰(CF_EMAIL_TOKEN)은 함수 내부에서 읽음(Cloudflare 호환).
 const CF_ACCOUNT_ID = 'd0c818cc564e1942b7bd8f65c6c53fcb'
 async function sendViaCloudflare(opts: { from: string; to: string; subject: string; html: string; text?: string }): Promise<void> {
@@ -57,7 +29,9 @@ async function sendViaCloudflare(opts: { from: string; to: string; subject: stri
   }
 }
 
-// 이메일 발송 로그 기록용 (서버 전용 service client)
+// 이메일 발송 로그 기록용 (서버 전용 service client).
+// Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
+// 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
 let _supabase: SupabaseClient | null = null
 function getSupabase(): SupabaseClient {
   if (!_supabase) {

@@ -30,8 +30,6 @@ const supabase: ServiceClient = new Proxy({} as ServiceClient, {
   },
 })
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
-
 // 채널당 playlistItems 페이지 상한 (쿼터/시간 보호).
 // 증분 수집(last_video_published_at 이후만)이므로 2페이지면 신규분 충분.
 const MAX_PAGES = 2
@@ -101,6 +99,8 @@ export function isShort(durationSeconds?: number, title?: string): boolean {
 
 // 채널의 업로드 재생목록 ID (channels.list contentDetails, 1 unit)
 async function getUploadsPlaylistId(channelId: string): Promise<string | null> {
+  // Cloudflare 호환: env는 함수 내부에서 읽는다.
+  const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
   const res = await fetch(
     `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${YOUTUBE_API_KEY}`
   )
@@ -119,6 +119,8 @@ async function fetchPlaylistItems(
   playlistId: string,
   pageToken?: string
 ): Promise<{ items: PlaylistVideo[]; nextPageToken?: string; error?: boolean }> {
+  // Cloudflare 호환: env는 함수 내부에서 읽는다.
+  const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
   const url =
     `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails` +
     `&playlistId=${playlistId}&maxResults=50&key=${YOUTUBE_API_KEY}` +
@@ -142,6 +144,8 @@ type VideoDetail = { durationSeconds: number; description: string; title: string
 
 // 영상 상세 배치 (videos.list contentDetails+snippet, 50개당 1 unit)
 async function getVideoDetailsBatch(videoIds: string[]): Promise<Map<string, VideoDetail>> {
+  // Cloudflare 호환: env는 함수 내부에서 읽는다.
+  const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
   const out = new Map<string, VideoDetail>()
   for (let i = 0; i < videoIds.length; i += 50) {
     const batch = videoIds.slice(i, i + 50)

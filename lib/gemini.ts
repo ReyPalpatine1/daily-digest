@@ -2,9 +2,6 @@ import { logApiUsage, SYSTEM_USER_ID } from '@/lib/api-usage'
 import { stripTimeMarkers } from '@/lib/summary-format'
 import type { Locale } from './i18n/translations'
 
-// Cloudflare 호환: process.env는 요청 처리 시점에 채워지므로 모듈 최상단에서 읽지 않고
-// 호출 함수 내부에서 읽는다. (다른 파일과 동일 패턴)
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 // -latest alias는 실험 모델(프로덕션 부적합, 엄격한 rate limit, 가용성 미보장)이라
 // 503이 잦다 → 안정(GA) 모델 고정 + 503 시 폴백 모델로 1회 재시도.
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
@@ -402,6 +399,8 @@ export async function getTranscript(videoId: string, userId?: string): Promise<{
   transcriptExhausted?: boolean // 자막 API가 429/402(크레딧 소진) 응답 → "확정 아님"(충전/유료 전환 후 자막 가능)
   transcriptMissing?: boolean   // 자막 없음이 "확정"(콘텐츠 없음). 소진과 구분해 재시도 축소에 사용
 }> {
+  // Cloudflare 호환: env는 함수 내부에서 읽는다.
+  const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
   const fnStart = Date.now()
   let transcript = ''
   let description = ''

@@ -1,7 +1,5 @@
 import { logApiUsage, SYSTEM_USER_ID } from './api-usage'
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
-
 // 발송/풀에서 공통으로 쓰는 영상 표현 (mailer 등에서 import)
 export type VideoItem = {
   videoId: string
@@ -13,6 +11,8 @@ export type VideoItem = {
 
 // 채널 ID 추출 (URL에서). 채널 행에 channel_id가 없을 때 1회 보정용.
 export async function getChannelId(channelUrl: string, userId?: string): Promise<string | null> {
+  // Cloudflare 호환: env는 함수 내부에서 읽는다.
+  const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
   try {
     const handle = channelUrl.split('@')[1]?.split('/')[0]
     if (!handle) return null
