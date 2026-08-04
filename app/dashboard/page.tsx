@@ -214,6 +214,13 @@ export default function Dashboard() {
   // Free 한도 (Pro는 한도 없음 → 렌더에서 '무제한' 처리)
   const channelLimit = 5
   const retentionDays = isPro ? 30 : 7
+  // 열람 기록 보관 기간 판정 — 목록 필터·공유 딥링크가 같은 기준을 쓰도록 여기서 한 번만 만든다.
+  // 표기용 retentionDays(무료 7 / Pro 30)를 그대로 재사용해 안내 문구와 필터가 어긋나지 않게 한다.
+  // plan 미로드 시점(profile null·비관리자)에는 적용하지 않는다 — 전체표시로 두어 PRO 깜빡임 방지.
+  const planLoaded = isAdmin || profile !== null
+  const historyRetentionCutoff = Date.now() - retentionDays * 86_400_000
+  const beyondRetention = (d: HistoryDigest) =>
+    !!d.created_at && new Date(d.created_at).getTime() < historyRetentionCutoff
   // 활성/비활성 채널 수 (plan 강등 시 비활성 채널 존재 가능)
   const activeChannelCount = channels.filter(c => c.is_active !== false).length
   const inactiveChannelCount = channels.length - activeChannelCount
@@ -312,18 +319,20 @@ export default function Dashboard() {
     }).catch(() => setInitialLoading(false))
   }, [])
 
-  // 공유 링크(?share=) 소비 — 열람 기록이 채워진 뒤 1회만.
+  // 공유 링크(?share=) 소비 — 열람 기록이 채워지고 플랜이 확정된 뒤 1회만.
+  // (planLoaded 전에는 보관 기간 판정이 틀릴 수 있으므로 그때까지 보관값을 유지한 채 기다린다)
   // 대상 요약을 찾으면 열람기록 탭으로 옮기고 공유 시트를 연다.
   // 성공·실패와 무관하게 보관값을 지운다(중복 실행 방지). 시트가 이미 열려 있으면 덮어쓰지 않는다.
   const shareIntentDoneRef = useRef(false)
   useEffect(() => {
-    if (shareIntentDoneRef.current || initialLoading || shareTarget) return
+    if (shareIntentDoneRef.current || initialLoading || !planLoaded || shareTarget) return
     const intent = readShareIntent()
     shareIntentDoneRef.current = true
     if (!intent) return
     clearShareIntent()
     // fail_reason이 있는 항목은 공유할 요약이 없다 → 카드의 공유 버튼과 동일하게 대상에서 제외.
-    const target = digests.find(d => d.video_id === intent.videoId && !d.fail_reason)
+    // 보관 기간이 지난 항목도 화면 목록에 없으므로 제외(검색·채널 등 다른 필터는 걸지 않는다).
+    const target = digests.find(d => d.video_id === intent.videoId && !d.fail_reason && !beyondRetention(d))
     if (!target) {
       showPreviewToast('그 요약을 열람 기록에서 찾지 못했어요. 보관 기간이 지났을 수 있습니다.')
       return
@@ -338,7 +347,7 @@ export default function Dashboard() {
       keyPoints: target.key_points ?? [],
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialLoading, digests, shareTarget])
+  }, [initialLoading, planLoaded, digests, shareTarget])
 
   // 미리보기 안내 카드 닫음 여부 로드 (localStorage 접근은 클라이언트에서만)
   useEffect(() => {
@@ -506,11 +515,13 @@ export default function Dashboard() {
   }
 
   async function loadData(userId: string) {
+    // 열람 기록은 최대 보관 기간(Pro 30일)까지만 가져온다 — 어떤 플랜도 그보다 오래된 기록은 볼 수 없다.
+    const historyFrom = new Date(Date.now() - 30 * 86_400_000).toISOString()
     const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }] = await Promise.all([
       supabase.from('categories').select('*').eq('user_id', userId),
       supabase.from('channels').select('*').eq('user_id', userId),
       supabase.from('settings').select('*').eq('user_id', userId).single(),
-      supabase.from('digests').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(200),
+      supabase.from('digests').select('*').eq('user_id', userId).gte('created_at', historyFrom).order('created_at', { ascending: false }).limit(200),
     ])
     const sortedCats = (cats ?? []).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
     const sortedChs = (chs ?? []).sort((a, b) => a.alias.localeCompare(b.alias, 'ko'))
@@ -781,17 +792,10 @@ export default function Dashboard() {
 
   const filteredChannels = filterCat ? channels.filter(c => c.category_id === filterCat) : channels
   const getCatById = (id: string | null) => categories.find(c => c.id === id)
-  // FREE는 화면에 최근 7일만 표시(저장은 30일 유지 → 재구독 시 자동 복원).
-  // plan 미로드 시점(profile null·비관리자)에는 전체표시로 두어 PRO 깜빡임 방지.
-  const planLoaded = isAdmin || profile !== null
-  const applyFreeRetention = planLoaded && !isPro
-  const FREE_HISTORY_DAYS = 7
-  const historyRetentionCutoff = Date.now() - FREE_HISTORY_DAYS * 86_400_000
-  const beyondFreeRetention = (d: typeof digests[number]) =>
-    !!d.created_at && new Date(d.created_at).getTime() < historyRetentionCutoff
-
+  // 화면에는 플랜별 보관 기간(무료 7일 / Pro 30일)만 표시한다(판정은 상단 beyondRetention).
+  // 무료도 저장은 30일 유지 → 재구독 시 자동 복원.
   const filteredDigests = digests.filter(d => {
-    if (applyFreeRetention && beyondFreeRetention(d)) return false
+    if (planLoaded && beyondRetention(d)) return false
     if (historyFilter === 'breaking' && !d.is_breaking) return false
     if (historySearch && !d.video_title.toLowerCase().includes(historySearch.toLowerCase()) && !d.summary?.toLowerCase().includes(historySearch.toLowerCase())) return false
     if (historyDate && !d.created_at.startsWith(historyDate)) return false
@@ -800,9 +804,9 @@ export default function Dashboard() {
     return true
   })
 
-  // FREE에서 7일 제한으로 숨겨진 기록 수 (0이면 안내 숨김)
-  const hiddenByRetentionCount = applyFreeRetention
-    ? digests.filter(beyondFreeRetention).length
+  // 보관 기간 제한으로 숨겨진 기록 수 (0이면 안내 숨김)
+  const hiddenByRetentionCount = planLoaded
+    ? digests.filter(beyondRetention).length
     : 0
 
   const uniqueChannels = [...new Set(digests.map(d => d.channel_alias))].sort()
@@ -2611,8 +2615,9 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* FREE 7일 제한 안내 (숨겨진 기록이 있을 때만) */}
-              {hiddenByRetentionCount > 0 && (
+              {/* FREE 7일 제한 안내 (숨겨진 기록이 있을 때만).
+                  Pro 업그레이드 유도 문구라 Pro에게는 숨겨진 기록이 있어도 띄우지 않는다. */}
+              {!isPro && hiddenByRetentionCount > 0 && (
                 <div style={{
                   marginTop: 14, padding: '14px 16px',
                   background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
