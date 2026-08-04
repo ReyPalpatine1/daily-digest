@@ -54,7 +54,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Cloudflare Workers 호환 (★ 중요 — 어기면 배포는 되나 런타임에서 터짐)
 - **process.env는 "요청 처리 시점"에 채워진다.** 모듈 최상단(파일 로드 시점,
   함수 밖)에서 process.env를 읽어 클라이언트를 만들면 Cloudflare에서 undefined가 되어
-  "supabaseKey is required" 등으로 터진다. (Vercel은 로드 시점에도 채워져서 됨)
+  "supabaseKey is required" 등으로 터진다.
   → Supabase 등 모든 클라이언트는 **lazy 초기화**로 작성:
     함수 내부에서 생성하거나, lazy getter + Proxy 패턴(lib/supabase.ts 참고).
   → API 라우트에서도 const supabaseUrl = process.env... 를 모듈 최상단에 두지 말 것.
@@ -69,14 +69,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - wrangler.jsonc의 compatibility_flags(nodejs_compat,
   nodejs_compat_populate_process_env 등)와 r2/observability 바인딩 건드리지 말 것.
 - **Gemini 호출은 GEMINI_BASE_URL 환경변수 기반**으로 할 것(lib/gemini.ts 패턴).
-  Cloudflare는 AI Gateway 경유(지역 차단 우회), Vercel은 직접 호출.
+  Cloudflare AI Gateway 경유(지역 차단 우회).
   새 Gemini 호출을 추가할 때도 generativelanguage.googleapis.com을 하드코딩하지 말고
   `const base = process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com'`
   패턴을 따를 것.
 
-## 빌드 검증 (Vercel + Cloudflare 양쪽)
+## 빌드 검증
 - 코드 수정 후 셋 다 통과 확인 후 push:
-  npx tsc / npm run build (Vercel용) / npm run cf:build (Cloudflare용 OpenNext)
+  npx tsc / npm run build (Next.js 빌드) / npm run cf:build (Cloudflare용 OpenNext)
 - 셋 중 하나라도 실패하면 push하지 말고 에러를 보고할 것.
 
 ## null 단언 주의
