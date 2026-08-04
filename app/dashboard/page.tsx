@@ -38,6 +38,10 @@ const pendingIconStyle: React.CSSProperties = {
 // 열람기록 상단 미리보기 안내 카드를 닫았는지 (기기별 1회 노출용, DB 컬럼 대신 로컬 저장)
 const PREVIEW_GUIDE_KEY = 'ddv_preview_guide_done'
 
+// 열람 기록 한 페이지 크기. digests 행에는 요약 본문이 통째로 실려 있어 한 번에 많이 받으면
+// 모바일 첫 로딩이 느려진다 → 나눠 받고 "더 보기"로 이어붙인다.
+const HISTORY_PAGE_SIZE = 100
+
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
   const available = colors.filter(c => !usedColors.includes(c))
@@ -117,6 +121,8 @@ export default function Dashboard() {
   const [channels, setChannels] = useState<Channel[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
   const [digests, setDigests] = useState<HistoryDigest[]>([])
+  // 열람 기록에 다음 페이지가 남아 있는지("더 보기" 노출 조건)
+  const [hasMoreDigests, setHasMoreDigests] = useState(false)
   const [activeTab, setActiveTab] = useState<'channels' | 'schedule' | 'history'>('channels')
   // PRO 전용 채널 클릭 시 잠깐 뜨는 안내 문구(결제창 이동 없음)
   const [channelNotice, setChannelNotice] = useState<string | null>(null)
@@ -183,6 +189,7 @@ export default function Dashboard() {
   const tgDisconnect = usePending()
   const planSwitch = usePending()
   const previewRun = usePending()
+  const loadMore = usePending()
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   // 처음 사용자 도움말 팝업: 진입 시 help_seen===false 자동 노출 / 설정에서 재열기
@@ -521,7 +528,10 @@ export default function Dashboard() {
       supabase.from('categories').select('*').eq('user_id', userId),
       supabase.from('channels').select('*').eq('user_id', userId),
       supabase.from('settings').select('*').eq('user_id', userId).single(),
-      supabase.from('digests').select('*').eq('user_id', userId).gte('created_at', historyFrom).order('created_at', { ascending: false }).limit(200),
+      // 2차 정렬 키(id)는 동점(같은 created_at) 순서를 고정한다 — 없으면 페이지 경계에서 행이 중복·누락된다.
+      supabase.from('digests').select('*').eq('user_id', userId).gte('created_at', historyFrom)
+        .order('created_at', { ascending: false }).order('id', { ascending: false })
+        .range(0, HISTORY_PAGE_SIZE - 1),
     ])
     const sortedCats = (cats ?? []).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
     const sortedChs = (chs ?? []).sort((a, b) => a.alias.localeCompare(b.alias, 'ko'))
@@ -531,7 +541,33 @@ export default function Dashboard() {
 
     // tldr은 발송 시점에 digests.tldr로 함께 기록되므로 그대로 사용한다.
     // (과거엔 video_summaries에서 병합했으나 그 테이블은 RLS SELECT 정책이 없어 브라우저 조회가 항상 빈 결과였다)
-    setDigests((digs ?? []) as HistoryDigest[])
+    const rows = (digs ?? []) as HistoryDigest[]
+    setDigests(rows)
+    // 페이지가 꽉 찼으면 다음 페이지가 있을 수 있다는 뜻.
+    setHasMoreDigests(rows.length === HISTORY_PAGE_SIZE)
+  }
+
+  // 열람 기록 다음 페이지 — 기존 목록을 교체하지 않고 뒤에 이어붙인다.
+  // 정렬·범위 조건은 loadData와 완전히 동일해야 페이지 경계에서 중복·누락이 없다.
+  // 실패는 조용히 무시한다(버튼은 usePending이 원상 복구).
+  async function loadMoreDigests() {
+    if (!user) return
+    await loadMore.run(async () => {
+      const historyFrom = new Date(Date.now() - 30 * 86_400_000).toISOString()
+      const from = digests.length
+      const { data, error } = await supabase
+        .from('digests').select('*').eq('user_id', user.id).gte('created_at', historyFrom)
+        .order('created_at', { ascending: false }).order('id', { ascending: false })
+        .range(from, from + HISTORY_PAGE_SIZE - 1)
+      if (error || !data) return
+      const rows = data as HistoryDigest[]
+      // 오프셋 방식이라 앞 페이지 이후 새 기록이 들어오면 같은 행이 다시 올 수 있다 → id로 한 번 걸러낸다.
+      setDigests(prev => {
+        const seen = new Set(prev.map(d => d.id))
+        return [...prev, ...rows.filter(d => !seen.has(d.id))]
+      })
+      setHasMoreDigests(rows.length === HISTORY_PAGE_SIZE)
+    })
   }
 
   // 프로필만 재로드 (관리자 토글로 plan 변경 후 isPro 갱신용)
@@ -2323,6 +2359,14 @@ export default function Dashboard() {
                 )}
               </div>
 
+              {/* 필터는 전부 클라이언트에서 걸리므로 아직 안 불러온 기록은 검색되지 않는다.
+                  남은 페이지가 있을 때만 그 사실을 알린다(다 불러왔으면 안내할 이유가 없음). */}
+              {hasFilter && hasMoreDigests && (
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+                  {t('history.partialSearchNotice')}
+                </div>
+              )}
+
               {/* 기록 목록 / 빈 상태 */}
               {filteredDigests.length === 0 ? (
                 <div style={{ ...cardStyle, padding: '48px 24px', textAlign: 'center' }}>
@@ -2612,6 +2656,22 @@ export default function Dashboard() {
                       </Fragment>
                     )
                   })}
+                </div>
+              )}
+
+              {/* 다음 페이지 불러오기 — 남은 기록이 있을 때만. 누르는 즉시 비활성(중복 요청 방지). */}
+              {hasMoreDigests && (
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <button
+                    onClick={loadMoreDigests}
+                    disabled={loadMore.pending}
+                    style={{
+                      ...secondaryBtn,
+                      padding: '10px 20px',
+                      ...(loadMore.pending ? pendingBtnStyle : {}),
+                    }}>
+                    {loadMore.pending ? t('history.loadingMore') : t('history.loadMore')}
+                  </button>
                 </div>
               )}
 
