@@ -1,282 +1,161 @@
-# Daily Digest — 프로젝트 인수인계 문서
+# Daily Digest — 저장소 코드 맥락 문서 (HANDOVER)
 
-> 새 대화를 시작할 때 이 문서를 Claude에게 붙여넣거나, "저장소의 HANDOVER.md를 봐줘"라고 요청하세요.
-> 이 문서는 프로젝트의 **현재 상태**를 알려주는 설명서입니다. 작업으로 내용이 바뀌면 반드시 갱신하세요.
-
----
-
-## 0. 나에 대해 / 작업 방식 (Claude가 꼭 지킬 것)
-
-- 나는 **비개발자**다. 코드를 직접 못 읽으니, 전문 용어는 풀어서 설명하고 무엇을/왜 하는지 알려줄 것.
-- 작업 흐름: **웹챗(설계·논의) → VS Code의 Claude Code(Sonnet)에 붙여넣을 프롬프트를 만들어주면 내가 붙여넣음 → 자동 git push → Vercel 자동 배포.**
-- VS Code Claude Code는 "이 세션 모든 편집 허용" + "git 허용" + "npx tsc 허용"이 켜져 있다. 즉 **tsc 통과/푸시는 Claude Code가 알아서 함. 내가 직접 확인하지 않는다.**
-- 한국어로 답할 것.
-- **작업 환경**: 집=로컬 VS Code, 회사=GitHub Codespaces (둘 다 같은 저장소). 규칙: 떠나기 전 반드시 git push, 시작할 때 git pull. 두 곳 동시 수정 금지. .env.local은 git에 없으므로 Codespaces엔 별도 생성 필요(로컬 미리보기 시). Claude Code로 push만 할 거면 .env.local 없어도 됨.
-
-### 내가 반복해서 요구한 규칙 (어기지 말 것)
-1. **같은 확인 작업을 여러 번 시키지 말 것.** 검증이 필요하면 한 번에 끝나게 설계하고, 안 되면 GitHub 공개 저장소 코드를 직접 읽어서 원인을 잡을 것. (저장소 Public이므로 clone해서 직접 확인 가능)
-2. **SQL을 줄 때:**
-   - 날짜를 내가 직접 입력하게 하지 말 것. `(now() AT TIME ZONE 'Asia/Seoul')::date` 처럼 자동 계산식을 쓸 것.
-   - 각 SQL 아래에 **"예상 결과 / 해석"을 미리 적어둘 것.** (성공이면 뭐가 나오는지, 에러면 무슨 의미인지)
-3. **디자인/스타일 작업 시 문서값이 아니라 실제 코드를 먼저 확인할 것.** (예전에 문서의 뱃지 색을 믿고 작업했다가 틀린 적 있음 — 항상 grep으로 실제 정의를 본 뒤 시안/프롬프트를 만들 것)
-4. **스크린샷을 주면, 요청한 것만 처리하지 말고** 그 화면의 중복·위계·여백·정렬 등 디자인 문제를 함께 점검해서 보고할 것.
-5. **삭제(DB/파일)는 되돌릴 수 없으므로**, 실행 전에 "무엇이 몇 개 지워지는지" 미리보기를 먼저 보여주고 확인받을 것.
-6. "코드 작성 ㄴㄴ"이라고 하면 **지시할 때까지 코드/프롬프트를 만들지 말 것.** 보고·시안만.
-7. 큰 작업은 단계별로 쪼갤 것. 한 번에 다 하면 위험.
-8. 상업용 기준으로 작업 (가족 베타 범위라고 명시하지 않는 한).
-9. iOS15 대응: `.browserslistrc` (ios>=15, safari>=15) 유지 (아이폰7).
+> **이 문서의 범위**: 코드·인프라·DB·함정 등 **저장소 안에서 판단에 필요한 것만** 담는다.
+> 진행 상황·백로그·요금·사업 정보는 **여기 두지 않는다**(운영자의 웹챗 문서 CORE/STATUS/HISTORY/BIZ/INBOX가 정본).
+> 이중화하면 반드시 어긋난다 — 실제로 이 문서가 3주간 낡은 채로 방치돼 잘못된 판단을 유발한 적 있음.
+> 코드 작성 규칙은 **AGENTS.md**를 볼 것(이 문서와 역할 분리).
+> 최종 갱신: 2026-08-04
 
 ---
 
 ## 1. 서비스 개요
 
-- 구독한 유튜브 채널의 영상을 AI로 요약해 매일 이메일로 보내주는 서비스.
-- 매일 설정 시간에 전날 영상 전체 요약 발송(정각).
-- 속보 키워드 포함 영상은 감지 즉시 발송(Pro 전용).
-- 한 달치 요약 기록 저장 및 대시보드 열람.
-- 가족용 → 상업용 SaaS로 확장 중.
+구독한 유튜브 채널의 새 영상을 AI(Gemini)로 요약해 매일 아침 이메일/텔레그램으로 보내는 SaaS.
+다국어(한/영/중/일). 컨셉 "요약으로 먼저 읽고, 관심 있는 영상만 시청".
+서비스명 **Daily Video Digest**, 도메인 **dailyvideodigest.com**.
 
-## 2. 기술 스택
+## 2. 작업 방식
 
-- 프론트: Next.js 16 (App Router, TypeScript, Tailwind) — ※ 이 버전은 기존과 다른 점이 있으니 Claude Code는 node_modules의 next 문서를 참고
-- DB: Supabase (PostgreSQL + Auth + Google OAuth). **pg_cron 활성화됨.**
-- 배포: **Cloudflare Workers (OpenNext 어댑터)로 이전 중/완료. Vercel은 백업으로 유지.**
-  - Cloudflare 서비스 URL: https://daily-digest.8539519.workers.dev
-  - Vercel(백업): https://daily-digest-one-vert.vercel.app
-  - 빌드: OpenNext(@opennextjs/cloudflare 1.19.11) + Next 16.2.6
-  - GitHub 연결 자동배포(빌드 `npm run cf:build` / 배포 `npm run cf:deploy`)
-- AI 요약: **Gemini API — `gemini-3.1-flash-lite`(기본) + `gemini-2.5-flash`(503 폴백)**. 환경변수 GEMINI_MODEL / GEMINI_FALLBACK_MODEL. (구 `gemini-flash-latest`는 실험 모델이라 503 폭주 → 폐기)
-- 영상 수집: YouTube Data API v3 (playlistItems + videos 배치, search는 쿼터 폭발로 제거)
-- 자막: **Supadata API(1차) + YouTube API 설명(2차 폴백) + 페이지 HTML(3차 폴백)** 다단계. Supadata는 실패(206)·레이트(429)에도 크레딧 차감되므로 호출 1회로 최적화함. 무료 플랜 월 100크레딧으로는 부족 → 유료 전환 검토 필요.
-- 이메일: Gmail SMTP (nodemailer)
-- 크론: GitHub Actions (15분 주기, 부정확). + Supabase pg_cron(자동삭제용).
+운영자는 **비개발자**다. 코드/SQL을 직접 쓰지 않는다.
+흐름: 웹챗(설계·프롬프트 작성) → Claude Code에 붙여넣기 → git push → Cloudflare 자동 배포.
 
-## 3. 배포/접속 정보
+- 지시 없이 프롬프트를 임의 작성하지 말 것.
+- 테스트 목적 작업에는 push 문구를 넣지 말 것(`git checkout --`로 원복, 임시 스크립트 삭제).
+- 추측 금지 — 코드 grep으로 확인하고 근거를 먼저 제시할 것.
+- 임의로 "완료" 선언하지 말 것. 미해결이면 롤백/대안을 협의.
 
-- 서비스 URL: https://daily-digest-one-vert.vercel.app
-- GitHub: https://github.com/ReyPalpatine1/daily-digest (Public)
-- 로컬: C:\Users\85395\Desktop\daily-digest
-- Supabase 프로젝트 ID: rqoztfncbgxofxeyguxm
-- Supabase SQL Editor: https://supabase.com/dashboard/project/rqoztfncbgxofxeyguxm/sql
-- 관리자 계정: khsol0118@gmail.com (user_id: bbe14894-b824-4e5e-bc17-d7770392a23c)
-- CRON_SECRET: (실제 값은 공개 금지 — Vercel 환경변수 참조. 노출 시 즉시 교체)
-- Gemini Billing: Tier 1
-- Supadata: 무료 플랜(월 100크레딧, 소진 임박)
+## 3. 기술 스택 (현행)
+
+- **Next.js 16.2.6**(App Router, TS) + React 19 + lucide-react
+- **Cloudflare Workers Paid($5/월)** — @opennextjs/cloudflare. https://dailyvideodigest.com
+  (워커 URL `daily-digest.8539519.workers.dev`)
+  **Vercel 배포는 2026-08-04 삭제됨. 재구축 금지** — 같은 저장소·같은 DB를 서빙하면서
+  Cloudflare 속도 제한·Bot Fight Mode가 적용되지 않아 방어를 통째로 우회하는 경로였다.
+- **Supabase**(PostgreSQL 17 + Google OAuth). 프로젝트 `rqoztfncbgxofxeyguxm`
+- **Gemini** 3.1-flash-lite(기본) / 2.5-flash(폴백). **Cloudflare AI Gateway 경유**(지역 차단 우회).
+  호출은 `GEMINI_BASE_URL` 기반으로 작성할 것(하드코딩 금지).
+- **자막 구조3**: TranscriptAPI(1차, 유료 $5/월 1,000크레딧·실패 요청 0차감)
+  → Supadata(폴백, 미결제·429 정상) → 영상 설명(폴백). 셋 다 없으면 요약 불가.
+  - `include_timestamp=true`로 세그먼트 수신 → 자막에 30초 간격 `[m:ss]` 앵커 삽입 → timeline 실측화.
+  - 자막 slice **45,000자**(1시간 커버).
+- **이메일 = Cloudflare Email Sending REST API**
+  `lib/mailer.ts`의 `sendViaCloudflare()` — POST `accounts/{account_id}/email/sending/send`,
+  Bearer `CF_EMAIL_TOKEN`, from = `MAIL_FROM`(noreply@dailyvideodigest.com). SPF/DKIM 인증됨.
+  **nodemailer/Gmail/SMTP는 2026-08-04 전량 삭제**(코드·패키지·환경변수). 롤백 경로 없음 — 필요 시 git 이력.
+  Workers에서 SMTP 아웃바운드 소켓은 `global_fetch_strictly_public` 플래그로 차단되므로 **REST가 정석**.
+- **텔레그램** Bot API (Pro 전용 발송 채널)
+- **cron = Cloudflare Cron Triggers**(`worker.ts`) 15분 주기 →
+  `/api/collect`(수집) → `/api/cron`(발송 판정 + 체험 알림). 다이제스트는 하루 1회.
+  `.github/workflows/cron.yml`은 **schedule이 주석 처리된 수동 실행 전용**(과거 잔재).
+- **DB 백업**: GitHub Actions `backup.yml` — 매일 KST 04시 pg_dump → R2, 14일 보존, 실패 시 텔레그램.
+  apt는 PGDG 저장소만 갱신할 것(무관 저장소 서명 오류로 전체 실패한 이력 있음).
 
 ## 4. 환경변수
 
-NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY,
-YOUTUBE_API_KEY, GEMINI_API_KEY, (GEMINI_MODEL, GEMINI_FALLBACK_MODEL),
-GMAIL_USER, GMAIL_APP_PASSWORD, CRON_SECRET, NEXT_PUBLIC_APP_URL,
-ADMIN_EMAILS/NEXT_PUBLIC_ADMIN_EMAILS=khsol0118@gmail.com
+**Cloudflare Workers 런타임 변수/시크릿** (설정 → 변수 및 시크릿):
+`CF_EMAIL_TOKEN`(시크릿) / `MAIL_FROM` / `TRANSCRIPTAPI_KEY` / `SUPABASE_SERVICE_KEY` /
+`ADMIN_EMAILS` / `GEMINI_API_KEY` / `GEMINI_BASE_URL` / `CRON_SECRET` /
+`TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` / `YOUTUBE_API_KEY` /
+`NEXT_PUBLIC_*`(빌드 시 치환)
 
-## 4.5 Cloudflare 운영 주의사항 (중요 함정들)
+- **`CF_EMAIL_TOKEN`·`MAIL_FROM` 삭제 금지** — 실제 발송에 사용 중.
+- **`TELEGRAM_WEBHOOK_SECRET` 삭제 금지** — 이 값이 설정돼 있어야만 웹훅 검증이 동작한다(없으면 검증 자체를 건너뜀).
+- `wrangler.jsonc`의 `keep_vars: true`가 있어야 배포 시 일반 변수가 지워지지 않는다. 건드리지 말 것.
+- GitHub Secrets 7종은 백업 전용(SUPABASE_DB_URL·R2 4종·TELEGRAM 2종).
 
-### 환경변수 (★꼭 숙지)
-- Cloudflare는 변수가 **빌드 변수**(GitHub 연결 설정)와 **런타임 변수**(설정 → 변수 및 비밀) **두 곳**에 따로 있음. 코드(process.env)가 읽는 건 런타임 변수.
-- **NEXT_PUBLIC_ 변수**는 빌드 때 코드에 박혀서 런타임에도 보이지만, 그 외 변수(SUPABASE_SERVICE_KEY, ADMIN_EMAILS, GEMINI_API_KEY 등)는 **런타임 변수에 반드시 등록**해야 함. 안 하면 process.env에서 빈 값 → 발송/관리자 403 등 오류.
-- **★ keep_vars: wrangler.jsonc에 `"keep_vars": true` 설정함.** 이게 없으면 배포할 때마다 Cloudflare가 일반(비암호화) 변수를 덮어써서 삭제함(공식 동작). Secret(암호화) 변수는 배포에도 안 지워짐. keep_vars로 일반 변수도 보존됨.
-  → 변수가 또 사라지면 keep_vars 설정과 런타임 변수 등록 상태부터 확인.
+## 5. Cloudflare 함정 (새 코드 작성 전 필독)
 
-### 코드 패턴 (Cloudflare 호환)
-- **process.env는 "요청 처리 시점"에 채워짐.** 모듈 최상단(파일 로드 시)에서 process.env를 읽어 클라이언트를 만들면 undefined로 터짐("supabaseKey is required" 등).
-  → Supabase 등 클라이언트는 **lazy 초기화**(첫 사용 시 생성, Proxy 패턴)로 작성. lib/supabase.ts, mailer.ts, plan-sync.ts, send-guard.ts, video-pool.ts, api-usage.ts, 발송/admin API 라우트들이 이 패턴 적용됨.
-  → 새 코드도 모듈 최상단 process.env 읽기 금지. 함수 내부/lazy로.
-- **동적 import 주의**: changeLocale 등에서 `import('@/lib/supabase')` 같은 동적 import는 Cloudflare에서 페이지 로드 실패 유발. static import 사용.
-- compatibility_flags에 `nodejs_compat_populate_process_env` 포함(process.env 채우기).
+- **`process.env`는 함수 내부에서만 읽을 것.** 모듈 최상단은 금지(요청 시점에 채워짐).
+- **동적 import 금지** — 페이지 로드 실패를 유발한다.
+- **해시는 Web Crypto만**(Node `crypto` 금지). 공유 토큰도 `crypto.getRandomValues`.
+- **subrequest** 유료 1,000/실행. `MAX_SUMMARIES_PER_RUN = 100`.
+- **CPU** $5 Paid로 5분. 워커 CPU 시간 제한 15,000ms 설정됨. 청구 예산 알림 $10.
+- **이메일 발송은 REST fetch만.** SMTP 소켓은 위 플래그로 불가.
+- GitHub Actions의 "Re-run"은 옛 커밋을 쓴다 — 수정 후엔 "Run workflow".
+- **공개 경로 방어는 2단**: Cloudflare 속도 제한 규칙(무료 1개 한도 —
+  `/s/*` + `/api/ad-click` + `/api/share-report`를 한 식에 묶어 10초 20회/IP, 10초 차단)이
+  **워커 실행 전에** 막고, 코드는 집계 정확도만 담당(판정 실패 시 fail-open으로 그냥 집계).
+  이 규칙은 dailyvideodigest.com에만 적용되므로 **다른 도메인으로 같은 앱을 배포하면 방어가 통째로 우회된다.**
+- **Bot Fight Mode ↔ 카카오톡 미리보기**: 봇 차단을 켜면 링크 미리보기 크롤러가 막혀 카톡 카드가 깨질 수 있다.
+  봇 설정을 바꾼 뒤에는 반드시 공유 링크를 카톡에 붙여 썸네일을 확인할 것.
 
-### 인증/URL
-- 로그인 후 리다이렉트: Supabase Auth → URL Configuration의 Site URL/Redirect URLs에 Cloudflare 주소 등록(/** 와일드카드). 구글 OAuth는 Supabase 콜백 주소만 있으면 됨.
-- NEXT_PUBLIC_APP_URL: Cloudflare는 Cloudflare 주소, Vercel은 Vercel 주소로 각자 설정. email-templates.ts의 APP_URL은 이 환경변수 기반(하드코딩 제거됨).
+## 6. 발송 시스템
 
-### cron (정시 발송)
-- 현재 GitHub Actions(.github/workflows/cron.yml, 15분)가 /api/collect, /api/cron 호출. 주소를 Cloudflare로 변경함. **GitHub Actions는 활동 많은 시간대 1~2시간 지연**(무료 cron 한계).
-- 향후: Cloudflare Cron Triggers로 교체하면 정시성 개선(추가비용 없음, 단 Workers Paid $5 필요). Cron Triggers는 무료 플랜엔 없음 → 출시($5) 시점에 교체 검토.
+- **채널 공유 풀 구조**: 수집(`/api/collect`)과 발송(`/api/cron` → `/api/digest`·`/api/breaking`) 분리.
+  같은 채널을 여러 사용자가 구독해도 영상·요약은 한 벌만 만든다.
+- **폴백 C(하이브리드)**: 수집 cron이 미리 요약하고, 발송 시 누락분만 즉시 요약(`summarizeNow`).
+- **중복 발송 방지 2단**: ①`send_log` 선점(1차) ②`hasDigestSentToday`가 `email_logs`를 교차 확인(2차).
+  - ★ 2차는 **시간 컬럼이 `sent_at`**이다(`created_at`은 존재하지 않음).
+    과거에 `created_at`으로 조회해 항상 에러 → false 반환 → 2차 방어가 도입 이후 한 번도 동작하지 않았던 이력 있음.
+- **`24시간 published_at` 윈도우 밖 영상은 정상 경로에서 재요약 대상에서 빠진다.**
+  특정 영상을 강제로 다시 요약하려면 `video_id` 직접 리셋이 필요하다.
+  (과거 여러 A/B 비교가 사실상 옛 요약을 본 것이었던 원인)
 
-### 백업/복구
-- 안정 상태 git 태그: `stable-next-16.2.4` (Cloudflare 작업 전 백업). 문제 시 `git checkout stable-next-16.2.4`로 복구 가능. Vercel은 계속 살아있어 서비스 안 멈춤.
+### 인증 (2026-08-04 도입 — 반드시 유지)
 
-### subrequest 한도 (★ 요약 실패 주의)
-- Cloudflare Workers는 "한 번의 Worker 실행"당 외부 호출(subrequest) 횟수 제한이 있음:
-  **무료 플랜 50개 / 유료(Workers Paid $5) 1,000개.**
-- subrequest = 외부 호출 1개. 영상 1개 요약 ≈ 자막+설명+Gemini = 약 3~4개.
-  따라서 무료 50개 한도면 한 실행에 영상 약 10~12개가 한계.
-- 한 실행(= API 호출 1번, 예: "지금 실행하기" 1번, 또는 cron이 부르는
-  /api/collect·/api/cron·/api/digest 각각)이 영상을 너무 많이 처리하면
-  "Too many subrequests by single Worker invocation" 에러 → 그 이후 영상 요약 실패.
-- 한도는 "실행 1번당"이라 동시 실행은 각자 따로 카운트됨
-  (사용자 2명이 동시에 눌러도 각 실행이 한도 내면 OK).
-- **현재 대응**: lib/video-pool.ts에 MAX_SUMMARIES_PER_RUN(환경변수, 기본 10)로
-  한 실행당 요약 영상 수를 제한. 초과분은 다음 cron 주기로 이월(멱등성으로 중복 없음).
-- **★ 유료($5 Workers Paid) 전환 시**: subrequest 한도가 50→1,000으로 늘어나므로
-  MAX_SUMMARIES_PER_RUN 환경변수를 100 정도로 올릴 것(Cloudflare 런타임 변수에 등록).
-  그러면 한 번에 더 많은 영상을 처리해 발송이 빨라짐.
-- 다국어 요약(B방식)을 쓰면 영상당 언어 수만큼 Gemini 호출이 늘어 subrequest를
-  더 먹으므로, 언어가 많아지면 MAX_SUMMARIES_PER_RUN을 더 보수적으로 잡아야 함.
+- `lib/route-auth.ts`: `isCronRequest`(CRON_SECRET Bearer) / `getAuthedUser`(세션) / `isAdminEmail`
+- `/api/digest`: `trigger='cron'`이면 CRON_SECRET 필수, `'manual'`이면 세션 본인만
+  (불일치 403, 관리자만 지정 userId 예외)
+- `/api/breaking`: Bearer 통과 또는 세션 본인/관리자
+- **★ `/api/cron`이 위 둘을 fetch할 때 `Authorization` 헤더를 반드시 붙일 것.**
+  빠뜨리면 정기 발송이 전부 401로 죽는다.
+- 사용자용 "지금 실행하기"는 **폐기**(반복 요약 유발 경로). 관리자 테스트는 `/admin/system`의 본인 계정 실행만.
+- 인증 없는 라우트는 3개뿐이며 전부 의도된 공개:
+  `/api/ad-click`(반복 억제 보유) · `/api/share-report`(도배 방지 보유) · `/api/telegram/webhook`(시크릿 헤더 검증)
 
-### Gemini 지역 차단 (★ 요약 전체 실패 주의)
-- 증상: Cloudflare에서 요약 시 "User location is not supported for the API use"
-  (Gemini API 400 FAILED_PRECONDITION). Cloudflare Workers가 Gemini 미지원
-  지역(홍콩 등) 엣지에서 실행되면 Google이 거부. 한국에서 접속해도 발생 가능.
-- 해결: **Cloudflare AI Gateway 경유**로 우회함(지원 위치에서 중계됨).
-  - AI Gateway 'daily-digest-gemini' 생성(인증 토글 끔, API 키만으로 호출).
-  - 환경변수 GEMINI_BASE_URL을 Cloudflare 런타임 변수에 설정:
-    https://gateway.ai.cloudflare.com/v1/d0c818cc564e1942b7bd8f65c6c53fcb/daily-digest-gemini/google-ai-studio
-  - lib/gemini.ts가 GEMINI_BASE_URL 있으면 Gateway 경유, 없으면(Vercel) 직접 호출.
-  - 검증: 요약 성공 + "User location" 에러 없음으로 확인됨.
-- Vercel은 GEMINI_BASE_URL 미설정 → 직접 호출(기존대로). 양쪽 호환.
-- 만약 Gateway로도 안 되면(지역에 따라 다를 수 있음) Vertex AI(리전 지정) 검토.
+### 미리보기 (신규 온보딩)
 
-## 5. 플랜 / VIP 시스템
+- 조건: `preview_used_at`·`first_digest_at`이 둘 다 null이고 채널이 1개 이상일 때만 노출. **계정당 1회.**
+- 동작: 그 사용자 채널만 즉시 수집(`collectChannelsNow`, 동시 5개·20초 예산) →
+  **최신 영상 3개**만 요약 → `digests` 저장 + 실제 메일 발송.
+  3개 상한 이유 = Pro 20채널이면 라우트 60초·클라이언트 90초 제약을 넘긴다.
+- **날짜 범위 조건 없음** — 신규 채널이 최근 업로드가 없어도 미리보기가 비면 안 되기 때문.
+- 원샷 선점: `UPDATE ... WHERE preview_used_at IS NULL`의 갱신 행 수로 판정. 실패·빈 결과면 되돌린다.
+- **발송 장부는 `type='preview'`로 분리** — `hasDigestSentToday`는 `'digest'`만 세므로
+  미리보기를 눌러도 그날 정기 발송이 정상적으로 나간다. 제목에 '미리보기' 표기는 하지 않는다.
 
-- 누구나 가입 → Free. 관리자가 VIP 지정 → 무료 Pro. 결제 → Pro.
-- VIP/Pro 기능 동일, 사용자는 자기를 "PRO"로 봄(VIP는 관리자 페이지에서만 구분).
-- profiles: plan('free'|'pro'|'vip'), plan_expires_at, vip_granted_by/at, admin_note, last_active_at
-- isPro = (pro 유효기간 || vip || admin) — lib/supabase.ts의 checkIsPro 헬퍼 사용.
-- **뱃지 색 (중요 — 두 종류가 다름):**
-  - **사용자 화면(components/UserPlanBadge.tsx)**: FREE=#52525B, PRO=노란 그라데이션(#FBBF24→#F59E0B). FREE/PRO 2종만(VIP도 PRO로 표시).
-  - **관리자 화면(components/PlanBadge.tsx)**: FREE/PRO/VIP/ADMIN 4종 구분, 단색(PRO=#1D4ED8 파랑, VIP=#6D28D9 보라, ADMIN=#B91C1C 빨강).
-  - ※ 이 둘은 역할이 다르므로 섞지 말 것.
+## 7. DB 핵심 구조
 
-## 6. 공통 컴포넌트 (재사용 — 복붙 금지)
+- **`profiles` 키 = `id`**(= auth.users.id). `settings` 키 = `user_id`. JOIN: `settings.user_id = profiles.id`
+- **수신 이메일 정본 = `settings.email`**(`profiles.email`은 보조)
+- `profiles`: plan / plan_status(none·trialing·active·canceled, PG 시 onetime 추가) / plan_expires_at /
+  trial_used / 체험 알림·팝업 플래그 4종 / **preview_used_at** / **first_digest_at** /
+  signup_source · signup_ref_token(공유 경유 가입 추적)
+- `trial_history`: email_hash + platform_id + used_at. **탈퇴 후에도 영구 보존**(재체험 방지)
+- `videos` · `digests`: fail_reason(no_source/temporary/pending/live/pro_only) + fail_detail,
+  transcript_checked, live_broadcast_content. `digests.tldr`은 발송 시점 스냅샷
+  (`video_summaries`는 RLS로 클라이언트 조회 불가라 열람기록이 직접 읽는다)
+- `video_summaries`: summary / key_points / timeline / summary_basis / tldr / locale
+- `shared_summaries`(공유): token PK, video_id, shared_by, comment, annotations(jsonb),
+  expires_at(기본 14일), view_count, blocked_at. 물리 삭제는 `cleanupExpiredShares`(만료+7일 유예)
+- `share_views`(조회 중복 억제): token, visitor_hash, viewed_at. **24시간 경과분은 cleanupExpiredShares가 삭제**
+- `share_reports`(신고): reporter_hash, comment_snapshot(신고 시점 메모 원문), reason, status
+- `ad_clicks`: slot / source / is_bot / clicked_at / **visitor_hash**
+  (같은 해시 + 같은 slot이 30분 내면 **insert 자체를 안 함**)
+- `email_logs`: type(digest·breaking·welcome·trial*·**preview**) / status / **sent_at**
+- `feedback` · `error_log`(dedupe + is_read) · `admin_alert_settings` · `api_usage`
 
-- **components/AppHeader.tsx**: 사용자 페이지 공통 상단바. 로고(클릭→/dashboard), 플랜 뱃지, 뒤로가기(showBack, 로고 오른쪽), 우측 툴바(언어/테마/설정).
-- **components/AdminHeader.tsx**: 관리자 페이지 공통 헤더. 검정 바 + ADMIN 뱃지 + 네비 + 모드토글. props: activeKey. **새 관리자 탭을 만들면 반드시 이걸 사용.**
-- **components/UpgradeButton.tsx**: 검정 그라데이션 업그레이드 버튼(→/pricing). 업그레이드 유도는 이걸 사용.
-- **components/UserPlanBadge.tsx**: 사용자용 플랜 뱃지(size sm/md). 뱃지 표시는 이걸 사용.
-- **components/PlanBadge.tsx**: 관리자 전용 뱃지(4종).
+**타입 주의**: `video_summaries.key_points`/`timeline`은 JSONB, `digests.key_points`는 `text[]`.
+풀 → digests 저장 시 문자열 배열로 정규화할 것(과거 저장 중단 버그 원인).
 
-## 7. 발송 시스템 (채널 공유 풀 구조)
+**IP는 전부 Web Crypto SHA-256 해시로만 저장한다. 원본 IP는 어디에도 저장하지 않는다.**
+해시 알고리즘(`lib/visit-guard.ts`)을 바꾸면 기존 `reporter_hash`와 어긋나므로 변경 금지.
 
-- 핵심: 같은 채널/영상을 사용자마다 중복 조회·요약하지 않고, **채널 단위 1번 조회 / 영상 단위 1번 요약 후 공유.** 비용·쿼터가 사용자 수가 아니라 고유 채널 수에 비례.
-- 전체 UTC 저장, 표시만 KST (lib/time.ts).
-- 수집(/api/collect)과 발송(/api/cron, /api/digest, /api/breaking) 분리.
-- 폴백 C(하이브리드): 수집 cron이 미리 요약, 발송 시 누락분만 즉시 요약(summarizeNow).
-- 발송 멱등성: send_log + lib/send-guard.ts (sending/sent/failed 3단계, 5분 STALE 복구).
-- cron 부정확 대응: 슬롯 매칭 → "경과+멱등성"(하루 1회 보장, 6시간 가드).
-- 핵심 파일: lib/video-pool.ts, lib/gemini.ts, lib/youtube.ts, lib/email-templates.ts
+## 8. 과거에 실제로 터진 것들 (같은 실수 반복 금지)
 
-## 8. DB 테이블 / 주요 컬럼
+- **안전장치가 조용히 죽는다** — `hasDigestSentToday`(없는 컬럼 조회 → 항상 false),
+  텔레그램 웹훅 검증(변수 미설정 시 무력화). "있으면 검사"류 코드는 전제 충족 여부를 따로 확인할 것.
+- **빌드 통과 ≠ 동작 확인** — 발송 경로를 건드린 변경은 실제 메일 도착까지 확인할 것.
+- **방어를 세우면 우회로를 같이 찾을 것** — Cloudflare에 자물쇠를 달아도 Vercel 옆문이 열려 있으면 무의미했다.
+- **비결정성(temperature 0.3, seed 없음)** — 같은 입력도 매번 다르다. 단일 실행 비교는 노이즈다.
+  프롬프트만으로 출력 형식을 100% 보장할 수 없으므로 **코드 레벨 정규화**가 정석
+  (`normalizeAnchorParagraphs`, `stripTimeMarkers`).
+- **RLS 확인** — `video_summaries`는 RLS 켜짐·SELECT 정책 없음. 클라이언트가 직접 조회하면 조용히 빈 배열을 받는다.
 
-- profiles, categories, channels(is_active, uploads_playlist_id), settings(notify_when_empty, locale, breaking_keywords, email)
-- **★ 사용자 수신 주소의 정본은 settings.email** — 발송(다이제스트·체험/이용권 알림)은 settings.email 우선, 없으면 profiles.email 폴백. profiles.email만 보고 보내면 안 됨.
-- profiles 체험/이용권 알림 플래그 4개: trial_ending_notified_at / trial_ended_notified_at(메일 발송 기록), trial_ending_popup_seen_at / trial_ended_popup_seen_at(대시보드 팝업 확인 기록)
-- digests: 요약 기록(히스토리/읽음용). key_points=ARRAY(text[]), timeline=jsonb
-- videos: video_id PK, is_short, **summary_attempts(재시도 상한 3회)**
-- video_summaries: video_id PK, summary, **key_points=JSONB, timeline=JSONB**(과거 TEXT였음→전환 완료), model, **summary_basis**(자막/설명/제목 기반 표시)
-- send_log: 발송 멱등성
-- email_logs: 발송 성공률 통계 (시간 컬럼은 **sent_at**)
-- api_usage: 사용량(date, service, user_id, api_calls, input/output_tokens). **공유 작업은 시스템 ID(00000000-0000-0000-0000-000000000000)로 기록.**
-- feedback: 사용자 의견. user_id(탈퇴 시 SET NULL), rating, type, message(2~500자), status, is_public(테스티모니얼 공개용, 공개 UI는 미구현), locale. RLS는 본인 insert만 허용(조회·관리는 서버 service key).
-- error_log: 오류 로그. **is_read**(관리자 오류 탭 읽음 상태 — 안 읽은 오류 강조/뱃지용)
-- admin_alert_settings: 관리자 알림 설정. **last_error_alert_at**(신규 오류 알림 워터마크 — 이 시각 이후 오류만 새로 알림)
+## 9. 링크
 
-## 9. Supabase RPC 함수 (관리자 통계 / 정리)
-
-- admin_channel_counts(), admin_digest_counts(), admin_email_stats() — 사용자별 집계
-- admin_active_users(since), admin_top_channels(), admin_latest_digest() — usage용
-- admin_usage_summary(today_date, week_start) — api_usage 집계
-- **cleanup_old_data()** — 자동삭제. digests 30일 / send_log 7일 / email_logs 90일.
-  pg_cron으로 매일 KST 새벽 3시(UTC 18시) 실행. jobname='cleanup-old-data'.
-- 인덱스: api_usage(date), digests(created_at), digests(user_id), channels(user_id)
-
-## 10. 관리자 페이지 성능
-
-- 통짜 조회 + JS 집계 → RPC 집계 + Promise.all 병렬로 전환(usage 4.2초→1초대).
-- /api/admin/users, /api/admin/usage에 **60초 메모리 캐시.** set-plan/note 변경 시 invalidateUsersCache()로 무효화.
-- 남은 ~1초는 인증/네트워크 고정비용(사용자 수와 무관, 증가에 강함).
-
-## 11. 발송 기능 확정 요구사항 (상업용)
-
-- 속보: 당일 감지 즉시 발송 / 마지막 체크 이후 모든 새 속보 / 당일만 / 폭주 그대로 / 영상별 중복방지 / 키워드 대소문자무시+제목포함 / Pro 전용.
-- 정각: 하루 1회 보장 / 수동 "지금 실행하기"는 횟수 미포함 / 전날 모든 영상(속보 포함).
-- 발송 채널: 택1(중복 수신 X), 지금은 이메일만.
-
-## 12. 결제 / 프로필 (현재 상태)
-
-- 요금제 **/pricing** → 결제창 **/subscribe**(7일 Pro 체험 시작 실작동 / 실결제는 PG 미연동이라 "준비 중" 안내). /subscription, /test 페이지는 삭제됨.
-- 프로필 **/profile 단일 페이지**(탭 없음): 계정 정보 + 플랜 카드(FREE=업그레이드 버튼 / PRO=만료일+구독 관리).
-- 약관 3종 페이지 있음: /terms /privacy /refund (한국어, [[placeholder]] 미기입 — §15 ① 참조).
-- **열람 기록 표시**: FREE는 최근 7일만 표시(저장은 30일, 재구독 시 복원). PRO/VIP/admin은 전체. FREE 하단에 "PRO에서 더 보기" 안내.
-
-## 13. 이메일
-
-- 다국어 4개 언어(ko/en/zh/ja): lib/i18n/email-translations.ts (UI용 translations.ts와 분리)
-- 종류: 다이제스트 / 빈 다이제스트 / 속보 / 환영 / 체험 종료 예고·안내(trialEnding·trialEnded) / 1개월권 만료 예고·안내(passEnding·passEnded, PG 연동 전이라 대상 0명)
-- 푸터: "Daily Digest / (태그라인) / 알림 설정 / (이메일) 님에게 발송" — 수신자는 이름 우선.
-- 헤더(안녕하세요/N개 요약) 전체가 **/dashboard 링크.** 우측 힌트 "다이제스트 바로가기"(en: Go to Digest).
-- 각 요약 카드 하단에 분석 근거 표시(자막/설명/제목 기반).
-
-## 14. 해결한 주요 버그 (참고)
-
-- digests 6/6 이후 저장 중단: video_summaries.key_points가 TEXT여서 digests(text[]) 저장 시 타입 충돌 → JSONB 전환 + 코드 방어로 해결.
-- Gemini 503 전멸: gemini-flash-latest(실험 모델) → 안정 모델 고정 + 폴백.
-- 실패 요약이 풀에 영구 캐시: 실패 시 저장 안 하고 재시도 대기로 변경.
-- Gemini 깨진 JSON: 복구 파서 + responseMimeType:application/json.
-- api_usage 6/7 이후 기록 중단: 공유 경로 userId=null → 시스템 ID로 기록.
-- 쇼츠(is_short=true)는 발송 대상 제외(정상 동작).
-- 다이제스트 중복 발송: 실행이 발송 후 죽으면 send_log가 sending으로 남고, 다음 실행이 STALE 복구로 재선점해 또 발송 → email_logs 기준 hasDigestSentToday 교차확인을 추가해 "오늘 이미 성공 발송"이면 재발송 차단.
-- DB 자체 백업 실패: 백업 워크플로가 Microsoft apt 저장소 오류로 죽음 → apt 갱신을 PGDG(PostgreSQL 저장소)만 하도록 좁혀 해결.
-- 신규 오류가 쌓여도 무알림: 알림 체크가 오류 발생 뒤에만 돌아 놓침 → collect run 시작 전에도 체크 + admin_alert_settings.last_error_alert_at 워터마크로 "그 이후 새 오류"만 집계해 알림.
-- 체험 종료 메일 미발송 2건: ① mailer의 transporter를 모듈 최상단에서 참조해 Cloudflare에서 터짐 → getTransporter() 사용으로 수정. ② 수신 주소를 profiles.email로만 보고 발송 → 다이제스트와 동일하게 settings.email 우선(폴백 profiles.email)으로 통일.
-
-## 15. 백로그 (2026-07-11 기준)
-
-> 현재 작업 기준. 완료되면 ⑤로 옮기고, 새 항목은 분류에 맞게 추가할 것.
-
-### ① 출시 전 필수
-- $5 Cloudflare Workers Paid 전환 → 전환 시 MAX_SUMMARIES_PER_RUN 환경변수를 100으로(subrequest 50→1,000). 무료 CPU 30초 한도 문제(다이제스트 누락 원인)도 함께 해결됨
-- 자막 API 유료 전환 (Supadata 무료 월 100크레딧으로는 부족)
-- 약관 3종 마무리: [[placeholder]] 기입(사업자 등록 후) + 4개 언어 번역 + 개인정보처리방침에 trial_history(이메일 해시·플랫폼ID, 재체험 방지, 탈퇴 후 보관) 고지 + "무료 체험"→"Pro 체험" 명칭 정리
-
-### ② 미완 (작업하다 남은 것)
-- C. 관리자 콘텐츠 탭 가독성 — admin_top_channels RPC가 Supabase에만 정의되어 있고 저장소에 SQL이 없음. 수정 전 Supabase에서 현재 정의(SQL) 확인 필요
-- 환불 문의 안내 위치 (환불 규정은 있는데 어디로 문의하라는 안내가 없음)
-- digest·breaking 최상위 catch에 오류 알림 배선 (지금은 통째로 실패하면 조용히 죽음)
-
-### ③ PG 연동 시 필수 (잊으면 안 됨)
-- plan_status에 결제 유형 기록: 자동갱신=**active** / 1개월권(일회성)=**onetime**
-- 결제(자동갱신/1개월권) 부여 시점에 profiles의 trial_ending_notified_at / trial_ended_notified_at / trial_ending_popup_seen_at / trial_ended_popup_seen_at **4개를 null로 리셋** — 이용 사이클마다 만료 알림이 재활성화되는 구조 (lib/trial-notify.ts 상단 주석에도 명시됨)
-- 자동갱신(active)은 만료 알림 대상 아님 — 알림 스캔은 trialing/onetime만
-
-### ④ 보류·아이디어
-- 실결제 PG 연동 (사업자 등록 후): 결제 화면 자동/일회성 선택, 체험 카드 요구 재검토, 탈퇴 환불 연동
-- 카카오/WhatsApp/LINE 메신저 (출시 후)
-- 소셜 로그인 추가(카카오 등) — trial_history platform_id 확장 포함
-- Gemini 타임아웃 대응 — 재발 시
-- 멤버십 전용 영상 감지 — 기술적 불가(YouTube Data API 공식 필드 없음, 2026-07 확인). 요금제 한계 고지로 대체 중
-- digests 정규화 (video_id 참조+JOIN)
-- 관리자 화면 자막 비용 계산 (transcriptapi×$1.5/1k + supadata×$9/1k + Gemini 토큰)
-- 언어 동기화 로직 중복 통합 (대시보드+AppHeader)
-- subrequest/CPU 근본 대응: 수집/요약 분리 + 영상단위 큐화 (대규모 성장 시)
-- 관리자 텔레그램 오류 알림 실발송 검증 (오류 자연 발생 시)
-- 피드백 공개(테스티모니얼) — feedback.is_public 컬럼 준비됨, 공개 UI만 만들면 됨
-- 관리자 의견↔사용자 교차링크 (의견에서 그 사용자로, 사용자에서 그 사람 의견으로 이동)
-- 이주의 인기 영상 위젯 / 북마크·나중에 볼 영상 / "오늘 미리보기"
-- 폐기됨: 영상 정밀 요약, 매일 여러 번, 우선 처리, Premium/Family, 슈퍼 프로, AI 음성, 디스코드, 카테고리 제한, 연 단위 결제(2026-07), 제목 기반 요약(2026-07), FAQ 고객센터 이관(2026-07, pricing 내 FAQ 유지 확정)
-
-### ⑤ 완료
-- 구조3 자막 / Cloudflare Cron / 랜딩 / 색 톤 / 도움말 팝업 / MAX_SUMMARIES_PER_RUN=1
-- 요금제 개편(연 폐기·월 ₩4,900 단일·4상태 버튼) + 결제창(/subscribe) + 7일 체험 실작동 + trial_history 재체험 방지 + 재가입자 결제 유도 (2026-07)
-- 약관·개인정보·환불 3종 페이지 (/terms /privacy /refund, 한국어, placeholder) (2026-07)
-- 회원 탈퇴 (/api/account/delete, 공유풀·trial_history 보존) (2026-07)
-- DB 자체 백업 (backup.yml: 매일 KST 04시 pg_dump→R2, 14일 보존, 실패 텔레그램) (2026-07)
-- 요약 실패 사유 표기 (fail_reason 4종 + 대시보드/이메일 표시 + 관리자 [debug]) + 제목 기반 폐지 + 라이브 감지 + 요금제 한계 고지 (2026-07)
-- 관리자 오류 시스템 (error_log + /admin 오류 탭 + 이메일/텔레그램 알림 선택) (2026-07)
-- 사용자 피드백 시스템: /feedback 페이지 + /admin/feedback 관리 탭 + 진입점 3곳 + 관리자 헤더 실시간 뱃지 (2026-07)
-- 관리자 오류 탭 읽음·강조 (error_log.is_read — 안 읽은 오류 하이라이트/뱃지, 클릭 시 읽음) (2026-07)
-- 관리자 헤더 탭 순서 확정: 대시보드·시스템·오류·사용자·의견·콘텐츠·이메일 (2026-07)
-- 체험 종료 안내: 메일 2종(전날 예고/당일 안내) + 대시보드 팝업 2종 + 1개월권(onetime) 뼈대(메일·팝업 문구 분기, PG 연동 전이라 대상 0명). 명칭 규칙: 개념="Pro 체험", CTA="7일 무료" (2026-07)
-
-### 출시 전 잡일
-- 이모지→lucide / 영어 이메일 재검증 / 미사용 i18n 키 정리(pricing faq 제외) / 요약 메일 다듬기(속보 배너+중복) / Vercel 정리 / 시크릿 별도 기록
-
-## 16. 자주 쓰는 링크
-
-- 서비스: https://daily-digest-one-vert.vercel.app
-- GitHub: https://github.com/ReyPalpatine1/daily-digest
-- GitHub Actions: https://github.com/ReyPalpatine1/daily-digest/actions
-- Supabase SQL: https://supabase.com/dashboard/project/rqoztfncbgxofxeyguxm/sql
-- Google Cloud (YouTube 쿼터): https://console.cloud.google.com
-- Gemini: https://aistudio.google.com
-- Supadata 대시보드: https://dash.supadata.ai
+- 서비스 https://dailyvideodigest.com
+- GitHub https://github.com/ReyPalpatine1/daily-digest
+- Supabase https://supabase.com/dashboard/project/rqoztfncbgxofxeyguxm
+- Cloudflare https://dash.cloudflare.com
+- TranscriptAPI https://transcriptapi.com · Supadata https://supadata.ai
