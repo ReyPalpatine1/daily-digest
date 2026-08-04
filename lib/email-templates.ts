@@ -13,7 +13,9 @@ export type EmailDigestItem = {
   channel: string
   category: string
   emoji: string
-  video: { title: string; url: string; publishedAt: string }
+  // videoId는 카드의 공유 링크(/dashboard?share=...) 생성에만 쓰인다.
+  // 과거 호출부(videoId 없는 항목)에서도 깨지지 않도록 옵셔널 — 없으면 공유 링크를 생략한다.
+  video: { title: string; url: string; publishedAt: string; videoId?: string }
   summary: {
     tldr?: string // 결론 한 줄(역피라미드 최상단, 라벨 없이 강조). 과거 데이터엔 없을 수 있어 옵셔널.
     summary: string
@@ -171,6 +173,11 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
   const tl = safeArray<{ time: string; content: string }>(item.summary.timeline)
   const basisKey = basisTranslationKey(item.summary.summaryBasis)
   const failKey = failReasonTranslationKey(item.summary.failReason)
+  // 공유 링크 — 대시보드에서 공유 시트를 여는 보조 버튼("영상 보기"와 같은 줄).
+  // 실패·대기·라이브·pro_only 항목은 공유할 요약이 없으므로 넣지 않는다(대시보드 카드와 동일 기준).
+  const shareLink = !failKey && item.video.videoId
+    ? `<a href="${APP_URL}/dashboard?share=${encodeURIComponent(item.video.videoId)}" style="display:inline-block;padding:7px 14px;border:1px solid #E5E5E5;border-radius:6px;color:#525252;background:#FFFFFF;font-size:12px;font-weight:500;text-decoration:none;margin-left:8px;">${et(locale, 'digest.shareLink')}</a>`
+    : ''
   return `
     <div style="background:#FFFFFF;border-radius:10px;padding:20px 24px;border:1px solid #E5E5E5;margin-bottom:12px;">
       ${item.summary.errorInfo ? '' : ''}
@@ -222,7 +229,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         </div>` : ''}`}
       <a href="${escapeHtml(item.video.url)}" style="display:inline-block;padding:7px 14px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
         ${et(locale, 'digest.watchVideo')}
-      </a>
+      </a>${shareLink}
       ${basisKey && !failKey ? `
         <div style="font-size:11px;color:#A1A1AA;margin-top:14px;">${escapeHtml(et(locale, basisKey))}</div>` : ''}
     </div>`
@@ -409,7 +416,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
     return [
       {
         channel: 'Bloomberg', category: 'Economy', emoji: '📈',
-        video: { title: 'Fed Holds Rates Steady, Signals Caution', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
+        video: { videoId: 'sample00001', title: 'Fed Holds Rates Steady, Signals Caution', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
         summary: {
           summary: 'The Federal Reserve kept interest rates unchanged, citing persistent inflation and a resilient labor market.',
           keyPoints: ['Rates unchanged at 5.25–5.50%', 'Inflation still above the 2% target', 'Two cuts projected later this year'],
@@ -418,7 +425,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
       },
       {
         channel: 'Marques Brownlee', category: 'Tech', emoji: '🎬',
-        video: { title: 'The Best Phone Cameras of 2026', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 7200_000).toISOString() },
+        video: { videoId: 'sample00002', title: 'The Best Phone Cameras of 2026', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 7200_000).toISOString() },
         summary: {
           summary: 'A blind comparison of flagship phone cameras, ranking low-light and color accuracy across eight devices.',
           keyPoints: ['Low-light winner surprised everyone', 'Color science still varies widely'],
@@ -430,7 +437,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
   return [
     {
       channel: 'YTN', category: '지정학', emoji: '📡',
-      video: { title: '미·중 정상 통화, 무역 긴장 완화 신호', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
+      video: { videoId: 'sample00001', title: '미·중 정상 통화, 무역 긴장 완화 신호', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
       summary: {
         summary: '양국 정상이 통화에서 관세 인하 가능성을 논의하며 무역 갈등 완화 분위기가 형성됐습니다.',
         keyPoints: ['관세 단계적 인하 검토', '추가 실무 협상 일정 합의', '시장은 즉시 긍정 반응'],
@@ -439,7 +446,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
     },
     {
       channel: '소수몽키', category: '경제', emoji: '💰',
-      video: { title: '반도체 사이클, 지금이 저점일까?', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 7200_000).toISOString() },
+      video: { videoId: 'sample00002', title: '반도체 사이클, 지금이 저점일까?', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 7200_000).toISOString() },
       summary: {
         summary: '메모리 반도체 가격 흐름과 재고 지표를 근거로 사이클 저점 가능성을 진단했습니다.',
         keyPoints: ['재고 조정 막바지 국면', '하반기 수요 회복 기대'],
@@ -453,7 +460,7 @@ export function dummyBreakingItem(locale: EmailLocale): EmailDigestItem {
   if (locale === 'en') {
     return {
       channel: 'Reuters', category: 'Markets', emoji: '⚡',
-      video: { title: 'Breaking: Major Index Drops 3% on Rate Fears', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
+      video: { videoId: 'sample00003', title: 'Breaking: Major Index Drops 3% on Rate Fears', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
       summary: {
         summary: 'Equity markets fell sharply after stronger-than-expected inflation data renewed rate-hike concerns.',
         keyPoints: ['Index down 3% intraday', 'Bond yields spiked'],
@@ -463,7 +470,7 @@ export function dummyBreakingItem(locale: EmailLocale): EmailDigestItem {
   }
   return {
     channel: '부읽남TV', category: '재테크', emoji: '🚨',
-    video: { title: '속보: 삼성전자 실적 발표, 시장 예상 상회', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
+    video: { videoId: 'sample00003', title: '속보: 삼성전자 실적 발표, 시장 예상 상회', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
     summary: {
       summary: '삼성전자가 시장 예상을 웃도는 분기 실적을 발표하며 주가가 장중 강세를 보였습니다.',
       keyPoints: ['영업이익 컨센서스 상회', '반도체 부문 회복 뚜렷'],

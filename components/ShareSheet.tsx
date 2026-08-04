@@ -131,14 +131,23 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
   const [createdSig, setCreatedSig] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // 카카오·기기 공유가 함께 쓰는 하단 안내 한 줄(2.5초)
   const [kakaoNotice, setKakaoNotice] = useState<string | null>(null)
   const [kakaoReady, setKakaoReady] = useState(false)
+  // 기기 공유(Web Share API) 지원 여부. 렌더 중 navigator를 보면 SSR과 결과가 달라져
+  // 하이드레이션 불일치가 나므로 마운트 후 effect에서만 판정한다.
+  const [canNativeShare, setCanNativeShare] = useState(false)
   const kakaoSend = usePending()
+  const nativeSend = usePending()
 
   const showKakaoNotice = (msg: string) => {
     setKakaoNotice(msg)
     setTimeout(() => setKakaoNotice(null), 2500)
   }
+
+  useEffect(() => {
+    setCanNativeShare(typeof navigator !== 'undefined' && !!navigator.share)
+  }, [])
 
   // 카카오 SDK 주입 + 초기화. 키가 없거나 로드/초기화가 실패하면 kakaoReady=false로 두고
   // 버튼은 비활성 모양 + 안내 문구로 폴백한다(시트가 깨지지 않도록 전부 try/catch).
@@ -258,6 +267,20 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
     }
   }
 
+  // 공유 카드 문구 — 카카오·기기 공유가 같은 규칙을 쓴다(문구를 채널마다 따로 만들지 않는다).
+  // 제목=메모, 설명=tldr 구성을 메모 유무와 관계없이 유지한다.
+  // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다.
+  // tldr이 없을 때만 설명을 영상 제목으로 대체하고, 그것도 없으면 설명을 생략한다.
+  const cardCopy = (): { title: string; desc: string } => {
+    const memo = cardText(comment, KAKAO_TITLE_MAX)
+    return {
+      title: memo || '📌 핵심 포인트',
+      desc: memo
+        ? cardText(tldr, KAKAO_DESC_MAX)
+        : cardText(tldr, KAKAO_DESC_MAX) || cardText(videoTitle, KAKAO_DESC_MAX),
+    }
+  }
+
   // 카카오톡 공유 — 링크가 만들어진 뒤에만 동작. 실패는 조용히 넘기지 않고 안내 문구로 알린다.
   const sendKakao = () => {
     if (!shareUrl) return
@@ -269,14 +292,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
       try {
         const share = window.Kakao?.Share
         if (!share) throw new Error('kakao share unavailable')
-        // 제목=메모, 설명=tldr 구성을 메모 유무와 관계없이 유지한다.
-        // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다.
-        // tldr이 없을 때만 설명을 영상 제목으로 대체하고, 그것도 없으면 설명을 생략한다.
-        const memo = cardText(comment, KAKAO_TITLE_MAX)
-        const title = memo || '📌 핵심 포인트'
-        const desc = memo
-          ? cardText(tldr, KAKAO_DESC_MAX)
-          : cardText(tldr, KAKAO_DESC_MAX) || cardText(videoTitle, KAKAO_DESC_MAX)
+        const { title, desc } = cardCopy()
         const link = { mobileWebUrl: shareUrl, webUrl: shareUrl }
         share.sendDefault({
           objectType: 'feed',
@@ -290,6 +306,21 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
         })
       } catch {
         showKakaoNotice('카카오톡 공유에 실패했어요. 링크를 복사해 붙여넣어 주세요.')
+      }
+    })
+  }
+
+  // 기기 공유(Web Share API) — 링크가 만들어진 뒤에만 동작. 지원하는 기기에서만 버튼이 보인다.
+  // 사용자가 공유 시트를 닫으면 AbortError가 나는데 이건 실패가 아니므로 조용히 무시한다.
+  const shareNative = () => {
+    if (!shareUrl) return
+    void nativeSend.run(async () => {
+      try {
+        const { title, desc } = cardCopy()
+        await navigator.share({ title, ...(desc ? { text: desc } : {}), url: shareUrl })
+      } catch (e) {
+        if ((e as { name?: string } | null)?.name === 'AbortError') return
+        showKakaoNotice('공유를 열지 못했어요. 링크를 복사해 주세요.')
       }
     })
   }
@@ -475,23 +506,24 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
                 {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? '복사됨' : '복사'}
               </button>
             </div>
-            {/* 새 링크 만들기(내용을 수정했을 때만) + 카카오톡 */}
+            {/* 새 링크 만들기(내용을 수정했을 때만) — 문구가 길어 아래 공유 버튼들과 한 줄에 두지 않는다 */}
+            {changedSinceCreate && (
+              <button
+                onClick={create}
+                disabled={creating}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '10px 14px', borderRadius: 8,
+                  background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
+                  cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit',
+                  opacity: creating ? 0.6 : 1,
+                }}>
+                <RefreshCw size={15} /> {creating ? '생성 중…' : '수정한 내용으로 새 링크 만들기'}
+              </button>
+            )}
+            {/* 카카오톡 + 기기 공유(지원 기기에서만 — 미지원이면 복사 버튼이 폴백) */}
             <div style={{ display: 'flex', gap: 8 }}>
-              {changedSinceCreate && (
-                <button
-                  onClick={create}
-                  disabled={creating}
-                  style={{
-                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '10px 14px', borderRadius: 8,
-                    background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-                    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
-                    cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit',
-                    opacity: creating ? 0.6 : 1,
-                  }}>
-                  <RefreshCw size={15} /> {creating ? '생성 중…' : '수정한 내용으로 새 링크 만들기'}
-                </button>
-              )}
               <button
                 onClick={sendKakao}
                 disabled={kakaoSend.pending}
@@ -506,6 +538,21 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
                 }}>
                 <MessageCircle size={15} /> {kakaoSend.pending ? '여는 중…' : '카카오톡으로 보내기'}
               </button>
+              {canNativeShare && (
+                <button
+                  onClick={shareNative}
+                  disabled={nativeSend.pending}
+                  style={{
+                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '10px 14px', borderRadius: 8,
+                    background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
+                    cursor: nativeSend.pending ? 'default' : 'pointer', fontFamily: 'inherit',
+                    opacity: nativeSend.pending ? 0.6 : 1,
+                  }}>
+                  <Share2 size={15} /> {nativeSend.pending ? '여는 중…' : '기기로 공유'}
+                </button>
+              )}
             </div>
             {kakaoNotice && (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>

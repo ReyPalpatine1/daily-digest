@@ -6,6 +6,7 @@ import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
 import { normalizeChannelUrl } from '@/lib/channel-url'
 import { recordSignupRef } from '@/lib/signup-ref'
+import { captureShareIntent, readShareIntent, clearShareIntent } from '@/lib/share-intent'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { UpgradeButton } from '@/components/UpgradeButton'
@@ -217,6 +218,17 @@ export default function Dashboard() {
   const activeChannelCount = channels.filter(c => c.is_active !== false).length
   const inactiveChannelCount = channels.length - activeChannelCount
 
+  // 이메일 카드의 공유 링크(?share=<videoId>) 보관 — 아래 로그인 확인·리다이렉트보다 먼저 저장한다
+  // (미로그인이면 '/'로 빠지면서 쿼리가 사라지므로). 저장 후 URL에서 share만 제거해 새로고침 시 재실행을 막는다.
+  useEffect(() => {
+    if (!captureShareIntent(window.location.search)) return
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('share')
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch {}
+  }, [])
+
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       // 리다이렉트 경로는 화면이 곧 사라지므로 스켈레톤을 유지한 채 빠진다.
@@ -299,6 +311,34 @@ export default function Dashboard() {
       }
     }).catch(() => setInitialLoading(false))
   }, [])
+
+  // 공유 링크(?share=) 소비 — 열람 기록이 채워진 뒤 1회만.
+  // 대상 요약을 찾으면 열람기록 탭으로 옮기고 공유 시트를 연다.
+  // 성공·실패와 무관하게 보관값을 지운다(중복 실행 방지). 시트가 이미 열려 있으면 덮어쓰지 않는다.
+  const shareIntentDoneRef = useRef(false)
+  useEffect(() => {
+    if (shareIntentDoneRef.current || initialLoading || shareTarget) return
+    const intent = readShareIntent()
+    shareIntentDoneRef.current = true
+    if (!intent) return
+    clearShareIntent()
+    // fail_reason이 있는 항목은 공유할 요약이 없다 → 카드의 공유 버튼과 동일하게 대상에서 제외.
+    const target = digests.find(d => d.video_id === intent.videoId && !d.fail_reason)
+    if (!target) {
+      showPreviewToast('그 요약을 열람 기록에서 찾지 못했어요. 보관 기간이 지났을 수 있습니다.')
+      return
+    }
+    setActiveTab('history')
+    setShareTarget({
+      videoId: target.video_id,
+      title: target.video_title,
+      tldr: target.tldr ?? '',
+      summary: target.summary ?? '',
+      timeline: target.timeline ?? [],
+      keyPoints: target.key_points ?? [],
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLoading, digests, shareTarget])
 
   // 미리보기 안내 카드 닫음 여부 로드 (localStorage 접근은 클라이언트에서만)
   useEffect(() => {
