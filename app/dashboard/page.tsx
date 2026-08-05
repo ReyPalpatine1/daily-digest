@@ -595,7 +595,7 @@ export default function Dashboard() {
     const cutoffIso = historyCutoffIso(isProHint)
     // 목록을 1페이지로 되돌리므로 진행 중인 "더 보기" 응답은 무효화한다.
     historyEpochRef.current++
-    const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }, { data: overview }, hiddenRes] =
+    const [{ data: cats }, { data: chs }, { data: sets }, { data: digs, error: digsError }, { data: overview }, hiddenRes] =
       await Promise.all([
         supabase.from('categories').select('*').eq('user_id', userId),
         supabase.from('channels').select('*').eq('user_id', userId),
@@ -614,6 +614,8 @@ export default function Dashboard() {
               .lt('created_at', cutoffIso)
               .gte('created_at', new Date(Date.now() - 30 * 86_400_000).toISOString()),
       ])
+    // PostgREST 오류는 message만으로는 원인을 알 수 없다(details/hint에 들어 있음) → 객체 전체를 남긴다.
+    if (digsError) console.error('[history] 조회 실패:', digsError)
     const sortedCats = (cats ?? []).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
     const sortedChs = (chs ?? []).sort((a, b) => a.alias.localeCompare(b.alias, 'ko'))
     setCategories(sortedCats)
@@ -642,7 +644,14 @@ export default function Dashboard() {
     await historyReload.run(async () => {
       const { data, error } = await buildDigestQuery(userId, historyCutoffIso())
         .range(0, HISTORY_PAGE_SIZE - 1)
-      if (error || !data) return
+      if (error || !data) {
+        // 조용히 넘어가면 화면상 "아무 반응 없음"이 되어 원인을 알 수 없다.
+        // PostgREST 오류는 details/hint에 원인이 있으므로 객체 전체를 남긴다.
+        if (error) console.error('[history] 조회 실패:', error)
+        // 목록은 그대로 두고(기존 동작) 사용자에겐 한 줄만 알린다.
+        showPreviewToast(t('history.loadError'))
+        return
+      }
       const rows = data as HistoryDigest[]
       setDigests(rows)
       setHasMoreDigests(rows.length === HISTORY_PAGE_SIZE)
@@ -651,7 +660,8 @@ export default function Dashboard() {
 
   // 열람 기록 다음 페이지 — 기존 목록을 교체하지 않고 뒤에 이어붙인다.
   // 정렬·범위 조건은 loadData와 완전히 동일해야 페이지 경계에서 중복·누락이 없다.
-  // 실패는 조용히 무시한다(버튼은 usePending이 원상 복구).
+  // 실패는 콘솔에만 남기고 화면엔 알리지 않는다 — 사용자가 직접 누른 동작이라 버튼 복구로 즉시 알 수 있다
+  // (버튼은 usePending이 원상 복구).
   async function loadMoreDigests() {
     if (!user) return
     await loadMore.run(async () => {
@@ -659,7 +669,10 @@ export default function Dashboard() {
       const from = digests.length
       const { data, error } = await buildDigestQuery(user.id, historyCutoffIso())
         .range(from, from + HISTORY_PAGE_SIZE - 1)
-      if (error || !data) return
+      if (error || !data) {
+        if (error) console.error('[history] 조회 실패:', error)
+        return
+      }
       // 응답을 기다리는 사이 목록이 갈아끼워졌으면 버린다.
       if (historyEpochRef.current !== epoch) return
       const rows = data as HistoryDigest[]
