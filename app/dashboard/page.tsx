@@ -2778,7 +2778,13 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
+                        {/* 목록 안 광고는 무료 사용자에게 최대 2개까지만 — 스크롤 초반(5번째 뒤)과
+                            중반(20번째 뒤)으로 도달 구간을 나눈다. 두 번째 자리는 25개 이상일 때만 두는데,
+                            그보다 짧으면 목록 끝에 붙어 두 광고가 몰려 보이기 때문이다.
+                            "더 보기"로 목록이 길어져도 자리는 이 둘뿐이다 — 다이나믹 배너가 iframe이라
+                            개수만큼 무거워지므로 N개마다 반복 배치하지 않는다. */}
                         {idx === 4 && filteredDigests.length > 5 && !isPro && <AdCard source="history" t={t} />}
+                        {idx === 19 && filteredDigests.length >= 25 && !isPro && <AdCard source="history" t={t} />}
                       </Fragment>
                     )
                   })}
@@ -2818,9 +2824,9 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* 광고 카드 — 무료 사용자 한정. 6개 이상이면 5번째 기록 뒤(목록 안)에 삽입되므로,
-                  1~5개일 때만 PRO 안내 뒤 맨 끝에 1개 렌더 → 어떤 경우에도 정확히 1개(기록 0개면 0개).
-                  marginTop:auto로 화면 최하단 밀착(래퍼 flex:1 필요). */}
+              {/* 광고 카드 — 무료 사용자 한정. 6개 이상이면 목록 안에 삽입되므로,
+                  1~5개일 때만 PRO 안내 뒤 맨 끝에 1개 렌더 → 짧은 목록에서도 광고가 0개가 되지 않는다
+                  (기록 0개면 0개). marginTop:auto로 화면 최하단 밀착(래퍼 flex:1 필요). */}
               {filteredDigests.length > 0 && filteredDigests.length <= 5 && !isPro && (
                 <div style={{ marginTop: 'auto', paddingTop: 32, marginBottom: 8 }}>
                   <AdCard source="history" t={t} />
