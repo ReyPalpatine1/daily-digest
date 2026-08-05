@@ -40,7 +40,16 @@ const PREVIEW_GUIDE_KEY = 'ddv_preview_guide_done'
 
 // 열람 기록 한 페이지 크기. digests 행에는 요약 본문이 통째로 실려 있어 한 번에 많이 받으면
 // 모바일 첫 로딩이 느려진다 → 나눠 받고 "더 보기"로 이어붙인다.
-const HISTORY_PAGE_SIZE = 100
+// 검색·필터가 서버 쿼리로 옮겨져 목록이 "불러온 범위"에 갇히지 않으므로 한 페이지를 더 작게 잡는다.
+const HISTORY_PAGE_SIZE = 50
+
+// 개요(채널 탭 통계 + 필터 드롭다운 후보)용 경량 조회 상한.
+// 본문 없이 5개 컬럼만 읽고, 검색·필터와 무관하게 보관 기간 전체를 훑는다.
+// digests 목록이 필터로 좁혀져도 통계·드롭다운이 따라 줄어들지 않게 하려는 용도.
+const HISTORY_OVERVIEW_LIMIT = 2000
+
+// 열람 기록 검색어 디바운스 — 타자마다 DB를 때리지 않도록.
+const HISTORY_SEARCH_DEBOUNCE_MS = 400
 
 function randomColor(usedColors: string[] = []) {
   const colors = ['#4da6ff', '#47ffb2', '#ff4757', '#c47fff', '#ffaa47', '#ff6b9d', '#00d2d3', '#ffd32a', '#a29bfe', '#fd79a8', '#55efc4', '#fdcb6e']
@@ -89,6 +98,15 @@ const channelIcons: Record<ChannelId, typeof Mail> = {
 // 로드 시 video_summaries.tldr(locale 매칭)을 병합해 역피라미드 최상단에 노출한다.
 type HistoryDigest = Digest & { tldr?: string | null }
 
+// 개요용 경량 행 — 채널 탭 통계와 필터 드롭다운 후보만 만들면 되므로 본문(summary 등)은 읽지 않는다.
+type HistoryOverviewRow = {
+  created_at: string
+  channel_alias: string
+  category_name: string | null
+  is_breaking: boolean | null
+  is_read: boolean | null
+}
+
 // 기록 항목의 실패·대기·라이브 사유 라벨 키 (카드 상단).
 // 매칭 없으면 null → 라벨 생략 (과거 데이터 호환: fail_reason 없는 행).
 function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
@@ -121,6 +139,12 @@ export default function Dashboard() {
   const [channels, setChannels] = useState<Channel[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
   const [digests, setDigests] = useState<HistoryDigest[]>([])
+  // 검색·필터와 무관한 보관 기간 전체의 경량 스냅샷.
+  // digests는 이제 서버에서 필터링돼 오므로, 필터를 걸어도 변하면 안 되는 값
+  // (채널 탭 통계, 속보 뱃지, 필터 드롭다운 후보)은 전부 이 배열에서 계산한다.
+  const [historyOverview, setHistoryOverview] = useState<HistoryOverviewRow[]>([])
+  // 보관 기간이 지나 숨겨진 기록 수(무료 전용 안내). 목록과 별개로 개수만 세어 담는다.
+  const [hiddenByRetentionCount, setHiddenByRetentionCount] = useState(0)
   // 열람 기록에 다음 페이지가 남아 있는지("더 보기" 노출 조건)
   const [hasMoreDigests, setHasMoreDigests] = useState(false)
   const [activeTab, setActiveTab] = useState<'channels' | 'schedule' | 'history'>('channels')
@@ -138,6 +162,9 @@ export default function Dashboard() {
   const [historyDate, setHistoryDate] = useState('')
   const [historyChannel, setHistoryChannel] = useState('')
   const [historyCategory, setHistoryCategory] = useState('')
+  // 실제 쿼리에 쓰이는 검색어(디바운스 통과분). 목록·더 보기가 같은 값을 봐야
+  // 페이지 경계에서 조건이 어긋나지 않으므로, 조회는 항상 이 값만 참조한다.
+  const [historySearchApplied, setHistorySearchApplied] = useState('')
   // 첫 진입 데이터 로딩(인증→프로필→loadData) 구간.
   const [initialLoading, setInitialLoading] = useState(true)
   // 미리보기 실행 결과 토스트 (하단 중앙 알약, 2.5초)
@@ -190,6 +217,8 @@ export default function Dashboard() {
   const planSwitch = usePending()
   const previewRun = usePending()
   const loadMore = usePending()
+  // 필터 변경 재조회 — 200ms 지연 노출 규칙을 그대로 써서 빠른 응답에는 스켈레톤이 깜빡이지 않는다.
+  const historyReload = usePending()
 
   // --- Phase 2: 새 디자인용 UI 상태 ---
   // 처음 사용자 도움말 팝업: 진입 시 help_seen===false 자동 노출 / 설정에서 재열기
@@ -221,13 +250,10 @@ export default function Dashboard() {
   // Free 한도 (Pro는 한도 없음 → 렌더에서 '무제한' 처리)
   const channelLimit = 5
   const retentionDays = isPro ? 30 : 7
-  // 열람 기록 보관 기간 판정 — 목록 필터·공유 딥링크가 같은 기준을 쓰도록 여기서 한 번만 만든다.
-  // 표기용 retentionDays(무료 7 / Pro 30)를 그대로 재사용해 안내 문구와 필터가 어긋나지 않게 한다.
-  // plan 미로드 시점(profile null·비관리자)에는 적용하지 않는다 — 전체표시로 두어 PRO 깜빡임 방지.
+  // 보관 기간 판정은 서버 쿼리(historyCutoffIso)로 옮겼다 — 화면에서 다시 자르지 않는다.
+  // 이중으로 걸면 서버가 준 페이지가 화면에서 또 사라져 "더 보기"가 헛돌았다.
+  // plan 미로드 시점(profile null·비관리자) 구분은 공유 딥링크 대기에 계속 쓰인다.
   const planLoaded = isAdmin || profile !== null
-  const historyRetentionCutoff = Date.now() - retentionDays * 86_400_000
-  const beyondRetention = (d: HistoryDigest) =>
-    !!d.created_at && new Date(d.created_at).getTime() < historyRetentionCutoff
   // 활성/비활성 채널 수 (plan 강등 시 비활성 채널 존재 가능)
   const activeChannelCount = channels.filter(c => c.is_active !== false).length
   const inactiveChannelCount = channels.length - activeChannelCount
@@ -260,6 +286,10 @@ export default function Dashboard() {
           .eq('id', data.user.id)
           .single()
 
+        // 아래 loadData는 setProfile 직후에 호출되므로 state의 isPro가 아직 옛값이다.
+        // 방금 조회(또는 생성)한 프로필로 플랜을 직접 계산해 넘겨야 Pro가 30일치를 받는다.
+        let loadedProfile: Profile | null = null
+
         if (!profileRow) {
           const email = data.user.email ?? ''
           const newProfile = {
@@ -269,7 +299,7 @@ export default function Dashboard() {
             plan: 'free' as const,
           }
           await supabase.from('profiles').insert(newProfile)
-          setProfile({
+          loadedProfile = {
             ...newProfile,
             plan_expires_at: null,
             vip_granted_by: null,
@@ -279,7 +309,8 @@ export default function Dashboard() {
             // DB 기본값과 동일하게 null (insert에는 넣지 않는다)
             preview_used_at: null,
             first_digest_at: null,
-          })
+          }
+          setProfile(loadedProfile)
           // 기본 설정 자동 생성
           await supabase.from('settings').insert({
             user_id: data.user.id,
@@ -294,7 +325,8 @@ export default function Dashboard() {
             { user_id: data.user.id, name: '기본 카테고리', color: '#4da6ff' },
           ])
         } else {
-          setProfile(profileRow as Profile)
+          loadedProfile = profileRow as Profile
+          setProfile(loadedProfile)
           const row = profileRow as Record<string, any>
           setTrialFlags({
             trial_ending_notified_at: row.trial_ending_notified_at ?? null,
@@ -318,7 +350,9 @@ export default function Dashboard() {
           .eq('id', data.user.id)
           .then(() => {}, () => {})
 
-        await loadData(data.user.id)
+        // isPro state는 아직 갱신 전이므로 방금 확정한 프로필 기준으로 계산해 넘긴다.
+        // (isAdmin=false 고정은 상단 isPro 계산과 같은 규칙 — "관리자=무조건 Pro" 단축을 끈다)
+        await loadData(data.user.id, checkIsPro(loadedProfile, false))
       } finally {
         // 실패해도 스켈레톤이 남지 않도록 반드시 해제
         setInitialLoading(false)
@@ -338,8 +372,8 @@ export default function Dashboard() {
     if (!intent) return
     clearShareIntent()
     // fail_reason이 있는 항목은 공유할 요약이 없다 → 카드의 공유 버튼과 동일하게 대상에서 제외.
-    // 보관 기간이 지난 항목도 화면 목록에 없으므로 제외(검색·채널 등 다른 필터는 걸지 않는다).
-    const target = digests.find(d => d.video_id === intent.videoId && !d.fail_reason && !beyondRetention(d))
+    // 보관 기간 판정은 하지 않는다 — 서버가 보관 범위 안의 기록만 주므로 digests에 있으면 볼 수 있는 기록이다.
+    const target = digests.find(d => d.video_id === intent.videoId && !d.fail_reason)
     if (!target) {
       showPreviewToast('그 요약을 열람 기록에서 찾지 못했어요. 보관 기간이 지났을 수 있습니다.')
       return
@@ -521,18 +555,65 @@ export default function Dashboard() {
     await saveSettings({ telegram_chat_id: null, delivery_method: 'email' })
   }
 
-  async function loadData(userId: string) {
-    // 열람 기록은 최대 보관 기간(Pro 30일)까지만 가져온다 — 어떤 플랜도 그보다 오래된 기록은 볼 수 없다.
-    const historyFrom = new Date(Date.now() - 30 * 86_400_000).toISOString()
-    const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }] = await Promise.all([
-      supabase.from('categories').select('*').eq('user_id', userId),
-      supabase.from('channels').select('*').eq('user_id', userId),
-      supabase.from('settings').select('*').eq('user_id', userId).single(),
-      // 2차 정렬 키(id)는 동점(같은 created_at) 순서를 고정한다 — 없으면 페이지 경계에서 행이 중복·누락된다.
-      supabase.from('digests').select('*').eq('user_id', userId).gte('created_at', historyFrom)
-        .order('created_at', { ascending: false }).order('id', { ascending: false })
-        .range(0, HISTORY_PAGE_SIZE - 1),
-    ])
+  // 열람 기록 보관 기간의 시작점(ISO). 날짜를 직접 넣지 않고 항상 지금 기준으로 계산한다.
+  // isProHint: state의 isPro가 아직 옛값인 시점(프로필 setState 직후)에 쓰는 우회로.
+  function historyCutoffIso(isProHint?: boolean): string {
+    const days = (isProHint ?? isPro) ? 30 : 7
+    return new Date(Date.now() - days * 86_400_000).toISOString()
+  }
+
+  // 열람 기록 조회 조건 한 벌 — 첫 페이지와 "더 보기"가 반드시 같은 조건을 써야
+  // 페이지 경계에서 중복·누락이 없다. 두 곳이 조건을 각자 갖지 않도록 여기서만 만든다.
+  // (range만 호출부에서 다르게 준다)
+  function buildDigestQuery(userId: string, cutoffIso: string) {
+    let q = supabase.from('digests').select('*').eq('user_id', userId)
+      .gte('created_at', cutoffIso)
+    if (historyFilter === 'breaking') q = q.eq('is_breaking', true)
+    if (historyChannel) q = q.eq('channel_alias', historyChannel)
+    if (historyCategory) q = q.eq('category_name', historyCategory)
+    if (historyDate) {
+      // 기존 클라이언트 판정은 created_at.startsWith(historyDate) = UTC 기준이었다.
+      // 동작을 바꾸지 않도록 같은 기준(UTC 하루)으로 범위를 만든다.
+      const dayStart = `${historyDate}T00:00:00.000Z`
+      const next = new Date(dayStart)
+      next.setUTCDate(next.getUTCDate() + 1)
+      q = q.gte('created_at', dayStart).lt('created_at', next.toISOString())
+    }
+    if (historySearchApplied) {
+      // PostgREST의 or()는 쉼표로 조건을, 마침표로 컬럼·연산자·값을 나누고 괄호로 묶는다.
+      // 값을 큰따옴표로 감싸면 그 안의 , ( ) . : 는 구분자로 해석되지 않는다.
+      // 큰따옴표는 이스케이프하고, 역슬래시는 제거한다(LIKE 이스케이프 문자라 끝에 오면 쿼리가 깨진다).
+      const kw = historySearchApplied.replace(/\\/g, '').replace(/"/g, '\\"')
+      if (kw) q = q.or(`video_title.ilike."%${kw}%",summary.ilike."%${kw}%"`)
+    }
+    // 2차 정렬 키(id)는 동점(같은 created_at) 순서를 고정한다 — 없으면 페이지 경계에서 행이 중복·누락된다.
+    return q.order('created_at', { ascending: false }).order('id', { ascending: false })
+  }
+
+  async function loadData(userId: string, isProHint?: boolean) {
+    const proNow = isProHint ?? isPro
+    const cutoffIso = historyCutoffIso(isProHint)
+    // 목록을 1페이지로 되돌리므로 진행 중인 "더 보기" 응답은 무효화한다.
+    historyEpochRef.current++
+    const [{ data: cats }, { data: chs }, { data: sets }, { data: digs }, { data: overview }, hiddenRes] =
+      await Promise.all([
+        supabase.from('categories').select('*').eq('user_id', userId),
+        supabase.from('channels').select('*').eq('user_id', userId),
+        supabase.from('settings').select('*').eq('user_id', userId).single(),
+        buildDigestQuery(userId, cutoffIso).range(0, HISTORY_PAGE_SIZE - 1),
+        // 검색·필터를 걸지 않은 경량 스냅샷 — 채널 탭 통계·속보 뱃지·필터 후보용.
+        supabase.from('digests').select('created_at, channel_alias, category_name, is_breaking, is_read')
+          .eq('user_id', userId).gte('created_at', cutoffIso)
+          .order('created_at', { ascending: false }).limit(HISTORY_OVERVIEW_LIMIT),
+        // 보관 기간이 지나 숨겨진 기록 수 — 무료 전용 Pro 유도 안내에만 쓴다(본문 없이 개수만).
+        // Pro는 안내 자체를 띄우지 않으므로 조회하지 않는다.
+        proNow
+          ? Promise.resolve(null)
+          : supabase.from('digests').select('id', { count: 'exact', head: true })
+              .eq('user_id', userId)
+              .lt('created_at', cutoffIso)
+              .gte('created_at', new Date(Date.now() - 30 * 86_400_000).toISOString()),
+      ])
     const sortedCats = (cats ?? []).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
     const sortedChs = (chs ?? []).sort((a, b) => a.alias.localeCompare(b.alias, 'ko'))
     setCategories(sortedCats)
@@ -545,6 +626,27 @@ export default function Dashboard() {
     setDigests(rows)
     // 페이지가 꽉 찼으면 다음 페이지가 있을 수 있다는 뜻.
     setHasMoreDigests(rows.length === HISTORY_PAGE_SIZE)
+    setHistoryOverview((overview ?? []) as HistoryOverviewRow[])
+    // 개수 조회 실패는 조용히 넘어간다(안내만 안 뜬다).
+    setHiddenByRetentionCount(hiddenRes?.count ?? 0)
+  }
+
+  // 목록을 통째로 갈아끼울 때마다 증가시킨다. "더 보기" 응답이 돌아왔을 때 값이 달라져 있으면
+  // 그 사이 다른 조건의 목록으로 바뀐 것이므로 이어붙이지 않는다(조건이 섞인 목록 방지).
+  const historyEpochRef = useRef(0)
+
+  // 열람 기록 첫 페이지 다시 조회 — 필터가 바뀌었을 때 목록을 통째로 갈아끼운다.
+  // 조건은 loadData와 같은 buildDigestQuery를 쓰므로 어긋날 수 없다.
+  async function reloadHistoryFirstPage(userId: string) {
+    historyEpochRef.current++
+    await historyReload.run(async () => {
+      const { data, error } = await buildDigestQuery(userId, historyCutoffIso())
+        .range(0, HISTORY_PAGE_SIZE - 1)
+      if (error || !data) return
+      const rows = data as HistoryDigest[]
+      setDigests(rows)
+      setHasMoreDigests(rows.length === HISTORY_PAGE_SIZE)
+    })
   }
 
   // 열람 기록 다음 페이지 — 기존 목록을 교체하지 않고 뒤에 이어붙인다.
@@ -553,13 +655,13 @@ export default function Dashboard() {
   async function loadMoreDigests() {
     if (!user) return
     await loadMore.run(async () => {
-      const historyFrom = new Date(Date.now() - 30 * 86_400_000).toISOString()
+      const epoch = historyEpochRef.current
       const from = digests.length
-      const { data, error } = await supabase
-        .from('digests').select('*').eq('user_id', user.id).gte('created_at', historyFrom)
-        .order('created_at', { ascending: false }).order('id', { ascending: false })
+      const { data, error } = await buildDigestQuery(user.id, historyCutoffIso())
         .range(from, from + HISTORY_PAGE_SIZE - 1)
       if (error || !data) return
+      // 응답을 기다리는 사이 목록이 갈아끼워졌으면 버린다.
+      if (historyEpochRef.current !== epoch) return
       const rows = data as HistoryDigest[]
       // 오프셋 방식이라 앞 페이지 이후 새 기록이 들어오면 같은 행이 다시 올 수 있다 → id로 한 번 걸러낸다.
       setDigests(prev => {
@@ -569,6 +671,28 @@ export default function Dashboard() {
       setHasMoreDigests(rows.length === HISTORY_PAGE_SIZE)
     })
   }
+
+  // 검색어 디바운스 — 타자마다 조회하지 않도록 400ms 뒤에만 적용값으로 승격한다.
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setHistorySearchApplied(historySearch.trim()),
+      HISTORY_SEARCH_DEBOUNCE_MS,
+    )
+    return () => clearTimeout(timer)
+  }, [historySearch])
+
+  // 필터가 바뀌면 1페이지부터 다시 조회. 검색어는 위에서 디바운스된 값만 본다.
+  // 첫 마운트에서는 건너뛴다 — loadData가 이미 1페이지를 채우므로 중복 조회가 된다.
+  const historyFilterReadyRef = useRef(false)
+  useEffect(() => {
+    if (!historyFilterReadyRef.current) {
+      historyFilterReadyRef.current = true
+      return
+    }
+    if (!user) return
+    void reloadHistoryFirstPage(user.id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historySearchApplied, historyFilter, historyDate, historyChannel, historyCategory])
 
   // 프로필만 재로드 (관리자 토글로 plan 변경 후 isPro 갱신용)
   async function reloadProfile(userId: string) {
@@ -828,25 +952,17 @@ export default function Dashboard() {
 
   const filteredChannels = filterCat ? channels.filter(c => c.category_id === filterCat) : channels
   const getCatById = (id: string | null) => categories.find(c => c.id === id)
-  // 화면에는 플랜별 보관 기간(무료 7일 / Pro 30일)만 표시한다(판정은 상단 beyondRetention).
+  // 검색·필터·보관 기간이 전부 서버 쿼리로 옮겨져 여기서 더 거를 것이 없다.
+  // 렌더 쪽 참조가 많아 변수는 그대로 두고 digests를 그대로 가리킨다(회귀 최소화).
   // 무료도 저장은 30일 유지 → 재구독 시 자동 복원.
-  const filteredDigests = digests.filter(d => {
-    if (planLoaded && beyondRetention(d)) return false
-    if (historyFilter === 'breaking' && !d.is_breaking) return false
-    if (historySearch && !d.video_title.toLowerCase().includes(historySearch.toLowerCase()) && !d.summary?.toLowerCase().includes(historySearch.toLowerCase())) return false
-    if (historyDate && !d.created_at.startsWith(historyDate)) return false
-    if (historyChannel && d.channel_alias !== historyChannel) return false
-    if (historyCategory && d.category_name !== historyCategory) return false
-    return true
-  })
+  const filteredDigests = digests
 
-  // 보관 기간 제한으로 숨겨진 기록 수 (0이면 안내 숨김)
-  const hiddenByRetentionCount = planLoaded
-    ? digests.filter(beyondRetention).length
-    : 0
-
-  const uniqueChannels = [...new Set(digests.map(d => d.channel_alias))].sort()
-  const uniqueCategories = [...new Set(digests.map(d => d.category_name))].filter(Boolean).sort()
+  // 필터 드롭다운 후보는 개요(필터 미적용)에서 뽑는다.
+  // digests에서 뽑으면 채널을 하나 고른 순간 나머지 채널이 목록에서 사라져 되돌아갈 수 없다.
+  const uniqueChannels = [...new Set(historyOverview.map(d => d.channel_alias))].sort()
+  const uniqueCategories = [...new Set(historyOverview.map(d => d.category_name))]
+    .filter((c): c is string => !!c)
+    .sort()
 
   // 메뉴 정의 (탑바 + 모바일 시트 공용)
   const tabs: { key: 'channels' | 'schedule' | 'history'; label: string }[] = [
@@ -854,7 +970,8 @@ export default function Dashboard() {
     { key: 'schedule', label: t('nav.schedule') },
     { key: 'history', label: t('nav.history') },
   ]
-  const breakingUnread = digests.filter(d => d.is_breaking && !d.is_read).length
+  // 탭 뱃지는 열람 기록 필터와 무관해야 하므로 개요에서 센다.
+  const breakingUnread = historyOverview.filter(d => d.is_breaking && !d.is_read).length
 
   // 공통 스타일 토큰
   const logoBox: React.CSSProperties = {
@@ -1140,12 +1257,13 @@ export default function Dashboard() {
           const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '사용자'
           const todayStr = kstDateStr(0)
           const yesterdayStr = kstDateStr(1)
-          const todayDigestCount = digests.filter(d => d.created_at?.startsWith(todayStr)).length
-          const yesterdayDigestCount = digests.filter(d => d.created_at?.startsWith(yesterdayStr)).length
+          // 채널 탭 통계는 열람 기록 탭의 검색·필터에 영향받으면 안 되므로 개요(필터 미적용)에서 센다.
+          const todayDigestCount = historyOverview.filter(d => d.created_at?.startsWith(todayStr)).length
+          const yesterdayDigestCount = historyOverview.filter(d => d.created_at?.startsWith(yesterdayStr)).length
           const dailyDelta = todayDigestCount - yesterdayDigestCount
-          const breakingTotal = digests.filter(d => d.is_breaking).length
+          const breakingTotal = historyOverview.filter(d => d.is_breaking).length
           const channelStats = (alias: string) => {
-            const list = digests.filter(d => d.channel_alias === alias)
+            const list = historyOverview.filter(d => d.channel_alias === alias)
             return {
               today: list.filter(d => d.created_at?.startsWith(todayStr)).length,
               unreadBreaking: list.filter(d => d.is_breaking && !d.is_read).length,
@@ -2359,16 +2477,11 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* 필터는 전부 클라이언트에서 걸리므로 아직 안 불러온 기록은 검색되지 않는다.
-                  남은 페이지가 있을 때만 그 사실을 알린다(다 불러왔으면 안내할 이유가 없음). */}
-              {hasFilter && hasMoreDigests && (
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
-                  {t('history.partialSearchNotice')}
-                </div>
-              )}
-
-              {/* 기록 목록 / 빈 상태 */}
-              {filteredDigests.length === 0 ? (
+              {/* 기록 목록 / 빈 상태 — 필터 재조회 중에는 목록 자리를 스켈레톤으로 둔다.
+                  (historyReload는 usePending이라 200ms 안에 끝나면 스켈레톤이 아예 켜지지 않는다) */}
+              {historyReload.pending ? (
+                <SkeletonList count={3} />
+              ) : filteredDigests.length === 0 ? (
                 <div style={{ ...cardStyle, padding: '48px 24px', textAlign: 'center' }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: '50%',
