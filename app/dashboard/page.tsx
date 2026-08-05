@@ -2778,13 +2778,11 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
-                        {/* 목록 안 광고는 무료 사용자에게 최대 2개까지만 — 스크롤 초반(5번째 뒤)과
-                            중반(20번째 뒤)으로 도달 구간을 나눈다. 두 번째 자리는 25개 이상일 때만 두는데,
-                            그보다 짧으면 목록 끝에 붙어 두 광고가 몰려 보이기 때문이다.
-                            "더 보기"로 목록이 길어져도 자리는 이 둘뿐이다 — 다이나믹 배너가 iframe이라
-                            개수만큼 무거워지므로 N개마다 반복 배치하지 않는다. */}
+                        {/* 목록 안 광고는 스크롤 초반 이 한 자리뿐이다. 나머지 한 자리는 목록 맨 아래에 둔다
+                            (중간에 끼우면 어정쩡하게 보임). N개마다 반복하는 규칙으로 일반화하지 말 것 —
+                            다이나믹 배너가 iframe이라 개수만큼 외부 로딩이 붙는데, CPA 모델이라
+                            반복 노출의 수익 기여는 거의 없다. */}
                         {idx === 4 && filteredDigests.length > 5 && !isPro && <AdCard source="history" t={t} />}
-                        {idx === 19 && filteredDigests.length >= 25 && !isPro && <AdCard source="history" t={t} />}
                       </Fragment>
                     )
                   })}
@@ -2804,6 +2802,16 @@ export default function Dashboard() {
                     }}>
                     {loadMore.pending ? t('history.loadingMore') : t('history.loadMore')}
                   </button>
+                </div>
+              )}
+
+              {/* 목록 맨 아래 광고 — 무료 사용자 한정, 두 자리 중 나머지 하나.
+                  "더 보기" 아래·Pro 전환 안내 위에 둔다. 안내가 항상 마지막이어야 둘이 경쟁하지 않는다.
+                  5개 이하일 때는 아래 하단 광고가 그 역할을 하므로 여기선 제외한다(중복 방지).
+                  화면 고정(position: fixed)은 쓰지 않는다 — 하단 중앙 토스트·하단 우측 "맨 위로"와 겹친다. */}
+              {!isPro && filteredDigests.length > 5 && (
+                <div style={{ paddingTop: 32 }}>
+                  <AdCard source="history" t={t} />
                 </div>
               )}
 
