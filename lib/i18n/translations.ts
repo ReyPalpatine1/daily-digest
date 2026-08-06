@@ -74,6 +74,7 @@ export const translations = {
     },
     ads: {
       label: '광고',
+      close: '광고 닫기',
       partnerDisclosure: '이 광고는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.',
       partnerTitle: '쿠팡 오늘의 특가 — 골드박스',
       partnerDesc: '매일 바뀌는 최대 할인 상품 모음',
@@ -766,6 +767,7 @@ export const translations = {
     },
     ads: {
       label: 'AD',
+      close: 'Close ad',
       partnerDisclosure: 'As part of the Coupang Partners program, we receive a commission from purchases made through this ad.',
       partnerTitle: "Coupang Today's Deals — Gold Box",
       partnerDesc: 'Top discounted picks, refreshed daily',
@@ -1449,6 +1451,7 @@ export const translations = {
     },
     ads: {
       label: '广告',
+      close: '关闭广告',
       partnerDisclosure: '本广告属于 Coupang Partners 推广活动，我们会因此获得一定金额的佣金。',
       partnerTitle: 'Coupang 今日特价 — Gold Box',
       partnerDesc: '每日更新的超值折扣商品精选',
@@ -2129,6 +2132,7 @@ export const translations = {
     },
     ads: {
       label: '広告',
+      close: '広告を閉じる',
       partnerDisclosure: 'この広告はクーパンパートナーズ活動の一環であり、当社はこれにより一定額の手数料を受け取ります。',
       partnerTitle: 'クーパン本日の特価 — ゴールドボックス',
       partnerDesc: '毎日変わる最大割引商品のまとめ',

@@ -38,6 +38,10 @@ const pendingIconStyle: React.CSSProperties = {
 // 열람기록 상단 미리보기 안내 카드를 닫았는지 (기기별 1회 노출용, DB 컬럼 대신 로컬 저장)
 const PREVIEW_GUIDE_KEY = 'ddv_preview_guide_done'
 
+// 광고를 닫았는지 — 세션 한정이라 sessionStorage를 쓴다(localStorage면 영구 숨김이 된다).
+// 새로고침·새 탭이면 다시 노출.
+const ADS_CLOSED_KEY = 'ddv_ads_closed'
+
 // 열람 기록 한 페이지 크기. digests 행에는 요약 본문이 통째로 실려 있어 한 번에 많이 받으면
 // 모바일 첫 로딩이 느려진다 → 나눠 받고 "더 보기"로 이어붙인다.
 // 검색·필터가 서버 쿼리로 옮겨져 목록이 "불러온 범위"에 갇히지 않으므로 한 페이지를 더 작게 잡는다.
@@ -172,6 +176,9 @@ export default function Dashboard() {
   // 열람기록 상단 미리보기 안내 카드의 "닫음" 상태 (localStorage, 기기별).
   // 초기값 true = 서버/첫 렌더에서 잠깐 보였다 사라지는 깜빡임 방지.
   const [previewGuideDone, setPreviewGuideDone] = useState(true)
+  // 광고 닫음 상태 — 자리마다 두지 않고 여기 한 곳에서 관리한다.
+  // 어느 하나를 닫으면 열람 기록·채널 탭의 광고가 동시에 사라진다.
+  const [adsHidden, setAdsHidden] = useState(false)
   const [newKeyword, setNewKeyword] = useState('')
   const [expandedDigest, setExpandedDigest] = useState<string | null>(null)
   // 열람기록 요약 카드 "공유" 시트 대상 (null이면 닫힘)
@@ -243,6 +250,8 @@ export default function Dashboard() {
   const isPro = checkIsPro(profile, false)
   // VIP/Pro 모두 사용자에겐 "PRO"로 표시 (구분 없음)
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
+  // 광고 노출 조건 — 모든 자리가 이 하나를 쓴다(Pro면 애초에 없고, 닫으면 전부 사라진다).
+  const showAds = !isPro && !adsHidden
 
   // --- Phase 3: 채널 탭 검색 상태 ---
   const [channelSearch, setChannelSearch] = useState('')
@@ -396,6 +405,15 @@ export default function Dashboard() {
       setPreviewGuideDone(localStorage.getItem(PREVIEW_GUIDE_KEY) === '1')
     } catch {
       setPreviewGuideDone(true) // 접근 차단 환경(사생활 보호 모드 등)에선 노출하지 않음
+    }
+  }, [])
+
+  // 광고 닫음 여부 로드 (sessionStorage 접근은 클라이언트에서만)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(ADS_CLOSED_KEY) === '1') setAdsHidden(true)
+    } catch {
+      // 접근 차단 환경에선 이번 세션 동안 그대로 노출
     }
   }, [])
 
@@ -867,6 +885,16 @@ export default function Dashboard() {
     if (!settings) return
     const keywords = settings.breaking_keywords.filter(k => k !== kw)
     await saveSettings({ breaking_keywords: keywords })
+  }
+
+  // 광고 닫기 (모든 자리 공용) — 이번 세션에만 유지되고 새로고침하면 다시 노출된다.
+  function hideAds() {
+    try {
+      sessionStorage.setItem(ADS_CLOSED_KEY, '1')
+    } catch {
+      // 저장 실패해도 이번 렌더에선 닫힌다
+    }
+    setAdsHidden(true)
   }
 
   // 미리보기 안내 카드 닫기 (X · 확인 버튼 공용)
@@ -2773,11 +2801,17 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
-                        {/* 목록 안 광고는 스크롤 초반 이 한 자리뿐이다. 나머지 한 자리는 목록 맨 아래에 둔다
-                            (중간에 끼우면 어정쩡하게 보임). N개마다 반복하는 규칙으로 일반화하지 말 것 —
-                            다이나믹 배너가 iframe이라 개수만큼 외부 로딩이 붙는데, CPA 모델이라
-                            반복 노출의 수익 기여는 거의 없다. */}
-                        {idx === 4 && filteredDigests.length > 5 && !isPro && <AdCard source="history" t={t} />}
+                        {/* 열람 기록 광고는 목록 안 이 두 자리(10번째·30번째 뒤)뿐이다. 각 하한
+                            (12개·32개)은 광고가 목록 끝에 붙어 어색해지는 것을 막기 위한 값 —
+                            기록이 적은 신규 사용자에게는 열람 기록에 광고를 두지 않는다.
+                            N개마다 반복하는 규칙으로 일반화하지 말 것 — 다이나믹 배너가 iframe이라
+                            개수만큼 외부 로딩이 붙는데, CPA 모델이라 반복 노출의 수익 기여는 거의 없다. */}
+                        {idx === 9 && filteredDigests.length >= 12 && showAds && (
+                          <AdCard source="history" t={t} onClose={hideAds} />
+                        )}
+                        {idx === 29 && filteredDigests.length >= 32 && showAds && (
+                          <AdCard source="history" t={t} onClose={hideAds} />
+                        )}
                       </Fragment>
                     )
                   })}
@@ -2800,16 +2834,6 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* 목록 맨 아래 광고 — 무료 사용자 한정, 두 자리 중 나머지 하나.
-                  "더 보기" 아래·Pro 전환 안내 위에 둔다. 안내가 항상 마지막이어야 둘이 경쟁하지 않는다.
-                  5개 이하일 때는 아래 하단 광고가 그 역할을 하므로 여기선 제외한다(중복 방지).
-                  화면 고정(position: fixed)은 쓰지 않는다 — 하단 중앙 토스트·하단 우측 "맨 위로"와 겹친다. */}
-              {!isPro && filteredDigests.length > 5 && (
-                <div style={{ paddingTop: 32 }}>
-                  <AdCard source="history" t={t} />
-                </div>
-              )}
-
               {/* FREE 7일 제한 안내 (숨겨진 기록이 있을 때만).
                   Pro 업그레이드 유도 문구라 Pro에게는 숨겨진 기록이 있어도 띄우지 않는다. */}
               {!isPro && hiddenByRetentionCount > 0 && (
@@ -2827,14 +2851,6 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* 광고 카드 — 무료 사용자 한정. 6개 이상이면 목록 안에 삽입되므로,
-                  1~5개일 때만 PRO 안내 뒤 맨 끝에 1개 렌더 → 짧은 목록에서도 광고가 0개가 되지 않는다
-                  (기록 0개면 0개). marginTop:auto로 화면 최하단 밀착(래퍼 flex:1 필요). */}
-              {filteredDigests.length > 0 && filteredDigests.length <= 5 && !isPro && (
-                <div style={{ marginTop: 'auto', paddingTop: 32, marginBottom: 8 }}>
-                  <AdCard source="history" t={t} />
-                </div>
-              )}
             </div>
           )
         })()}
@@ -2858,9 +2874,9 @@ export default function Dashboard() {
 
             {/* 광고 카드 — 무료 사용자 한정, 화면 최하단 밀착(footer 방식).
                 marginTop:auto가 flex 컬럼에서 남는 공간을 위로 밀어 광고를 바닥에 붙인다. */}
-            {!isPro && (
+            {showAds && (
               <div style={{ marginTop: 'auto', paddingTop: 32, marginBottom: 8 }}>
-                <AdCard source="dashboard" t={t} />
+                <AdCard source="dashboard" t={t} onClose={hideAds} />
               </div>
             )}
           </>
