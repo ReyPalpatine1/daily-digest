@@ -28,7 +28,18 @@ export default function AdCard({ source: _source, t }: Props) {
   }, [])
 
   return (
-    <div style={{ textAlign: 'center' }}>
+    <div style={{
+      // 열람 기록 항목 카드와 동일한 상자 (목록 리듬 유지).
+      // hover 테두리 변화는 넣지 않는다 — 카드 전체가 클릭 대상이 아니므로
+      // 클릭 가능한 것처럼 보이면 안 된다. 미읽음 좌측 굵은 테두리도 적용 대상 아님.
+      background: 'var(--bg-card)',
+      border: '0.5px solid var(--border)',
+      borderRadius: 10,
+      overflow: 'hidden',
+      padding: '14px 15px',
+      // 배너는 고정 폭이라 좌측 정렬하면 우측이 비므로 가운데 정렬 유지.
+      textAlign: 'center',
+    }}>
       {/* 라벨 + 고지 한 줄 (배너 위, 작게) */}
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.6 }}>
         {t('ads.label')} · {t('ads.partnerDisclosure')}
