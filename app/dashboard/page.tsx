@@ -40,7 +40,10 @@ const PREVIEW_GUIDE_KEY = 'ddv_preview_guide_done'
 
 // 광고를 닫았는지 — 세션 한정이라 sessionStorage를 쓴다(localStorage면 영구 숨김이 된다).
 // 새로고침·새 탭이면 다시 노출.
-const ADS_CLOSED_KEY = 'ddv_ads_closed'
+// 열람 기록과 채널 탭을 나눠 둔다: 열람 기록에서 닫는 것은 "지금 읽는 중이니 방해하지 말라"는
+// 뜻이지 서비스 전체에서 광고를 거부한다는 뜻이 아니다.
+const ADS_CLOSED_HISTORY_KEY = 'ddv_ads_closed_history'
+const ADS_CLOSED_CHANNELS_KEY = 'ddv_ads_closed_channels'
 
 // 열람 기록 한 페이지 크기. digests 행에는 요약 본문이 통째로 실려 있어 한 번에 많이 받으면
 // 모바일 첫 로딩이 느려진다 → 나눠 받고 "더 보기"로 이어붙인다.
@@ -152,7 +155,8 @@ export default function Dashboard() {
   // 열람 기록에 다음 페이지가 남아 있는지("더 보기" 노출 조건)
   const [hasMoreDigests, setHasMoreDigests] = useState(false)
   const [activeTab, setActiveTab] = useState<'channels' | 'schedule' | 'history'>('channels')
-  // PRO 전용 채널 클릭 시 잠깐 뜨는 안내 문구(결제창 이동 없음)
+  // 잠긴 기능(PRO 전용 채널·속보 토글·키워드 추가·잠긴 채널 행)을 눌렀을 때
+  // 잠깐 뜨는 안내 문구(결제창 이동 없음). 자리마다 문구를 나누지 않는다.
   const [channelNotice, setChannelNotice] = useState<string | null>(null)
   // 열람 기록 "맨 위로" 버튼: 일정량 스크롤 시 노출
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -176,9 +180,10 @@ export default function Dashboard() {
   // 열람기록 상단 미리보기 안내 카드의 "닫음" 상태 (localStorage, 기기별).
   // 초기값 true = 서버/첫 렌더에서 잠깐 보였다 사라지는 깜빡임 방지.
   const [previewGuideDone, setPreviewGuideDone] = useState(true)
-  // 광고 닫음 상태 — 자리마다 두지 않고 여기 한 곳에서 관리한다.
-  // 어느 하나를 닫으면 열람 기록·채널 탭의 광고가 동시에 사라진다.
-  const [adsHidden, setAdsHidden] = useState(false)
+  // 광고 닫음 상태 — 영역별로 따로 관리한다(열람 기록 / 채널 탭).
+  // 열람 기록의 두 자리는 서로 같은 상태를 쓰므로 하나를 닫으면 둘 다 사라진다.
+  const [adsHiddenHistory, setAdsHiddenHistory] = useState(false)
+  const [adsHiddenChannels, setAdsHiddenChannels] = useState(false)
   const [newKeyword, setNewKeyword] = useState('')
   const [expandedDigest, setExpandedDigest] = useState<string | null>(null)
   // 열람기록 요약 카드 "공유" 시트 대상 (null이면 닫힘)
@@ -250,8 +255,9 @@ export default function Dashboard() {
   const isPro = checkIsPro(profile, false)
   // VIP/Pro 모두 사용자에겐 "PRO"로 표시 (구분 없음)
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
-  // 광고 노출 조건 — 모든 자리가 이 하나를 쓴다(Pro면 애초에 없고, 닫으면 전부 사라진다).
-  const showAds = !isPro && !adsHidden
+  // 광고 노출 조건 — Pro면 애초에 없고, 닫으면 그 영역만 사라진다.
+  const showHistoryAds = !isPro && !adsHiddenHistory
+  const showChannelAds = !isPro && !adsHiddenChannels
 
   // --- Phase 3: 채널 탭 검색 상태 ---
   const [channelSearch, setChannelSearch] = useState('')
@@ -411,7 +417,8 @@ export default function Dashboard() {
   // 광고 닫음 여부 로드 (sessionStorage 접근은 클라이언트에서만)
   useEffect(() => {
     try {
-      if (sessionStorage.getItem(ADS_CLOSED_KEY) === '1') setAdsHidden(true)
+      if (sessionStorage.getItem(ADS_CLOSED_HISTORY_KEY) === '1') setAdsHiddenHistory(true)
+      if (sessionStorage.getItem(ADS_CLOSED_CHANNELS_KEY) === '1') setAdsHiddenChannels(true)
     } catch {
       // 접근 차단 환경에선 이번 세션 동안 그대로 노출
     }
@@ -887,14 +894,31 @@ export default function Dashboard() {
     await saveSettings({ breaking_keywords: keywords })
   }
 
-  // 광고 닫기 (모든 자리 공용) — 이번 세션에만 유지되고 새로고침하면 다시 노출된다.
-  function hideAds() {
+  // 잠긴 기능 클릭 시 안내 토스트 (모든 자리 공용).
+  // 눌러도 아무 반응이 없으면 사용자는 잠금이 아니라 고장으로 읽는다 → 저장은 하지 않고 안내만.
+  function showProNotice() {
+    setChannelNotice(t('common.proFeature'))
+    window.setTimeout(() => setChannelNotice(null), 2500)
+  }
+
+  // 광고 닫기 — 이번 세션에만 유지되고 새로고침하면 다시 노출된다.
+  // 닫은 영역만 숨기고 다른 탭의 광고는 남긴다.
+  function hideHistoryAds() {
     try {
-      sessionStorage.setItem(ADS_CLOSED_KEY, '1')
+      sessionStorage.setItem(ADS_CLOSED_HISTORY_KEY, '1')
     } catch {
       // 저장 실패해도 이번 렌더에선 닫힌다
     }
-    setAdsHidden(true)
+    setAdsHiddenHistory(true)
+  }
+
+  function hideChannelAds() {
+    try {
+      sessionStorage.setItem(ADS_CLOSED_CHANNELS_KEY, '1')
+    } catch {
+      // 저장 실패해도 이번 렌더에선 닫힌다
+    }
+    setAdsHiddenChannels(true)
   }
 
   // 미리보기 안내 카드 닫기 (X · 확인 버튼 공용)
@@ -1834,7 +1858,9 @@ export default function Dashboard() {
                     return (
                       <div key={ch.id} className="channels-row"
                         title={isLocked ? t('channels.lockedTooltip') : undefined}
-                        style={isLocked ? { opacity: 0.5 } : undefined}>
+                        // 잠긴 행은 눌러도 무반응이면 고장으로 읽힌다 → 안내 토스트만 띄운다.
+                        onClick={isLocked ? showProNotice : undefined}
+                        style={isLocked ? { opacity: 0.5, cursor: 'pointer' } : undefined}>
                         <span style={{
                           width: 6, height: 6, borderRadius: '50%',
                           background: dotColor, flexShrink: 0,
@@ -1877,7 +1903,8 @@ export default function Dashboard() {
                           minWidth: 50, textAlign: 'right',
                           flexShrink: 0,
                         }}>{timeText}</span>
-                        <div className="row-actions">
+                        {/* 행 클릭(잠금 안내)이 이동·수정·삭제 버튼까지 삼키지 않도록 차단 */}
+                        <div className="row-actions" onClick={e => e.stopPropagation()}>
                           {movingChannel === ch.id ? (
                             <select
                               autoFocus
@@ -1990,8 +2017,7 @@ export default function Dashboard() {
           const selectChannel = (def: typeof CHANNELS[number]) => {
             if (!def.enabled) return
             if (def.proOnly && !isPro) {
-              setChannelNotice(t('schedule.proChannelNotice'))
-              window.setTimeout(() => setChannelNotice(null), 2500)
+              showProNotice()
               return
             }
             if (currentMethod === def.id) return
@@ -2092,7 +2118,7 @@ export default function Dashboard() {
                           </span>
                           {ch.locked && (
                             <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, ...proBadge }}>
-                              <Lock size={10} /> Pro
+                              <Lock size={11} />{t('stats.proOnly')}
                             </span>
                           )}
                           {!ch.locked && ch.comingSoon && (
@@ -2217,20 +2243,6 @@ export default function Dashboard() {
                     )
                   })}
                 </div>
-                {/* PRO 전용 채널 안내 토스트 — 결제 토스트와 동일 스타일(하단 중앙 알약).
-                    bg=text-primary / 글씨·아이콘=bg-card 라 라이트·다크 양쪽에서 자동 반전·대비됨. */}
-                {channelNotice && (
-                  <div style={{
-                    position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-                    zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
-                    padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
-                    boxShadow: 'var(--shadow-lg)',
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}>
-                    <Lock size={13} color="var(--bg-card)" />
-                    {channelNotice}
-                  </div>
-                )}
               </div>
 
               {/* 새 영상 없는 날 알림 */}
@@ -2264,11 +2276,27 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                   <div style={sectionTitle}>{t('schedule.breaking')}</div>
                   {!isPro ? (
-                    /* 이 카드의 유일한 잠금 표시 — 입력창 placeholder·추가 버튼에 중복 표기하지 않는다
-                       (입력·버튼이 비활성인 것만으로 잠금은 충분히 전달된다). */
-                    <span style={{ ...proBadge, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Lock size={11} />{t('schedule.breakingProOnly')}
-                    </span>
+                    /* 잠금 뱃지 + 비활성 토글. 뱃지(표시)와 토스트(클릭 반응)는 역할이 달라 중복이 아니다 —
+                       토글이 아예 없으면 무엇이 잠긴 건지 알 수 없고, 눌러도 무반응이면 고장으로 읽힌다. */
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ ...proBadge, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Lock size={11} />{t('stats.proOnly')}
+                      </span>
+                      <div onClick={showProNotice}
+                        style={{
+                          width: 36, height: 20, borderRadius: 999,
+                          background: 'var(--bg-subtle)',
+                          border: '0.5px solid var(--border)',
+                          position: 'relative', cursor: 'not-allowed',
+                          opacity: 0.5, flexShrink: 0,
+                        }}>
+                        <div style={{
+                          position: 'absolute', top: 2, left: 2,
+                          width: 14, height: 14, borderRadius: '50%',
+                          background: 'var(--text-tertiary)',
+                        }} />
+                      </div>
+                    </div>
                   ) : (
                     <div onClick={() => saveSettings({ breaking_alert: !settings?.breaking_alert })}
                       style={{
@@ -2322,8 +2350,16 @@ export default function Dashboard() {
                     placeholder={t('schedule.keywordPlaceholder')}
                     disabled={!isPro}
                     style={{ ...inputStyle, flex: 1, opacity: isPro ? 1 : 0.6 }} />
-                  <button onClick={() => kwAdd.run(addKeyword)}
-                    disabled={!isPro || kwAdd.pending}
+                  {/* 무료면 disabled 대신 "보기만 비활성" — 눌리긴 해야 안내 토스트를 띄울 수 있다.
+                      키워드는 추가되지 않는다(저장 없이 토스트만). */}
+                  <button onClick={() => {
+                      if (!isPro) {
+                        showProNotice()
+                        return
+                      }
+                      kwAdd.run(addKeyword)
+                    }}
+                    disabled={kwAdd.pending}
                     style={kwAdd.pending
                       ? { ...primaryBtn, ...pendingBtnStyle }
                       : isPro ? primaryBtn : disabledBtn}>
@@ -2801,16 +2837,18 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
-                        {/* 열람 기록 광고는 목록 안 이 두 자리(10번째·30번째 뒤)뿐이다. 각 하한
-                            (12개·32개)은 광고가 목록 끝에 붙어 어색해지는 것을 막기 위한 값 —
+                        {/* 열람 기록 광고는 목록 안 이 두 자리(15번째·40번째 뒤)뿐이다. 각 하한
+                            (17개·42개)은 광고가 목록 끝에 붙어 어색해지는 것을 막기 위한 값 —
                             기록이 적은 신규 사용자에게는 열람 기록에 광고를 두지 않는다.
+                            첫 자리를 뒤로 물린 이유: 닫기 버튼이 있어 첫 광고에서 닫으면 뒤 자리는
+                            어차피 노출되지 않는다 → 목록을 충분히 훑은 뒤에 만나게 한다.
                             N개마다 반복하는 규칙으로 일반화하지 말 것 — 다이나믹 배너가 iframe이라
                             개수만큼 외부 로딩이 붙는데, CPA 모델이라 반복 노출의 수익 기여는 거의 없다. */}
-                        {idx === 9 && filteredDigests.length >= 12 && showAds && (
-                          <AdCard source="history" t={t} onClose={hideAds} />
+                        {idx === 14 && filteredDigests.length >= 17 && showHistoryAds && (
+                          <AdCard source="history" t={t} onClose={hideHistoryAds} />
                         )}
-                        {idx === 29 && filteredDigests.length >= 32 && showAds && (
-                          <AdCard source="history" t={t} onClose={hideAds} />
+                        {idx === 39 && filteredDigests.length >= 42 && showHistoryAds && (
+                          <AdCard source="history" t={t} onClose={hideHistoryAds} />
                         )}
                       </Fragment>
                     )
@@ -2874,9 +2912,9 @@ export default function Dashboard() {
 
             {/* 광고 카드 — 무료 사용자 한정, 화면 최하단 밀착(footer 방식).
                 marginTop:auto가 flex 컬럼에서 남는 공간을 위로 밀어 광고를 바닥에 붙인다. */}
-            {showAds && (
+            {showChannelAds && (
               <div style={{ marginTop: 'auto', paddingTop: 32, marginBottom: 8 }}>
-                <AdCard source="dashboard" t={t} onClose={hideAds} />
+                <AdCard source="dashboard" t={t} onClose={hideChannelAds} />
               </div>
             )}
           </>
@@ -2918,6 +2956,22 @@ export default function Dashboard() {
           onClose={() => closeTrialPopup(false)}
           onSubscribe={() => closeTrialPopup(true)}
         />
+      )}
+
+      {/* 잠긴 기능 안내 토스트 — 결제 토스트와 동일 스타일(하단 중앙 알약).
+          bg=text-primary / 글씨·아이콘=bg-card 라 라이트·다크 양쪽에서 자동 반전·대비됨.
+          탭 조건 밖(공통 위치)에 둔다 — 발송 설정·채널 탭 어디서 눌러도 같은 토스트가 보여야 한다. */}
+      {channelNotice && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
+          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+          boxShadow: 'var(--shadow-lg)',
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}>
+          <Lock size={13} color="var(--bg-card)" />
+          {channelNotice}
+        </div>
       )}
 
       {/* 미리보기 결과 토스트 — 결제/PRO 안내 토스트와 동일 스타일(하단 중앙 알약).
