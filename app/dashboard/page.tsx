@@ -1492,7 +1492,11 @@ export default function Dashboard() {
                     {(breakingTotal === 0 && plan === 'FREE') ? '—' : breakingTotal}
                   </div>
                   <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)' }}>
-                    {plan === 'FREE' ? t('stats.proOnly') : t('stats.accumulated')}
+                    {plan === 'FREE' ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        <Lock size={11} />{t('stats.proOnly')}
+                      </span>
+                    ) : t('stats.accumulated')}
                   </div>
                 </div>
 
@@ -1705,7 +1709,7 @@ export default function Dashboard() {
                   background: 'var(--bg-subtle)', border: '0.5px solid var(--border-light)',
                   borderRadius: 9, padding: '10px 14px', marginBottom: 12,
                 }}>
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>🔒</span>
+                  <Lock size={14} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, lineHeight: 1.5 }}>
                     {t('channels.lockedNotice', { n: channelLimit })}
                   </span>
@@ -1820,7 +1824,7 @@ export default function Dashboard() {
                             background: 'var(--bg-subtle)', color: 'var(--text-tertiary)',
                             padding: '2px 7px', borderRadius: 5, flexShrink: 0,
                             whiteSpace: 'nowrap',
-                          }}>🔒 Pro</span>
+                          }}>Pro</span>
                         )}
                         {cat && (
                           <span style={{
@@ -1939,8 +1943,11 @@ export default function Dashboard() {
           // 발송 채널 목록 — lib/channels.ts 단일 소스 + 언어별 동적 순서.
           const rawMethod: ChannelId = (settings?.delivery_method as ChannelId) ?? 'email'
           // UI 방어: 강등 직후 캐시 등으로 PRO 채널이 남아있어도 무료면 email 선택으로 간주.
+          // 목록에 없는 채널(미구현 enabled=false, 알 수 없는 값)이 저장돼 있어도 email로 간주 —
+          // 실제 발송도 lib/delivery.ts에서 email로 폴백하므로 표시와 동작이 일치한다.
           const rawDef = CHANNELS.find(c => c.id === rawMethod)
-          const currentMethod: ChannelId = (rawDef?.proOnly && !isPro) ? 'email' : rawMethod
+          const currentMethod: ChannelId =
+            (!rawDef?.enabled || (rawDef.proOnly && !isPro)) ? 'email' : rawMethod
           const notifChannels = orderedChannels(locale)
             .map(def => ({
               def,
@@ -2218,7 +2225,10 @@ export default function Dashboard() {
                     }} />
                   </div>
                 </div>
-                <div style={sectionSubtitle}>{t('schedule.notifyEmptyDesc')}</div>
+                {/* 이 카드는 설명이 마지막 요소라 sectionSubtitle의 marginBottom이 카드 바닥에
+                    그대로 남는다 → 여기서만 0으로 덮어써 다른 카드와 높이 리듬을 맞춘다.
+                    공용 sectionSubtitle은 다른 카드들이 이 여백에 의존하므로 건드리지 않는다. */}
+                <div style={{ ...sectionSubtitle, marginBottom: 0 }}>{t('schedule.notifyEmptyDesc')}</div>
               </div>
 
               {/* 속보 키워드 */}
@@ -2226,7 +2236,11 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                   <div style={sectionTitle}>{t('schedule.breaking')}</div>
                   {!isPro ? (
-                    <span style={proBadge}>{t('schedule.breakingProOnly')}</span>
+                    /* 이 카드의 유일한 잠금 표시 — 입력창 placeholder·추가 버튼에 중복 표기하지 않는다
+                       (입력·버튼이 비활성인 것만으로 잠금은 충분히 전달된다). */
+                    <span style={{ ...proBadge, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Lock size={11} />{t('schedule.breakingProOnly')}
+                    </span>
                   ) : (
                     <div onClick={() => saveSettings({ breaking_alert: !settings?.breaking_alert })}
                       style={{
@@ -2277,21 +2291,15 @@ export default function Dashboard() {
                     onKeyDown={e => isPro && e.key === 'Enter' && kwAdd.run(addKeyword)}
                     onFocus={e => isPro && (e.currentTarget.style.borderColor = 'var(--accent)')}
                     onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                    placeholder={isPro ? t('schedule.keywordPlaceholder') : t('schedule.keywordPlaceholderLocked')}
+                    placeholder={t('schedule.keywordPlaceholder')}
                     disabled={!isPro}
                     style={{ ...inputStyle, flex: 1, opacity: isPro ? 1 : 0.6 }} />
-                  <button onClick={() => {
-                      if (!isPro) {
-                        console.log('[phase4] open upgrade modal — breaking keywords')
-                        return
-                      }
-                      kwAdd.run(addKeyword)
-                    }}
-                    disabled={kwAdd.pending}
+                  <button onClick={() => kwAdd.run(addKeyword)}
+                    disabled={!isPro || kwAdd.pending}
                     style={kwAdd.pending
                       ? { ...primaryBtn, ...pendingBtnStyle }
                       : isPro ? primaryBtn : disabledBtn}>
-                    {kwAdd.pending ? t('common.adding') : isPro ? t('common.add') : '🔒 Pro'}
+                    {kwAdd.pending ? t('common.adding') : t('common.add')}
                   </button>
                 </div>
               </div>

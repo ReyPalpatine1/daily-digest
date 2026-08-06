@@ -1,6 +1,9 @@
 // 발송 채널 정의 — 단일 소스(Single Source of Truth).
 // 채널 추가/제거/순서변경/활성화는 전부 아래 CHANNELS 배열만 수정하면 된다.
 // 실제 발송 구현 여부는 enabled 로 표시(현재 email/telegram 만 true).
+// enabled=false 채널은 orderedChannels()에서 제외되어 화면에서 숨겨진다 —
+// 발송이 안 되는 채널을 "Pro 전용"으로 노출하면 결제해도 못 쓰는 기능을 파는 셈이 된다.
+// 정의는 남겨두므로 구현이 끝나면 아래 플래그만 true로 바꾸면 다시 노출된다.
 
 import type { Settings } from './supabase'
 
@@ -16,7 +19,7 @@ export type ChannelDef = {
   id: ChannelId
   labelKey: string // i18n 키 (예: 'channels.email')
   icon: string // 아이콘 식별자(프론트에서 매핑)
-  enabled: boolean // 실제 작동 여부 (email/telegram=true, 나머지=false 준비중)
+  enabled: boolean // 실제 작동 여부 (email/telegram=true, 나머지=false 준비중 → 화면에서 숨김)
   proOnly: boolean // PRO 전용 여부 (email=false, 나머지=true)
   addressField: ChannelAddressField | null
   regionLocales?: string[] // 이 채널을 상단 우선노출할 언어(예: kakao→['ko'])
@@ -36,11 +39,12 @@ export function getChannel(id: ChannelId): ChannelDef | undefined {
 }
 
 // 언어별 정렬: email 항상 맨 위 → 해당 locale의 regionLocales 채널 → telegram(글로벌) → 나머지.
+// enabled=false 채널은 결과에서 제외된다(= 화면에서 숨겨진다).
 export function orderedChannels(locale: string): ChannelDef[] {
   const used = new Set<ChannelId>()
   const result: ChannelDef[] = []
   const push = (c?: ChannelDef) => {
-    if (c && !used.has(c.id)) {
+    if (c && c.enabled && !used.has(c.id)) {
       used.add(c.id)
       result.push(c)
     }
