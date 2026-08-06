@@ -36,14 +36,18 @@ export default function AdCard({ source: _source, t }: Props) {
       border: '0.5px solid var(--border)',
       borderRadius: 10,
       overflow: 'hidden',
-      padding: '14px 15px',
+      // 배너 높이(90~100)에 비해 카드가 크지 않으므로 여백을 좁게.
+      // 고지 문구가 배너 아래로 내려가 하단만 조금 더 좁다(위 12 / 좌우 14 / 아래 10).
+      padding: '12px 14px 10px',
+      // 본문 maxWidth가 1280이라 목록 카드는 1200px까지 늘어나는데 배너는 728px 고정 —
+      // 그대로 두면 좌우가 크게 빈다. 900으로 묶어 좌우 여백을 배너 기준 85px 남짓으로.
+      // 모바일(320 배너)에서는 이 maxWidth가 걸리지 않는다.
+      maxWidth: 900,
+      margin: '0 auto',
+      boxSizing: 'border-box',
       // 배너는 고정 폭이라 좌측 정렬하면 우측이 비므로 가운데 정렬 유지.
       textAlign: 'center',
     }}>
-      {/* 라벨 + 고지 한 줄 (배너 위, 작게) */}
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.6 }}>
-        {t('ads.label')} · {t('ads.partnerDisclosure')}
-      </div>
       {/* 다이나믹 배너 — 뷰포트에 따라 1종만 렌더 */}
       {isNarrow ? (
         <iframe
@@ -66,6 +70,13 @@ export default function AdCard({ source: _source, t }: Props) {
           style={{ maxWidth: '100%', display: 'inline-block' }}
         />
       )}
+      {/* 라벨 + 고지 한 줄 (배너 아래, 작게).
+          fontSize 11 / text-muted / lineHeight 1.6 은 낮추지 말 것 — 공정위 추천·보증
+          심사지침상 경제적 이해관계 고지는 소비자가 쉽게 인식할 수 있어야 하는데,
+          위치가 배너 아래라 인식성이 이미 다소 떨어진다. 문구도 확정형 그대로 유지. */}
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.6 }}>
+        {t('ads.label')} · {t('ads.partnerDisclosure')}
+      </div>
     </div>
   )
 }
