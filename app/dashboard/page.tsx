@@ -1709,15 +1709,7 @@ export default function Dashboard() {
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, lineHeight: 1.5 }}>
                     {t('channels.lockedNotice', { n: channelLimit })}
                   </span>
-                  <button onClick={() => router.push('/pricing')}
-                    style={{
-                      flexShrink: 0, padding: '5px 11px', borderRadius: 7,
-                      border: '0.5px solid var(--text-primary)', background: 'transparent',
-                      color: 'var(--text-primary)', fontSize: 11, fontWeight: 500,
-                      cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                    }}>
-                    {t('proBanner.ctaShort')}
-                  </button>
+                  <UpgradeButton label={t('nav.proUpgrade')} style={{ flexShrink: 0 }} />
                 </div>
               )}
 
@@ -2016,11 +2008,6 @@ export default function Dashboard() {
                     <span style={{ fontSize: 12, color: 'var(--warning)' }}>{t('common.changed')}</span>
                   )}
                 </div>
-                {!isPro && (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, textAlign: 'right' }}>
-                    {t('schedule.proHint')}
-                  </div>
-                )}
               </div>
 
               {/* 알림 채널 */}
