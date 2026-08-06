@@ -1878,7 +1878,10 @@ export default function Dashboard() {
                             background: 'var(--bg-subtle)', color: 'var(--text-tertiary)',
                             padding: '2px 7px', borderRadius: 5, flexShrink: 0,
                             whiteSpace: 'nowrap',
-                          }}>Pro</span>
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                          }}>
+                            <Lock size={11} />{t('stats.proOnly')}
+                          </span>
                         )}
                         {cat && (
                           <span style={{
@@ -2089,7 +2092,8 @@ export default function Dashboard() {
                           style={{
                             display: 'flex', alignItems: 'center', gap: 10,
                             padding: '10px 12px', borderRadius: 7,
-                            cursor: ch.comingSoon ? 'default' : (interactive ? 'pointer' : 'default'),
+                            // 잠긴 행도 누르면 안내 토스트가 뜨므로 손가락 커서(준비중 행만 기본 화살표).
+                            cursor: ch.comingSoon ? 'default' : 'pointer',
                             background: 'transparent',
                             transition: 'background 0.15s',
                             opacity: dimmed ? 0.55 : 1,
@@ -2287,7 +2291,8 @@ export default function Dashboard() {
                           width: 36, height: 20, borderRadius: 999,
                           background: 'var(--bg-subtle)',
                           border: '0.5px solid var(--border)',
-                          position: 'relative', cursor: 'not-allowed',
+                          // 눌리면 안내 토스트가 뜨므로 'not-allowed'가 아니라 손가락 커서.
+                          position: 'relative', cursor: 'pointer',
                           opacity: 0.5, flexShrink: 0,
                         }}>
                         <div style={{
@@ -2362,7 +2367,9 @@ export default function Dashboard() {
                     disabled={kwAdd.pending}
                     style={kwAdd.pending
                       ? { ...primaryBtn, ...pendingBtnStyle }
-                      : isPro ? primaryBtn : disabledBtn}>
+                      // 무료: 보기는 비활성이되 커서는 손가락(눌리면 안내 토스트가 뜬다).
+                      // disabledBtn 자체는 진짜 비활성 버튼(저장 등)이 쓰므로 여기서만 덮어쓴다.
+                      : isPro ? primaryBtn : { ...disabledBtn, cursor: 'pointer' }}>
                     {kwAdd.pending ? t('common.adding') : t('common.add')}
                   </button>
                 </div>
