@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, ChevronLeft, ChevronRight, Mail, Play, ChevronDown, Link2 } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Mail, Play, ChevronDown, Link2, Lock } from 'lucide-react'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -10,6 +10,9 @@ type Props = {
   isMobile: boolean
   // 열 때의 체크박스 초기값(= 현재 settings.help_seen). 닫을 때 이 값(변경 포함)을 부모가 저장.
   initialDontShow: boolean
+  // 현재 플랜. 무료(false)면 Pro 전용 항목에 잠금 뱃지를 붙인다.
+  // 미전달 시 무료로 간주 — 잘못 알려주는 쪽보다 막힌 걸 알려주는 쪽이 안전하다.
+  isPro?: boolean
   onClose: (dontShowAgain: boolean) => void
 }
 
@@ -250,6 +253,18 @@ function PreviewShare({ t }: { t: TFn }) {
   )
 }
 
+// Pro 전용 잠금 뱃지 — 대시보드의 잠금 뱃지(proBadge + <Lock size={11} /> + stats.proOnly)와 같은 구성.
+// 화면에서 자물쇠로 막아둔 기능과 도움말이 같은 표시를 써야 사용자가 둘을 연결한다(새 모양 금지).
+// 문장 안에 들어가므로 verticalAlign/marginRight만 더한다.
+const proLockBadge: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+  fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+  color: 'var(--text-muted)', background: 'var(--bg-subtle)',
+  padding: '2px 7px', borderRadius: 4,
+  whiteSpace: 'nowrap', verticalAlign: 'middle',
+  marginRight: 6,
+}
+
 // 번호(①②③) 단계 안내 한 줄. 번호와 멘트를 세로 가운데 정렬(두 줄이어도 번호가 중앙).
 function NumberedStep({ n, text }: { n: number; text: React.ReactNode }) {
   return (
@@ -280,15 +295,20 @@ function renderItem(t: TFn, raw: string): React.ReactNode {
   )
 }
 
-export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Props) {
+export default function HelpPopup({ t, isMobile, initialDontShow, isPro = false, onClose }: Props) {
   const [step, setStep] = useState(0)
   const [dontShow, setDontShow] = useState(initialDontShow)
 
-  const steps = [
-    { preview: <PreviewChannels t={t} />, key: 'step1', items: [t('help.step1_1'), t('help.step1_2'), t('help.step1_3')] },
-    { preview: <PreviewSchedule t={t} />, key: 'step2', items: [t('help.step2_1'), t('help.step2_2'), t('help.step2_3')] },
-    { preview: <PreviewHistory t={t} />, key: 'step3', items: [t('help.step3_1'), t('help.step3_2'), t('help.step3_3')] },
-    { preview: <PreviewShare t={t} />, key: 'step4', items: [t('help.step4_1'), t('help.step4_2'), t('help.step4_3')] },
+  // Pro 전용 항목에만 붙는 잠금 표시. 무료 사용자에게만 보인다(Pro에겐 문장만).
+  // 대상은 발송 설정의 텔레그램(step2_2)·속보 키워드(step2_3) 둘뿐 —
+  // 미리보기(step1_3)와 공유(step4)는 무료도 쓰는 기능이라 붙이지 않는다.
+  const lockFree = !isPro
+
+  const steps: { preview: React.ReactNode; key: string; items: { text: string; locked?: boolean }[] }[] = [
+    { preview: <PreviewChannels t={t} />, key: 'step1', items: [{ text: t('help.step1_1') }, { text: t('help.step1_2') }, { text: t('help.step1_3') }] },
+    { preview: <PreviewSchedule t={t} />, key: 'step2', items: [{ text: t('help.step2_1') }, { text: t('help.step2_2'), locked: lockFree }, { text: t('help.step2_3'), locked: lockFree }] },
+    { preview: <PreviewHistory t={t} />, key: 'step3', items: [{ text: t('help.step3_1') }, { text: t('help.step3_2') }, { text: t('help.step3_3') }] },
+    { preview: <PreviewShare t={t} />, key: 'step4', items: [{ text: t('help.step4_1') }, { text: t('help.step4_2') }, { text: t('help.step4_3') }] },
   ]
   // 단계 수는 배열에서 파생 — 헤더 n/N·점 표시·마지막 단계 버튼이 함께 따라온다.
   const TOTAL = steps.length
@@ -374,8 +394,17 @@ export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Pro
             {t(`help.${k}_title`)}
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 18 }}>
-            {steps[step].items.map((raw, i) => (
-              <NumberedStep key={i} n={i + 1} text={renderItem(t, raw)} />
+            {cur.items.map((item, i) => (
+              <NumberedStep key={i} n={i + 1} text={
+                <>
+                  {item.locked && (
+                    <span style={proLockBadge}>
+                      <Lock size={11} />{t('stats.proOnly')}
+                    </span>
+                  )}
+                  {renderItem(t, item.text)}
+                </>
+              } />
             ))}
           </div>
         </div>

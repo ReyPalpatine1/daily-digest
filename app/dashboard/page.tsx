@@ -2948,7 +2948,7 @@ export default function Dashboard() {
 
       {/* 처음 사용자 도움말 팝업 (자동 노출 + 설정에서 재열기) */}
       {showHelp && (
-        <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} onClose={closeHelp} />
+        <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} isPro={isPro} onClose={closeHelp} />
       )}
 
       {/* Pro 체험·1개월권 종료 안내 팝업 (전날 ending / 당일 ended) */}

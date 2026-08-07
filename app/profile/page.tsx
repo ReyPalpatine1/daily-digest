@@ -312,7 +312,7 @@ export default function ProfilePage() {
 
       {/* === 도움말 팝업 (설정 메뉴에서 열기) === */}
       {showHelp && (
-        <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} onClose={closeHelp} />
+        <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} isPro={isPro} onClose={closeHelp} />
       )}
 
       {/* === 토스트 === */}

@@ -523,7 +523,7 @@ export function AppHeader({
 
       {/* 헤더 자체 도움말 — onHelpClick을 전달한 페이지(대시보드·프로필)는 자기 팝업을 쓰므로 여기선 열리지 않는다 */}
       {showHelp && helpSeen !== null && (
-        <HelpPopup t={t} isMobile={isMobile} initialDontShow={helpSeen} onClose={closeOwnHelp} />
+        <HelpPopup t={t} isMobile={isMobile} initialDontShow={helpSeen} isPro={isPro} onClose={closeOwnHelp} />
       )}
     </>
   )
