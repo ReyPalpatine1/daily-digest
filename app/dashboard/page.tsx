@@ -1642,16 +1642,27 @@ export default function Dashboard() {
                   실행 후에는 profile.preview_used_at이 채워져 카드가 사라진다. */}
               {!profile?.preview_used_at && !profile?.first_digest_at && channels.length >= 1 && (
                 <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                    {t('preview.title')}
+                  {/* 제목·설명은 왼쪽, 버튼은 오른쪽 끝 — 잠금 안내 배너·저장 버튼과 같은 배치.
+                      설명이 두 줄이라 세로는 flex-start(가운데 정렬하면 버튼이 떠 보인다). */}
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                        {t('preview.title')}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+                        {t('preview.desc')}
+                      </div>
+                    </div>
+                    {/* marginLeft:auto — 좁은 폭에서 버튼이 아랫줄로 내려가도 오른쪽에 붙는다.
+                        한 줄일 때는 왼쪽 묶음의 flex:1이 이미 밀어내므로 영향 없음. */}
+                    <button onClick={() => previewRun.run(runPreview)} disabled={previewRun.pending}
+                      style={{
+                        ...(previewRun.pending ? { ...primaryBtn, ...pendingBtnStyle } : primaryBtn),
+                        flexShrink: 0, marginLeft: 'auto',
+                      }}>
+                      {previewRun.pending ? t('preview.running') : t('preview.cta')}
+                    </button>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.6 }}>
-                    {t('preview.desc')}
-                  </div>
-                  <button onClick={() => previewRun.run(runPreview)} disabled={previewRun.pending}
-                    style={previewRun.pending ? { ...primaryBtn, ...pendingBtnStyle } : primaryBtn}>
-                    {previewRun.pending ? t('preview.running') : t('preview.cta')}
-                  </button>
                 </div>
               )}
 
