@@ -2852,6 +2852,17 @@ export default function Dashboard() {
                                   </div>
                                 )
                               })()}
+
+                              {/* AI 생성물 고지 — 내용 맨 아래. 메일·텔레그램·공유페이지와 같은 문장.
+                                  실패·대기 항목은 보여줄 요약이 없으므로 생략한다. */}
+                              {!digest.fail_reason && (
+                                <div style={{
+                                  fontSize: 11, color: 'var(--text-muted)',
+                                  marginTop: 12, lineHeight: 1.6,
+                                }}>
+                                  {t('common.aiNotice')}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

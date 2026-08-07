@@ -131,6 +131,16 @@ function shell(title: string, locale: EmailLocale, inner: string, footer: string
 </html>`
 }
 
+// AI 생성물 고지 — 요약이 실린 메일(다이제스트·속보)의 본문 맨 끝, 푸터 바로 위.
+// ★ footerBlock 안에 넣지 말 것: 환영·체험 종료 등 요약이 없는 메일에도 붙어 엉뚱해진다.
+// 톤은 기존 푸터와 동일(11px 회색). 메일이라 CSS 변수 불가 → 고정 팔레트.
+function aiNoticeBlock(locale: EmailLocale): string {
+  return `
+    <div style="font-size:11px;color:#8a8a8e;line-height:1.6;margin-top:16px;padding:0 4px;">
+      ${escapeHtml(et(locale, 'digest.aiNotice'))}
+    </div>`
+}
+
 function footerBlock(locale: EmailLocale, email?: string): string {
   // Gmail이 매일 동일한 푸터를 "반복 내용"으로 접는 것을 완화하기 위해 발송 날짜를 넣어 내용을 변화시킨다.
   // 새 시간 로직을 만들지 않고 @/lib/time의 nowUtc + 기존 formatDate(KST·locale 매핑)를 재사용.
@@ -299,7 +309,9 @@ export function buildDigestHtml(
   // 광고 로테이션: KST 날짜의 일(day of month)이 짝수면 Pro 배너, 홀수면 제휴 슬롯.
   const kstDay = toZoned(nowUtc()).day
   const ad = isPro ? '' : (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay)))
-  return shell(et(locale, 'digest.subject', { date }), locale, header + body + ad, footerBlock(locale, email))
+  // 영상이 하나도 없는 날("오늘은 새 영상이 없어요")엔 요약이 없으므로 고지도 붙이지 않는다.
+  const aiNotice = items.length > 0 ? aiNoticeBlock(locale) : ''
+  return shell(et(locale, 'digest.subject', { date }), locale, header + body + ad + aiNotice, footerBlock(locale, email))
 }
 
 export function buildBreakingHtml(
@@ -318,7 +330,7 @@ export function buildBreakingHtml(
   return shell(
     et(locale, 'breaking.subject', { title: item.video.title }),
     locale,
-    header + digestCard(item, locale),
+    header + digestCard(item, locale) + aiNoticeBlock(locale),
     footerBlock(locale, email),
   )
 }

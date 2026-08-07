@@ -390,9 +390,17 @@ export default async function SharePage({ params }: PageProps) {
       {/* (5) 하단 가입 CTA */}
       <SignupCta token={token} />
 
-      {/* (6) 푸터 — 만료 안내(좌) + 문제 신고(우) 한 줄. 좁은 화면에선 줄바꿈 */}
+      {/* (6) 푸터 — AI 고지(별도 줄) + 만료 안내(좌) · 문제 신고(우) 한 줄.
+             AI 고지는 비회원이 보는 화면이라 약관 동의가 없어 특히 필요하다.
+             이 페이지는 한국어 고정 문구를 쓰므로 여기서도 한국어로 둔다(다른 채널과 같은 문장). */}
       <div style={{
         paddingTop: 2,
+        fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.6,
+      }}>
+        이 요약은 AI가 자동 생성했습니다. 사실과 수치가 원본과 다를 수 있으니 중요한 내용은 영상에서 확인해 주세요.
+      </div>
+      <div style={{
+        paddingTop: 6,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexWrap: 'wrap', gap: 8,
       }}>

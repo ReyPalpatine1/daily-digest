@@ -83,10 +83,28 @@ function PreviewChannels({ t }: { t: TFn }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <TabBar t={t} active={0} />
-      {/* 실제 대시보드와 같은 위치감 — 미리보기는 채널 목록 위, 채널 추가는 오른쪽 끝. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={addChannelBtnStyle}>{t('preview.cta')}</span>
-        <span style={addChannelBtnStyle}>{t('dashboard.addChannel')}</span>
+      {/* 목록 위 헤더 영역 — 실제 대시보드와 같은 구조.
+          채널 추가는 헤더 오른쪽 끝 버튼, 미리보기는 같은 급의 버튼이 아니라
+          제목이 있는 별도 카드이고 버튼은 그 카드의 오른쪽에 붙는다.
+          프리뷰 상자(고정 290px)에 3행 목록까지 들어가야 하므로 카드는 조밀하게. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <span style={addChannelBtnStyle}>{t('dashboard.addChannel')}</span>
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 12px', borderRadius: 9,
+          background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+        }}>
+          <span style={{
+            flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600,
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {t('preview.title')}
+          </span>
+          <span style={{ ...addChannelBtnInlineStyle, flexShrink: 0 }}>{t('preview.cta')}</span>
+        </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {rows.map((r, i) => (

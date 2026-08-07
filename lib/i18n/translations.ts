@@ -12,6 +12,9 @@ export const translations = {
       addSubmit: '추가하기',
       // 잠긴 기능을 눌렀을 때의 공용 안내 — 기능별로 문구를 나누지 않는다.
       proFeature: 'Pro 기능입니다',
+      // AI 생성물 고지 — 메일(digest.aiNotice)·텔레그램·열람기록·공유페이지가 같은 문장을 쓴다.
+      // 채널마다 문구를 다르게 만들지 말 것.
+      aiNotice: '이 요약은 AI가 자동 생성했습니다. 사실과 수치가 원본과 다를 수 있으니 중요한 내용은 영상에서 확인해 주세요.',
       confirm: '확인',
       loading: '불러오는 중...',
       saving: '저장 중…',
@@ -715,6 +718,7 @@ export const translations = {
       add: 'Add',
       addSubmit: 'Add',
       proFeature: 'This is a Pro feature',
+      aiNotice: 'This summary was generated automatically by AI. Facts and figures may differ from the original, so please check the video for anything important.',
       confirm: 'Confirm',
       loading: 'Loading...',
       saving: 'Saving…',
@@ -1408,6 +1412,7 @@ export const translations = {
       add: '添加',
       addSubmit: '添加',
       proFeature: '这是 Pro 功能',
+      aiNotice: '本摘要由 AI 自动生成，事实与数字可能与原视频有出入，重要内容请以视频为准。',
       confirm: '确认',
       loading: '加载中...',
       saving: '保存中…',
@@ -2098,6 +2103,7 @@ export const translations = {
       add: '追加',
       addSubmit: '追加',
       proFeature: 'Pro機能です',
+      aiNotice: 'この要約はAIが自動生成しました。事実や数値が原本と異なる場合がありますので、重要な内容は動画でご確認ください。',
       confirm: '確認',
       loading: '読み込み中...',
       saving: '保存中…',

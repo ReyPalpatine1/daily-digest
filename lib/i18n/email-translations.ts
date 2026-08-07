@@ -41,6 +41,9 @@ export const emailTranslations = {
       partnerTitle: '쿠팡 오늘의 특가 — 골드박스',
       partnerDesc: '매일 바뀌는 최대 할인 상품 모음',
       partnerCta: '특가 보기',
+      // AI 생성물 고지 — 다이제스트·속보에만 붙인다(환영·체험 종료 메일에는 붙지 않음).
+      // 4채널(메일·텔레그램·열람기록·공유페이지)이 같은 문장을 쓴다.
+      aiNotice: '이 요약은 AI가 자동 생성했습니다. 사실과 수치가 원본과 다를 수 있으니 중요한 내용은 영상에서 확인해 주세요.',
     },
     breaking: {
       subject: '[속보] {title}',
@@ -137,6 +140,7 @@ export const emailTranslations = {
       partnerTitle: "Coupang Today's Deals — Gold Box",
       partnerDesc: 'Top discounted picks, refreshed daily',
       partnerCta: 'View Deals',
+      aiNotice: 'This summary was generated automatically by AI. Facts and figures may differ from the original, so please check the video for anything important.',
     },
     breaking: {
       subject: '[Breaking] {title}',
@@ -233,6 +237,7 @@ export const emailTranslations = {
       partnerTitle: 'Coupang 今日特价 — Gold Box',
       partnerDesc: '每日更新的超值折扣商品精选',
       partnerCta: '查看特价',
+      aiNotice: '本摘要由 AI 自动生成，事实与数字可能与原视频有出入，重要内容请以视频为准。',
     },
     breaking: {
       subject: '[快讯] {title}',
@@ -329,6 +334,7 @@ export const emailTranslations = {
       partnerTitle: 'クーパン本日の特価 — ゴールドボックス',
       partnerDesc: '毎日変わる最大割引商品のまとめ',
       partnerCta: '特価を見る',
+      aiNotice: 'この要約はAIが自動生成しました。事実や数値が原本と異なる場合がありますので、重要な内容は動画でご確認ください。',
     },
     breaking: {
       subject: '[速報] {title}',

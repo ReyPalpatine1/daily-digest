@@ -206,6 +206,8 @@ export async function sendDigestTelegram(
     lines.push('')
   }
 
+  // AI 생성물 고지 — 메일·열람기록·공유페이지와 같은 문장(digest.aiNotice)을 맨 끝에.
+  lines.push(escapeHtml(et(lc, 'digest.aiNotice')))
   lines.push(escapeHtml(et(lc, 'digest.footer')))
 
   try {
@@ -249,6 +251,9 @@ export async function sendBreakingTelegram(
       lines.push(keyPointLine(p))
     }
   }
+  // AI 생성물 고지 — 다이제스트와 같은 문장을 맨 끝에.
+  lines.push('')
+  lines.push(escapeHtml(et(lc, 'digest.aiNotice')))
 
   try {
     // 속보는 단일 영상이므로 미리보기 켬
