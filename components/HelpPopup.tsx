@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, ChevronLeft, ChevronRight, Mail, Play, ChevronDown } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Mail, Play, ChevronDown, Link2 } from 'lucide-react'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -14,7 +14,14 @@ type Props = {
 }
 
 // ── 공용 토큰 (전부 CSS 변수 / 흑백, 하드코딩·빨강 금지) ──
-const TOTAL = 3
+// ※ 단계 수(TOTAL)는 steps 배열 길이에서 파생시킨다(HelpPopup 내부) — 단계를 늘려도
+//    헤더의 n/N·점 표시·마지막 단계 버튼이 자동으로 따라온다.
+
+// 공유 강조(형광펜) — 공유 시트·공유 페이지·타임라인이 쓰는 값과 같아야 한다.
+// 도움말 목업만 다른 색을 쓰면 실제 화면과 다른 것을 가르치게 되므로 같은 값을 쓴다.
+// 반투명 노랑이라 라이트/다크 어느 배경 위에서도 아래 글자가 그대로 읽힌다.
+// (ShareSheet.tsx · ShareVideo.tsx · app/s/[token]/page.tsx와 동일)
+const SHARE_HIGHLIGHT_BG = 'rgba(255,205,0,0.20)'
 
 // 탭 바: 현재 스텝 탭만 활성(굵게 + 밑줄)
 function TabBar({ t, active }: { t: TFn; active: number }) {
@@ -73,7 +80,9 @@ function PreviewChannels({ t }: { t: TFn }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <TabBar t={t} active={0} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+      {/* 실제 대시보드와 같은 위치감 — 미리보기는 채널 목록 위, 채널 추가는 오른쪽 끝. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={addChannelBtnStyle}>{t('preview.cta')}</span>
         <span style={addChannelBtnStyle}>{t('dashboard.addChannel')}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -184,6 +193,63 @@ function PreviewHistory({ t }: { t: TFn }) {
   )
 }
 
+// ── 미니 프리뷰: 요약 공유 시트 ──
+// 공유는 열람 기록에서 시작하므로 탭 바는 열람 기록에 맞춘다(설명 문구와 같은 위치).
+// 구성은 실제 ShareSheet 순서 그대로 — 메모 입력칸 → 핵심 포인트(강조) → 공유 버튼.
+function PreviewShare({ t }: { t: TFn }) {
+  // 항목 행 — 강조 여부와 무관하게 같은 여백을 줘 강조가 붙어도 글자가 움직이지 않는다.
+  // 좌우 -9px는 공유 시트·공유 페이지와 같은 규칙(항목 단위를 드러냄).
+  const pointRow = (text: string, highlighted: boolean) => (
+    <div style={{
+      margin: '0 -9px', padding: '3px 9px', borderRadius: 6,
+      fontSize: 12.5, lineHeight: 1.6,
+      color: highlighted ? 'var(--text-primary)' : 'var(--text-secondary)',
+      ...(highlighted ? { background: SHARE_HIGHLIGHT_BG } : {}),
+    }}>
+      {text}
+    </div>
+  )
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <TabBar t={t} active={2} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {/* 메모 입력칸 모양 — 실제 시트의 textarea와 같은 톤(placeholder 색) */}
+        <div style={{
+          background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+          borderRadius: 9, padding: '10px 12px',
+          fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5,
+        }}>
+          {t('help.sample.memoPlaceholder')}
+        </div>
+
+        {/* 핵심 포인트 — 한 줄에만 형광펜을 입혀 강조 기능을 보여준다 */}
+        <div style={{
+          background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+          borderRadius: 9, padding: '12px 14px',
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, letterSpacing: 0.6,
+            color: 'var(--text-muted)', marginBottom: 8,
+          }}>
+            {t('history.keyPoints')}
+          </div>
+          {pointRow(t('help.sample.point1'), true)}
+          {pointRow(t('help.sample.point2'), false)}
+        </div>
+
+        {/* 공유하기 버튼 — 실제 시트와 같이 전체 폭 accent 버튼 */}
+        <span style={{
+          ...addChannelBtnStyle,
+          justifyContent: 'center', gap: 6,
+          padding: '9px 12px',
+        }}>
+          <Link2 size={13} /> {t('help.sample.shareBtn')}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // 번호(①②③) 단계 안내 한 줄. 번호와 멘트를 세로 가운데 정렬(두 줄이어도 번호가 중앙).
 function NumberedStep({ n, text }: { n: number; text: React.ReactNode }) {
   return (
@@ -219,10 +285,13 @@ export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Pro
   const [dontShow, setDontShow] = useState(initialDontShow)
 
   const steps = [
-    { preview: <PreviewChannels t={t} />, key: 'step1', items: [t('help.step1_1'), t('help.step1_2')] },
+    { preview: <PreviewChannels t={t} />, key: 'step1', items: [t('help.step1_1'), t('help.step1_2'), t('help.step1_3')] },
     { preview: <PreviewSchedule t={t} />, key: 'step2', items: [t('help.step2_1'), t('help.step2_2'), t('help.step2_3')] },
     { preview: <PreviewHistory t={t} />, key: 'step3', items: [t('help.step3_1'), t('help.step3_2'), t('help.step3_3')] },
+    { preview: <PreviewShare t={t} />, key: 'step4', items: [t('help.step4_1'), t('help.step4_2'), t('help.step4_3')] },
   ]
+  // 단계 수는 배열에서 파생 — 헤더 n/N·점 표시·마지막 단계 버튼이 함께 따라온다.
+  const TOTAL = steps.length
   const isFirst = step === 0
   const isLast = step === TOTAL - 1
   const cur = steps[step]
@@ -264,7 +333,7 @@ export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Pro
           gap: isMobile ? 16 : 18,
           boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
         }}>
-        {/* 헤더: n/4 + 닫기 (고정) */}
+        {/* 헤더: n/N + 닫기 (고정) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-tertiary)' }}>{step + 1} / {TOTAL}</span>
           <button
@@ -293,10 +362,13 @@ export default function HelpPopup({ t, isMobile, initialDontShow, onClose }: Pro
           {cur.preview}
         </div>
 
-        {/* 설명 영역 (나머지 채움 → 스텝 간 높이 불변) */}
+        {/* 설명 영역 (나머지 채움 → 스텝 간 높이 불변).
+            데스크톱은 팝업 높이가 고정이라, 문구가 긴 언어에서 넘치면 잘리는 대신 이 영역만 스크롤된다
+            (문구가 들어가는 평소에는 스크롤바가 생기지 않아 보이는 모습은 그대로). */}
         <div style={{
           flex: isMobile ? undefined : 1, minHeight: 0,
           display: 'flex', flexDirection: 'column',
+          overflowY: isMobile ? undefined : 'auto',
         }}>
           <h3 style={{ margin: 0, fontSize: isMobile ? 20 : 23, fontWeight: 700, color: 'var(--text-primary)' }}>
             {t(`help.${k}_title`)}
