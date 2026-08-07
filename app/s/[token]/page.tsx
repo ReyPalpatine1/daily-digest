@@ -102,9 +102,9 @@ const sectionLabelStyle: CSSProperties = {
 // '제목' 분기는 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
 function summaryBasisText(summaryBasis?: string | null): string | null {
   const basis = summaryBasis ?? ''
-  if (basis.includes('자막')) return '자막을 기반으로 분석한 AI 요약이라 오류가 있을 수 있습니다.'
-  if (basis.includes('설명')) return '영상 설명을 기반으로 분석한 AI 요약이라, 자막이 없어 실제 내용과 차이가 클 수 있습니다.'
-  if (basis.includes('제목')) return '영상 제목을 기반으로 분석한 AI 요약이라 실제 내용과 차이가 클 수 있습니다.'
+  if (basis.includes('자막')) return '자막을 기반으로 분석한 AI 요약입니다. 오류가 있을 수 있습니다.'
+  if (basis.includes('설명')) return '영상 설명을 기반으로 분석한 AI 요약입니다. 자막이 없어 실제 내용과 차이가 클 수 있습니다.'
+  if (basis.includes('제목')) return '영상 제목을 기반으로 분석한 AI 요약입니다. 실제 내용과 차이가 클 수 있습니다.'
   return null
 }
 
