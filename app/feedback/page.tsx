@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { supabase } from '@/lib/supabase'
+import { TOAST_MS } from '@/lib/toast'
 import { AppHeader } from '@/components/AppHeader'
 import { usePending } from '@/lib/use-pending'
 import { SkeletonBlock } from '@/components/Skeleton'
@@ -24,6 +25,8 @@ export default function FeedbackPage() {
   const { pending: submitting, run: runSubmit } = usePending()
   const [submitted, setSubmitted] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) }, [])
 
   // 로그인 필수 — 세션 없으면 홈으로.
   useEffect(() => {
@@ -37,9 +40,15 @@ export default function FeedbackPage() {
     return () => { cancelled = true }
   }, [router])
 
+  // 새 토스트가 뜨면 이전 타이머를 버린다 — 안 그러면 연속 호출 시 이전 타이머가
+  // 살아 있어 두 번째 토스트가 제 시간을 못 채우고 일찍 사라진다.
   function showToast(key: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     setToastKey(key)
-    setTimeout(() => setToastKey(null), 2500)
+    toastTimerRef.current = setTimeout(() => {
+      setToastKey(null)
+      toastTimerRef.current = null
+    }, TOAST_MS)
   }
 
   const card: React.CSSProperties = {
@@ -278,6 +287,8 @@ export default function FeedbackPage() {
           zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)',
+          // 읽기 전용이라 클릭을 받을 이유가 없다 — 노출 중 아래쪽 버튼을 막지 않게 통과시킨다.
+          pointerEvents: 'none',
         }}>
           {t(toastKey)}
         </div>

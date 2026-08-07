@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { X, Copy, Check, MessageCircle, Share2, Link, RefreshCw } from 'lucide-react'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { usePending } from '@/lib/use-pending'
+import { TOAST_MS } from '@/lib/toast'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -140,9 +141,18 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
   const kakaoSend = usePending()
   const nativeSend = usePending()
 
+  // 새 토스트가 뜨면 이전 타이머를 버린다 — 공유를 연달아 시도하면 이전 타이머가
+  // 살아 있어 두 번째 토스트가 제 시간을 못 채우고 일찍 사라진다.
+  const kakaoNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (kakaoNoticeTimerRef.current) clearTimeout(kakaoNoticeTimerRef.current) }, [])
+
   const showKakaoNotice = (msg: string) => {
+    if (kakaoNoticeTimerRef.current) clearTimeout(kakaoNoticeTimerRef.current)
     setKakaoNotice(msg)
-    setTimeout(() => setKakaoNotice(null), 2500)
+    kakaoNoticeTimerRef.current = setTimeout(() => {
+      setKakaoNotice(null)
+      kakaoNoticeTimerRef.current = null
+    }, TOAST_MS)
   }
 
   useEffect(() => {

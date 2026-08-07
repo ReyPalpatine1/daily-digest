@@ -3,6 +3,8 @@
 import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { translations, type Locale } from './translations'
 import { supabase } from '@/lib/supabase'
+// 두 문장이라 TOAST_MS(한 문장)가 아니라 TOAST_LONG_MS를 쓴다.
+import { TOAST_LONG_MS } from '@/lib/toast'
 
 // 초기 렌더 플래시 방지: localStorage → 브라우저 언어 폴백 (DB는 마운트 후 비동기로 덮어씀).
 function detectInitialLocale(): Locale {
@@ -47,10 +49,6 @@ export type LocaleContextValue = {
 }
 
 export const LocaleContext = createContext<LocaleContextValue | null>(null)
-
-// 언어 변경 안내 토스트 노출 시간(ms). 기존 토스트(2.5초)보다 긴 이유는
-// 두 문장이라 읽는 데 시간이 더 걸리기 때문이다.
-const LOCALE_NOTICE_MS = 4000
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>('ko')
@@ -132,7 +130,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       noticeTimerRef.current = setTimeout(() => {
         setShowLocaleNotice(false)
         noticeTimerRef.current = null
-      }, LOCALE_NOTICE_MS)
+      }, TOAST_LONG_MS)
     }
     applyLocale(newLocale)
     const userId = userIdRef.current
@@ -162,6 +160,8 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
           boxShadow: 'var(--shadow-lg)',
           maxWidth: 'min(420px, calc(100vw - 32px))',
           lineHeight: 1.5, textAlign: 'center',
+          // 읽기 전용이라 클릭을 받을 이유가 없다. 6초간 아래쪽 버튼이 막히지 않도록 통과시킨다.
+          pointerEvents: 'none',
         }}>
           {t('common.localeChangedNotice')}
         </div>

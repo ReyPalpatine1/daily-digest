@@ -20,6 +20,7 @@ import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X 
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { usePending } from '@/lib/use-pending'
+import { TOAST_MS } from '@/lib/toast'
 import { SkeletonList } from '@/components/Skeleton'
 import ScrollTopButton from '@/components/ScrollTopButton'
 
@@ -161,6 +162,7 @@ export default function Dashboard() {
   // 잠긴 기능(PRO 전용 채널·속보 토글·키워드 추가·잠긴 채널 행)을 눌렀을 때
   // 잠깐 뜨는 안내 문구(결제창 이동 없음). 자리마다 문구를 나누지 않는다.
   const [channelNotice, setChannelNotice] = useState<string | null>(null)
+  const channelNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 열람 기록 "맨 위로" 버튼: 일정량 스크롤 시 노출
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -178,8 +180,14 @@ export default function Dashboard() {
   const [historySearchApplied, setHistorySearchApplied] = useState('')
   // 첫 진입 데이터 로딩(인증→프로필→loadData) 구간.
   const [initialLoading, setInitialLoading] = useState(true)
-  // 미리보기 실행 결과 토스트 (하단 중앙 알약, 2.5초)
+  // 미리보기 실행 결과 토스트 (하단 중앙 알약)
   const [previewToast, setPreviewToast] = useState<string | null>(null)
+  const previewToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 두 토스트 타이머 정리 (언마운트 시 setState 호출 방지)
+  useEffect(() => () => {
+    if (channelNoticeTimerRef.current) clearTimeout(channelNoticeTimerRef.current)
+    if (previewToastTimerRef.current) clearTimeout(previewToastTimerRef.current)
+  }, [])
   // 열람기록 상단 미리보기 안내 카드의 "닫음" 상태 (localStorage, 기기별).
   // 초기값 true = 서버/첫 렌더에서 잠깐 보였다 사라지는 깜빡임 방지.
   const [previewGuideDone, setPreviewGuideDone] = useState(true)
@@ -899,9 +907,15 @@ export default function Dashboard() {
 
   // 잠긴 기능 클릭 시 안내 토스트 (모든 자리 공용).
   // 눌러도 아무 반응이 없으면 사용자는 잠금이 아니라 고장으로 읽는다 → 저장은 하지 않고 안내만.
+  // 새 토스트가 뜨면 이전 타이머를 버린다 — 잠긴 요소를 연달아 누르면 이전 타이머가
+  // 살아 있어 두 번째 토스트가 제 시간을 못 채우고 일찍 사라진다.
   function showProNotice() {
+    if (channelNoticeTimerRef.current) clearTimeout(channelNoticeTimerRef.current)
     setChannelNotice(t('common.proFeature'))
-    window.setTimeout(() => setChannelNotice(null), 2500)
+    channelNoticeTimerRef.current = setTimeout(() => {
+      setChannelNotice(null)
+      channelNoticeTimerRef.current = null
+    }, TOAST_MS)
   }
 
   // 광고 닫기 — 이번 세션에만 유지되고 새로고침하면 다시 노출된다.
@@ -934,10 +948,15 @@ export default function Dashboard() {
     setPreviewGuideDone(true)
   }
 
-  // 토스트 1회 노출 (하단 중앙 알약, 2.5초 — pricing/profile과 동일 패턴)
+  // 토스트 1회 노출 (하단 중앙 알약 — pricing/profile과 동일 패턴).
+  // 새 토스트가 뜨면 이전 타이머를 버려 두 번째 토스트가 제 시간을 온전히 채우게 한다.
   function showPreviewToast(message: string) {
+    if (previewToastTimerRef.current) clearTimeout(previewToastTimerRef.current)
     setPreviewToast(message)
-    setTimeout(() => setPreviewToast(null), 2500)
+    previewToastTimerRef.current = setTimeout(() => {
+      setPreviewToast(null)
+      previewToastTimerRef.current = null
+    }, TOAST_MS)
   }
 
   // 미리보기 실행 — 구독 채널 최신 3개를 지금 요약해 열람 기록에 채운다(메일 발송 없음).
@@ -2984,6 +3003,9 @@ export default function Dashboard() {
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)',
           display: 'inline-flex', alignItems: 'center', gap: 6,
+          // 토스트는 읽기 전용이라 클릭을 받을 이유가 없다. 노출 시간이 길어진 만큼
+          // 그 사이 아래쪽 버튼(맨 위로 등)이 막히지 않도록 포인터를 통과시킨다.
+          pointerEvents: 'none',
         }}>
           <Lock size={13} color="var(--bg-card)" />
           {channelNotice}
@@ -2998,6 +3020,7 @@ export default function Dashboard() {
           zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)',
+          pointerEvents: 'none',
         }}>
           {previewToast}
         </div>

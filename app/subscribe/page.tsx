@@ -1,10 +1,11 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
 import { supabase } from '@/lib/supabase'
+import { TOAST_MS } from '@/lib/toast'
 import { AppHeader } from '@/components/AppHeader'
 import { CreditCard, Lock, Ban } from 'lucide-react'
 
@@ -28,6 +29,8 @@ function SubscribeContent() {
   const [agreeTerms, setAgreeTerms] = useState(false)
   const [agreeAutoPay, setAgreeAutoPay] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) }, [])
   const [submitting, setSubmitting] = useState(false)
   // trial 모드로 잘못 진입한 재가입자(체험 이력 있음) 대비 — 확인 전엔 화면 미확정.
   const [trialChecked, setTrialChecked] = useState(false)
@@ -68,9 +71,15 @@ function SubscribeContent() {
   billingDate.setDate(billingDate.getDate() + 7)
   const billingDateLabel = billingDate.toLocaleDateString(dateLocale)
 
+  // 새 토스트가 뜨면 이전 타이머를 버린다 — 안 그러면 연속 호출 시 이전 타이머가
+  // 살아 있어 두 번째 토스트가 제 시간을 못 채우고 일찍 사라진다.
   function showToast(key: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     setToastKey(key)
-    setTimeout(() => setToastKey(null), 2500)
+    toastTimerRef.current = setTimeout(() => {
+      setToastKey(null)
+      toastTimerRef.current = null
+    }, TOAST_MS)
   }
 
   const canSubmit = mode === 'trial' ? agreeTerms : agreeTerms && (payType !== 'auto' || agreeAutoPay)
@@ -308,6 +317,8 @@ function SubscribeContent() {
           zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)',
+          // 읽기 전용이라 클릭을 받을 이유가 없다 — 노출 중 아래쪽 버튼을 막지 않게 통과시킨다.
+          pointerEvents: 'none',
         }}>
           {t(toastKey)}
         </div>
