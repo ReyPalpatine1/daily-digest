@@ -12,6 +12,9 @@ export const translations = {
       addSubmit: '추가하기',
       // 잠긴 기능을 눌렀을 때의 공용 안내 — 기능별로 문구를 나누지 않는다.
       proFeature: 'Pro 기능입니다',
+      // 언어 변경 직후 토스트. 요약은 video_summaries에 (video_id, locale)로 분리 저장되고
+      // 발송 시점의 settings.locale을 읽으므로, 이미 받은 요약은 바뀌지 않는다.
+      localeChangedNotice: '언어가 변경되었습니다. 이미 받은 요약은 그대로이며, 다음 발송부터 새 언어로 전달됩니다.',
       confirm: '확인',
       loading: '불러오는 중...',
       saving: '저장 중…',
@@ -718,6 +721,7 @@ export const translations = {
       add: 'Add',
       addSubmit: 'Add',
       proFeature: 'This is a Pro feature',
+      localeChangedNotice: "Language changed. Summaries you've already received stay as they are, and your next digest will arrive in the new language.",
       confirm: 'Confirm',
       loading: 'Loading...',
       saving: 'Saving…',
@@ -1411,6 +1415,7 @@ export const translations = {
       add: '添加',
       addSubmit: '添加',
       proFeature: '这是 Pro 功能',
+      localeChangedNotice: '语言已更改。已收到的摘要保持不变，从下次推送开始将使用新语言。',
       confirm: '确认',
       loading: '加载中...',
       saving: '保存中…',
@@ -2101,6 +2106,7 @@ export const translations = {
       add: '追加',
       addSubmit: '追加',
       proFeature: 'Pro機能です',
+      localeChangedNotice: '言語を変更しました。すでに受け取った要約はそのままで、次回の配信から新しい言語でお届けします。',
       confirm: '確認',
       loading: '読み込み中...',
       saving: '保存中…',

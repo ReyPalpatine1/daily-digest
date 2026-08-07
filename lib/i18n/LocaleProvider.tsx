@@ -48,10 +48,22 @@ export type LocaleContextValue = {
 
 export const LocaleContext = createContext<LocaleContextValue | null>(null)
 
+// 언어 변경 안내 토스트 노출 시간(ms). 기존 토스트(2.5초)보다 긴 이유는
+// 두 문장이라 읽는 데 시간이 더 걸리기 때문이다.
+const LOCALE_NOTICE_MS = 4000
+
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>('ko')
   // 로그인된 유저 id. changeLocale이 DB 저장 시 사용 (호출부는 userId를 안 넘김).
   const userIdRef = useRef<string | null>(null)
+  // 언어 변경 안내 토스트. changeLocale(사용자가 직접 고른 경우)에서만 켜진다 —
+  // 부팅 경로(detectInitialLocale·DB 동기화)는 applyLocale만 부르므로 뜨지 않는다.
+  const [showLocaleNotice, setShowLocaleNotice] = useState(false)
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+  }, [])
 
   // 현재 언어를 상태 + localStorage + <html lang>에 일괄 반영.
   const applyLocale = useCallback((next: Locale) => {
@@ -111,6 +123,17 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   // 사용자가 직접 언어를 바꿀 때 호출. localStorage + (로그인 상태면) settings.locale 저장.
   const changeLocale = useCallback((newLocale: Locale) => {
+    // 실제로 언어가 바뀐 경우에만 안내. 같은 언어를 다시 고르면 바뀐 게 없으므로 띄우지 않는다.
+    // 저장(localStorage·DB)은 기존과 동일하게 항상 수행한다 — 여기서 조기 반환하면
+    // DB 값이 어긋나 있던 계정이 계속 어긋난 채로 남는다.
+    if (newLocale !== locale) {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+      setShowLocaleNotice(true)
+      noticeTimerRef.current = setTimeout(() => {
+        setShowLocaleNotice(false)
+        noticeTimerRef.current = null
+      }, LOCALE_NOTICE_MS)
+    }
     applyLocale(newLocale)
     const userId = userIdRef.current
     if (userId) {
@@ -122,11 +145,27 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
         .eq('user_id', userId)
         .then(({ error }) => { if (error) console.warn('[locale] DB 저장 실패:', error.message) })
     }
-  }, [applyLocale])
+  }, [applyLocale, locale])
 
   return (
     <LocaleContext.Provider value={{ t, locale, changeLocale }}>
       {children}
+      {/* 언어 변경 안내 — 대시보드의 잠금/미리보기 토스트와 동일한 토큰(하단 중앙 알약).
+          bg=text-primary / 글씨=bg-card 라 라이트·다크 양쪽에서 자동 반전·대비된다.
+          두 문장이라 폭이 넓어지므로 maxWidth로 감싸고 좌우 16px 여백을 확보한다.
+          문구는 t()로 렌더 시점에 읽으므로 "바뀐 뒤의 언어"로 나온다. */}
+      {showLocaleNotice && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
+          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+          boxShadow: 'var(--shadow-lg)',
+          maxWidth: 'min(420px, calc(100vw - 32px))',
+          lineHeight: 1.5, textAlign: 'center',
+        }}>
+          {t('common.localeChangedNotice')}
+        </div>
+      )}
     </LocaleContext.Provider>
   )
 }
