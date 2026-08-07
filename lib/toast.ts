@@ -5,5 +5,5 @@
 // 사용자는 토스트가 떴다는 것을 인지하고 시선을 옮긴 뒤에야 읽기 시작하므로,
 // 문장이 길수록 인지 시간 위에 읽는 시간이 더 쌓인다.
 
-export const TOAST_MS = 4000        // 한 문장 안내
+export const TOAST_MS = 3000        // 한 문장 안내
 export const TOAST_LONG_MS = 6000   // 두 문장 이상
