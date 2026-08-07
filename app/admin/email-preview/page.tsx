@@ -23,6 +23,10 @@ export default function EmailPreviewPage() {
   const [ready, setReady] = useState(false)
   const [emailLocale, setEmailLocale] = useState<EmailLocale>('ko')
   const [type, setType] = useState<EmailType>('digest')
+  // 광고는 무료 사용자에게만 붙는다 — 실제 발송물과 같게 보려면 플랜을 골라야 한다.
+  const [plan, setPlan] = useState<'free' | 'pro'>('free')
+  // 푸터의 수신 주소 줄은 email 인자가 있을 때만 렌더된다 → 로그인한 관리자 주소를 넘긴다.
+  const [adminEmail, setAdminEmail] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     let cancelled = false
@@ -35,6 +39,7 @@ export default function EmailPreviewPage() {
         router.push('/dashboard')
         return
       }
+      setAdminEmail(data.user.email ?? undefined)
       setReady(true)
     })
     return () => { cancelled = true }
@@ -45,8 +50,8 @@ export default function EmailPreviewPage() {
   }
 
   const html =
-    type === 'digest' ? buildDigestHtml(dummyDigestItems(emailLocale), 'Daily Video Digest', emailLocale)
-      : type === 'breaking' ? buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Video Digest', emailLocale)
+    type === 'digest' ? buildDigestHtml(dummyDigestItems(emailLocale), 'Daily Video Digest', emailLocale, adminEmail, plan === 'pro')
+      : type === 'breaking' ? buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Video Digest', emailLocale, adminEmail)
         : type === 'welcome' ? buildWelcomeHtml(emailLocale)
           : buildErrorPreviewHtml(emailLocale)
 
@@ -73,7 +78,7 @@ export default function EmailPreviewPage() {
         {/* 컨트롤 */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ display: 'inline-flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
-            {(['ko', 'en'] as const).map(l => (
+            {(['ko', 'en', 'zh', 'ja'] as const).map(l => (
               <button key={l} onClick={() => setEmailLocale(l)} style={segBtn(emailLocale === l)}>
                 {l.toUpperCase()}
               </button>
@@ -86,6 +91,16 @@ export default function EmailPreviewPage() {
               </button>
             ))}
           </div>
+          {/* 플랜 토글 — 다이제스트에만 영향(광고 슬롯). 다른 메일엔 광고가 없어 숨긴다. */}
+          {type === 'digest' && (
+            <div style={{ display: 'inline-flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
+              {(['free', 'pro'] as const).map(p => (
+                <button key={p} onClick={() => setPlan(p)} style={segBtn(plan === p)}>
+                  {p === 'pro' ? 'Pro' : 'Free'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 미리보기 iframe */}

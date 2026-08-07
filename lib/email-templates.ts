@@ -131,16 +131,6 @@ function shell(title: string, locale: EmailLocale, inner: string, footer: string
 </html>`
 }
 
-// AI 생성물 고지 — 요약이 실린 메일(다이제스트·속보)의 본문 맨 끝, 푸터 바로 위.
-// ★ footerBlock 안에 넣지 말 것: 환영·체험 종료 등 요약이 없는 메일에도 붙어 엉뚱해진다.
-// 톤은 기존 푸터와 동일(11px 회색). 메일이라 CSS 변수 불가 → 고정 팔레트.
-function aiNoticeBlock(locale: EmailLocale): string {
-  return `
-    <div style="font-size:11px;color:#8a8a8e;line-height:1.6;margin-top:16px;padding:0 4px;">
-      ${escapeHtml(et(locale, 'digest.aiNotice'))}
-    </div>`
-}
-
 function footerBlock(locale: EmailLocale, email?: string): string {
   // Gmail이 매일 동일한 푸터를 "반복 내용"으로 접는 것을 완화하기 위해 발송 날짜를 넣어 내용을 변화시킨다.
   // 새 시간 로직을 만들지 않고 @/lib/time의 nowUtc + 기존 formatDate(KST·locale 매핑)를 재사용.
@@ -160,7 +150,9 @@ function footerBlock(locale: EmailLocale, email?: string): string {
 }
 
 // summaryBasis(한국어 라벨)를 분석 소스 표기 번역 키로 매핑. 매칭 안 되면 null(표기 생략).
-function basisTranslationKey(summaryBasis?: string): string | null {
+// 이 문구가 AI 부정확 고지를 겸하므로 텔레그램도 같은 매핑을 쓴다(문구가 갈리면 안 됨).
+// '제목' 분기는 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
+export function basisTranslationKey(summaryBasis?: string): string | null {
   if (!summaryBasis) return null
   if (summaryBasis.includes('자막')) return 'digest.basisTranscript'
   if (summaryBasis.includes('설명')) return 'digest.basisDescription'
@@ -309,9 +301,7 @@ export function buildDigestHtml(
   // 광고 로테이션: KST 날짜의 일(day of month)이 짝수면 Pro 배너, 홀수면 제휴 슬롯.
   const kstDay = toZoned(nowUtc()).day
   const ad = isPro ? '' : (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay)))
-  // 영상이 하나도 없는 날("오늘은 새 영상이 없어요")엔 요약이 없으므로 고지도 붙이지 않는다.
-  const aiNotice = items.length > 0 ? aiNoticeBlock(locale) : ''
-  return shell(et(locale, 'digest.subject', { date }), locale, header + body + ad + aiNotice, footerBlock(locale, email))
+  return shell(et(locale, 'digest.subject', { date }), locale, header + body + ad, footerBlock(locale, email))
 }
 
 export function buildBreakingHtml(
@@ -330,7 +320,7 @@ export function buildBreakingHtml(
   return shell(
     et(locale, 'breaking.subject', { title: item.video.title }),
     locale,
-    header + digestCard(item, locale) + aiNoticeBlock(locale),
+    header + digestCard(item, locale),
     footerBlock(locale, email),
   )
 }
@@ -422,7 +412,10 @@ export function buildErrorPreviewHtml(locale: EmailLocale = 'ko'): string {
   return shell(et(locale, 'error.subject'), locale, inner, footerBlock(locale))
 }
 
-// 미리보기용 더미 데이터
+// 미리보기용 더미 데이터.
+// ★ 관리자 미리보기 화면 전용 — 실제 발송 경로(mailer.ts·cron)는 이 함수를 쓰지 않는다.
+// summaryBasis는 실제 발송물과 같은 근거 표기(= AI 고지)를 확인하려고 넣는다.
+// 자막/설명 두 종류 + 실패 항목을 섞어 카드 3종을 한 화면에서 볼 수 있게 한다.
 export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
   if (locale === 'en') {
     return [
@@ -433,6 +426,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
           summary: 'The Federal Reserve kept interest rates unchanged, citing persistent inflation and a resilient labor market.',
           keyPoints: ['Rates unchanged at 5.25–5.50%', 'Inflation still above the 2% target', 'Two cuts projected later this year'],
           timeline: [{ time: '00:42', content: 'Opening statement from the chair' }, { time: '12:30', content: 'Q&A on the rate path' }],
+          summaryBasis: '자동 생성 자막 기반 요약',
         },
       },
       {
@@ -442,6 +436,16 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
           summary: 'A blind comparison of flagship phone cameras, ranking low-light and color accuracy across eight devices.',
           keyPoints: ['Low-light winner surprised everyone', 'Color science still varies widely'],
           timeline: [],
+          summaryBasis: '영상 설명 기반 요약',
+        },
+      },
+      {
+        // 요약 실패 카드 — 근거 표기(AI 고지)가 붙지 않는 것도 함께 확인하는 자리.
+        channel: 'BBC News', category: 'World', emoji: '📰',
+        video: { videoId: 'sample00004', title: 'Live: Parliament Debates the Budget', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 10800_000).toISOString() },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'no_source',
         },
       },
     ]
@@ -454,6 +458,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
         summary: '양국 정상이 통화에서 관세 인하 가능성을 논의하며 무역 갈등 완화 분위기가 형성됐습니다.',
         keyPoints: ['관세 단계적 인하 검토', '추가 실무 협상 일정 합의', '시장은 즉시 긍정 반응'],
         timeline: [{ time: '00:30', content: '통화 배경 설명' }, { time: '05:10', content: '주요 합의 내용 정리' }],
+        summaryBasis: '자동 생성 자막 기반 요약',
       },
     },
     {
@@ -463,6 +468,16 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
         summary: '메모리 반도체 가격 흐름과 재고 지표를 근거로 사이클 저점 가능성을 진단했습니다.',
         keyPoints: ['재고 조정 막바지 국면', '하반기 수요 회복 기대'],
         timeline: [],
+        summaryBasis: '영상 설명 기반 요약',
+      },
+    },
+    {
+      // 요약 실패 카드 — 근거 표기(AI 고지)가 붙지 않는 것도 함께 확인하는 자리.
+      channel: '연합뉴스TV', category: '사회', emoji: '📰',
+      video: { videoId: 'sample00004', title: '국회 예산안 심사 생중계', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 10800_000).toISOString() },
+      summary: {
+        summary: '', keyPoints: [], timeline: [],
+        failReason: 'no_source',
       },
     },
   ]
@@ -477,6 +492,7 @@ export function dummyBreakingItem(locale: EmailLocale): EmailDigestItem {
         summary: 'Equity markets fell sharply after stronger-than-expected inflation data renewed rate-hike concerns.',
         keyPoints: ['Index down 3% intraday', 'Bond yields spiked'],
         timeline: [],
+        summaryBasis: '자동 생성 자막 기반 요약',
       },
     }
   }
@@ -487,6 +503,7 @@ export function dummyBreakingItem(locale: EmailLocale): EmailDigestItem {
       summary: '삼성전자가 시장 예상을 웃도는 분기 실적을 발표하며 주가가 장중 강세를 보였습니다.',
       keyPoints: ['영업이익 컨센서스 상회', '반도체 부문 회복 뚜렷'],
       timeline: [],
+      summaryBasis: '자동 생성 자막 기반 요약',
     },
   }
 }

@@ -127,13 +127,16 @@ function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | 
   return null
 }
 
-// 요약 기반(자막/설명) 표기 키 — 이메일과 동일하게 카드 맨 아래에 둔다(성공 케이스 전용).
+// 요약 기반(자막/설명/제목) 표기 키 — 이메일과 동일하게 카드 맨 아래에 둔다(성공 케이스 전용).
+// 이 문구가 AI 부정확 고지를 겸하므로 화면 맨 아래에 별도 고지를 또 넣지 않는다.
 // 실패·대기 항목은 상단 사유 라벨이 설명하므로 표시하지 않는다.
-function summaryBasisKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
+// '제목' 분기는 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
+function summaryBasisKeys(d: Digest): { labelKey: string } | null {
   if (d.fail_reason) return null
   const basis = d.summary_basis ?? ''
   if (basis.includes('자막')) return { labelKey: 'history.basisTranscriptLabel' }
-  if (basis.includes('설명')) return { labelKey: 'history.basisDescriptionLabel', noteKey: 'history.basisDescriptionNote' }
+  if (basis.includes('설명')) return { labelKey: 'history.basisDescriptionLabel' }
+  if (basis.includes('제목')) return { labelKey: 'history.basisTitleLabel' }
   return null
 }
 
@@ -2837,32 +2840,16 @@ export default function Dashboard() {
                                 )}
                               </div>
 
-                              {/* 요약 기반 표기 — 이메일과 동일하게 카드 맨 아래(영상 보기 버튼 아래) */}
+                              {/* 요약 기반 표기(= AI 부정확 고지) — 이메일과 동일하게 카드 맨 아래(영상 보기 버튼 아래) */}
                               {(() => {
                                 const basis = summaryBasisKeys(digest)
                                 if (!basis) return null
                                 return (
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 14 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 14, lineHeight: 1.6 }}>
                                     {t(basis.labelKey)}
-                                    {basis.noteKey && (
-                                      <div style={{ lineHeight: 1.6, marginTop: 3 }}>
-                                        {t(basis.noteKey)}
-                                      </div>
-                                    )}
                                   </div>
                                 )
                               })()}
-
-                              {/* AI 생성물 고지 — 내용 맨 아래. 메일·텔레그램·공유페이지와 같은 문장.
-                                  실패·대기 항목은 보여줄 요약이 없으므로 생략한다. */}
-                              {!digest.fail_reason && (
-                                <div style={{
-                                  fontSize: 11, color: 'var(--text-muted)',
-                                  marginTop: 12, lineHeight: 1.6,
-                                }}>
-                                  {t('common.aiNotice')}
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>

@@ -97,6 +97,17 @@ const sectionLabelStyle: CSSProperties = {
   color: 'var(--text-muted)', marginBottom: 9,
 }
 
+// summary_basis(한국어 라벨) → 근거 표기 문구. 이 문구가 AI 부정확 고지를 겸한다.
+// 판정 기준은 메일(basisTranslationKey)·열람기록(summaryBasisKeys)과 동일하게 맞출 것.
+// '제목' 분기는 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
+function summaryBasisText(summaryBasis?: string | null): string | null {
+  const basis = summaryBasis ?? ''
+  if (basis.includes('자막')) return '자막을 기반으로 분석한 AI 요약입니다. 사실과 수치가 다를 수 있습니다.'
+  if (basis.includes('설명')) return '영상 설명을 기반으로 분석한 AI 요약입니다. 자막이 제공되지 않아 실제 내용과 차이가 클 수 있습니다.'
+  if (basis.includes('제목')) return '영상 제목을 기반으로 분석한 AI 요약입니다. 실제 내용과 차이가 클 수 있습니다.'
+  return null
+}
+
 // 메모 배너 라벨 — 아이콘과 함께 한 줄로.
 const bannerLabelStyle: CSSProperties = {
   ...sectionLabelStyle,
@@ -294,6 +305,9 @@ export default async function SharePage({ params }: PageProps) {
     active: activeTlTimes.has(it.time),
   }))
   const watchUrl = `https://youtube.com/watch?v=${video.videoId}`
+  // 요약 근거 문구 — 메일(digest.basis*)·열람기록(history.basis*)과 같은 한국어 문장.
+  // 이 페이지는 서버 컴포넌트 + 한국어 고정이라 t() 없이 그대로 둔다.
+  const basisText = summaryBasisText(summary?.summaryBasis)
 
   return (
     <Shell>
@@ -385,22 +399,23 @@ export default async function SharePage({ params }: PageProps) {
             이 영상의 요약을 불러올 수 없어요. 위 영상에서 직접 확인해 주세요.
           </div>
         )}
+
+        {/* 요약 근거 표기(= AI 부정확 고지) — 메일·열람기록과 같은 자리(요약 맨 아래).
+            비회원이 보는 화면이라 약관 동의가 없어 반드시 필요하다.
+            이 페이지는 한국어 고정 문구 방식이라 여기서도 한국어로 둔다(다른 채널과 같은 문장). */}
+        {basisText && (
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 14 }}>
+            {basisText}
+          </div>
+        )}
       </div>
 
       {/* (5) 하단 가입 CTA */}
       <SignupCta token={token} />
 
-      {/* (6) 푸터 — AI 고지(별도 줄) + 만료 안내(좌) · 문제 신고(우) 한 줄.
-             AI 고지는 비회원이 보는 화면이라 약관 동의가 없어 특히 필요하다.
-             이 페이지는 한국어 고정 문구를 쓰므로 여기서도 한국어로 둔다(다른 채널과 같은 문장). */}
+      {/* (6) 푸터 — 만료 안내(좌) + 문제 신고(우) 한 줄. 좁은 화면에선 줄바꿈 */}
       <div style={{
         paddingTop: 2,
-        fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.6,
-      }}>
-        이 요약은 AI가 자동 생성했습니다. 사실과 수치가 원본과 다를 수 있으니 중요한 내용은 영상에서 확인해 주세요.
-      </div>
-      <div style={{
-        paddingTop: 6,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexWrap: 'wrap', gap: 8,
       }}>

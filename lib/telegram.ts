@@ -7,6 +7,8 @@ import { VideoItem } from './youtube'
 import { et, type EmailLocale } from './i18n/email-translations'
 import { youtubeDeepLink } from '@/lib/video-time'
 import { boldMarkersToHtml, splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
+// 요약 근거 표기(= AI 부정확 고지)는 메일과 같은 매핑·문구를 쓴다. 채널마다 갈리면 안 된다.
+import { basisTranslationKey } from '@/lib/email-templates'
 
 // 발송 결과 로그용 (서버 전용 service client) — mailer 를 건드리지 않기 위해 별도 lazy 생성.
 let _supabase: SupabaseClient | null = null
@@ -175,6 +177,12 @@ function itemLines(item: DigestItem, lc: EmailLocale): string[] {
       )
     }
   }
+  // 요약 근거 표기(= AI 부정확 고지) — 메일 카드와 같은 자리(영상 블록 끝).
+  // 실패·대기 항목은 보여줄 요약이 없으므로 생략(메일 digestCard와 동일 기준).
+  const basisKey = basisTranslationKey(item.summary.summaryBasis)
+  if (basisKey && !item.summary.failReason) {
+    lines.push(escapeHtml(et(lc, basisKey)))
+  }
   return lines
 }
 
@@ -206,8 +214,6 @@ export async function sendDigestTelegram(
     lines.push('')
   }
 
-  // AI 생성물 고지 — 메일·열람기록·공유페이지와 같은 문장(digest.aiNotice)을 맨 끝에.
-  lines.push(escapeHtml(et(lc, 'digest.aiNotice')))
   lines.push(escapeHtml(et(lc, 'digest.footer')))
 
   try {
@@ -251,9 +257,12 @@ export async function sendBreakingTelegram(
       lines.push(keyPointLine(p))
     }
   }
-  // AI 생성물 고지 — 다이제스트와 같은 문장을 맨 끝에.
-  lines.push('')
-  lines.push(escapeHtml(et(lc, 'digest.aiNotice')))
+  // 요약 근거 표기(= AI 부정확 고지) — 메일 속보 카드와 같은 자리, 요약 끝.
+  const basisKey = basisTranslationKey(item.summary.summaryBasis)
+  if (basisKey && !item.summary.failReason) {
+    lines.push('')
+    lines.push(escapeHtml(et(lc, basisKey)))
+  }
 
   try {
     // 속보는 단일 영상이므로 미리보기 켬

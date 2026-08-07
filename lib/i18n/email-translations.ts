@@ -30,9 +30,12 @@ export const emailTranslations = {
       failPending: '요약 준비 중',
       failLive: '라이브 영상 — 요약 제외',
       proOnly: '이 영상은 자막이 없어 Pro 플랜에서 요약을 제공해요.',
-      basisTranscript: '자막을 기반으로 분석한 요약입니다',
-      basisDescription: '영상 설명을 기반으로 분석한 요약입니다',
-      basisTitle: '제목을 기반으로 한 간략 요약입니다',
+      // 요약 근거 표기 — AI 생성물이고 부정확할 수 있다는 고지를 여기에 흡수한다.
+      // 요약마다 붙으므로 본문 맨 끝에 별도 고지를 또 넣지 말 것(중복).
+      basisTranscript: '자막을 기반으로 분석한 AI 요약입니다. 사실과 수치가 다를 수 있습니다.',
+      basisDescription: '영상 설명을 기반으로 분석한 AI 요약입니다. 자막이 제공되지 않아 실제 내용과 차이가 클 수 있습니다.',
+      // 제목 기반은 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
+      basisTitle: '영상 제목을 기반으로 분석한 AI 요약입니다. 실제 내용과 차이가 클 수 있습니다.',
       adLabel: '광고',
       adTitle: '광고 없이, 채널 20개까지 — Pro',
       adDesc: '자막 없는 영상 요약과 실시간 속보까지. 월 ₩4,900',
@@ -41,9 +44,6 @@ export const emailTranslations = {
       partnerTitle: '쿠팡 오늘의 특가 — 골드박스',
       partnerDesc: '매일 바뀌는 최대 할인 상품 모음',
       partnerCta: '특가 보기',
-      // AI 생성물 고지 — 다이제스트·속보에만 붙인다(환영·체험 종료 메일에는 붙지 않음).
-      // 4채널(메일·텔레그램·열람기록·공유페이지)이 같은 문장을 쓴다.
-      aiNotice: '이 요약은 AI가 자동 생성했습니다. 사실과 수치가 원본과 다를 수 있으니 중요한 내용은 영상에서 확인해 주세요.',
     },
     breaking: {
       subject: '[속보] {title}',
@@ -129,9 +129,9 @@ export const emailTranslations = {
       failPending: 'Summary in progress',
       failLive: 'Live video — summary not provided',
       proOnly: 'This video has no captions — its summary is available on the Pro plan.',
-      basisTranscript: 'Summary based on the video transcript',
-      basisDescription: 'Summary based on the video description',
-      basisTitle: 'Brief summary based on the title only',
+      basisTranscript: 'AI summary based on the video transcript. Facts and figures may differ.',
+      basisDescription: 'AI summary based on the video description. No transcript was available, so it may differ significantly from the actual content.',
+      basisTitle: 'AI summary based on the video title. It may differ significantly from the actual content.',
       adLabel: 'AD',
       adTitle: 'Ad-free, up to 20 channels — Pro',
       adDesc: 'Summaries for videos without captions, plus breaking alerts. ₩4,900/mo',
@@ -140,7 +140,6 @@ export const emailTranslations = {
       partnerTitle: "Coupang Today's Deals — Gold Box",
       partnerDesc: 'Top discounted picks, refreshed daily',
       partnerCta: 'View Deals',
-      aiNotice: 'This summary was generated automatically by AI. Facts and figures may differ from the original, so please check the video for anything important.',
     },
     breaking: {
       subject: '[Breaking] {title}',
@@ -226,9 +225,9 @@ export const emailTranslations = {
       failPending: '摘要准备中',
       failLive: '直播视频 — 不提供摘要',
       proOnly: '该视频没有字幕，摘要在 Pro 计划中提供。',
-      basisTranscript: '基于字幕分析的摘要',
-      basisDescription: '基于视频说明分析的摘要',
-      basisTitle: '仅基于标题的简要摘要',
+      basisTranscript: '基于字幕分析的 AI 摘要，事实与数字可能有出入。',
+      basisDescription: '基于视频说明分析的 AI 摘要。该视频没有字幕，可能与实际内容差异较大。',
+      basisTitle: '基于视频标题分析的 AI 摘要，可能与实际内容差异较大。',
       adLabel: '广告',
       adTitle: '无广告，最多可订阅 20 个频道 — Pro',
       adDesc: '无字幕视频的摘要与实时快讯一应俱全。每月 ₩4,900',
@@ -237,7 +236,6 @@ export const emailTranslations = {
       partnerTitle: 'Coupang 今日特价 — Gold Box',
       partnerDesc: '每日更新的超值折扣商品精选',
       partnerCta: '查看特价',
-      aiNotice: '本摘要由 AI 自动生成，事实与数字可能与原视频有出入，重要内容请以视频为准。',
     },
     breaking: {
       subject: '[快讯] {title}',
@@ -323,9 +321,9 @@ export const emailTranslations = {
       failPending: '要約を準備中です',
       failLive: 'ライブ動画 — 要約対象外',
       proOnly: 'この動画には字幕がないため、要約は Pro プランで提供しています。',
-      basisTranscript: '字幕をもとに分析した要約です',
-      basisDescription: '動画の説明をもとに分析した要約です',
-      basisTitle: 'タイトルをもとにした簡単な要約です',
+      basisTranscript: '字幕をもとに分析したAI要約です。事実や数値が異なる場合があります。',
+      basisDescription: '動画の説明をもとに分析したAI要約です。字幕が提供されていないため、実際の内容と大きく異なる場合があります。',
+      basisTitle: '動画のタイトルをもとに分析したAI要約です。実際の内容と大きく異なる場合があります。',
       adLabel: '広告',
       adTitle: '広告なし、チャンネル20個まで — Pro',
       adDesc: '字幕なし動画の要約もリアルタイム速報も。月額 ₩4,900',
@@ -334,7 +332,6 @@ export const emailTranslations = {
       partnerTitle: 'クーパン本日の特価 — ゴールドボックス',
       partnerDesc: '毎日変わる最大割引商品のまとめ',
       partnerCta: '特価を見る',
-      aiNotice: 'この要約はAIが自動生成しました。事実や数値が原本と異なる場合がありますので、重要な内容は動画でご確認ください。',
     },
     breaking: {
       subject: '[速報] {title}',
