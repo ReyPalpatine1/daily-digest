@@ -323,7 +323,9 @@ export default function HelpPopup({ t, isMobile, initialDontShow, isPro = false,
   const lockFree = !isPro
 
   const steps: { preview: React.ReactNode; key: string; items: { text: string; locked?: boolean }[] }[] = [
-    { preview: <PreviewChannels t={t} />, key: 'step1', items: [{ text: t('help.step1_1') }, { text: t('help.step1_2') }, { text: t('help.step1_3') }] },
+    // step1_4(요약 제한 안내)는 "어떤 영상이 요약되는가"라 채널을 고를 때 필요한 정보다.
+    // 플랜과 무관한 일반 제약이므로 잠금 뱃지는 붙이지 않는다(상세는 /pricing FAQ 담당).
+    { preview: <PreviewChannels t={t} />, key: 'step1', items: [{ text: t('help.step1_1') }, { text: t('help.step1_2') }, { text: t('help.step1_3') }, { text: t('help.step1_4') }] },
     { preview: <PreviewSchedule t={t} />, key: 'step2', items: [{ text: t('help.step2_1') }, { text: t('help.step2_2'), locked: lockFree }, { text: t('help.step2_3'), locked: lockFree }] },
     { preview: <PreviewHistory t={t} />, key: 'step3', items: [{ text: t('help.step3_1') }, { text: t('help.step3_2') }, { text: t('help.step3_3') }] },
     { preview: <PreviewShare t={t} />, key: 'step4', items: [{ text: t('help.step4_1') }, { text: t('help.step4_2') }, { text: t('help.step4_3') }] },

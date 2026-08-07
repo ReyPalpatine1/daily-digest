@@ -257,10 +257,10 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           // 무시
         }
       } else {
-        setErrorMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해 주세요.')
+        setErrorMsg('링크 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.')
       }
     } catch {
-      setErrorMsg('링크 생성에 실패했어요. 잠시 후 다시 시도해 주세요.')
+      setErrorMsg('링크 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setCreating(false)
     }
@@ -295,7 +295,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
   const sendKakao = () => {
     if (!shareUrl) return
     if (!kakaoReady) {
-      showKakaoNotice('카카오톡 공유를 준비하지 못했어요. 링크를 복사해 붙여넣어 주세요.')
+      showKakaoNotice('카카오톡 공유를 준비하지 못했습니다. 링크를 복사해 붙여넣어 주세요.')
       return
     }
     void kakaoSend.run(async () => {
@@ -315,7 +315,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           buttons: [{ title: '요약 더보기', link }],
         })
       } catch {
-        showKakaoNotice('카카오톡 공유에 실패했어요. 링크를 복사해 붙여넣어 주세요.')
+        showKakaoNotice('카카오톡 공유에 실패했습니다. 링크를 복사해 붙여넣어 주세요.')
       }
     })
   }
@@ -330,7 +330,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
         await navigator.share({ title, ...(desc ? { text: desc } : {}), url: shareUrl })
       } catch (e) {
         if ((e as { name?: string } | null)?.name === 'AbortError') return
-        showKakaoNotice('공유를 열지 못했어요. 링크를 복사해 주세요.')
+        showKakaoNotice('공유를 열지 못했습니다. 링크를 복사해 주세요.')
       }
     })
   }

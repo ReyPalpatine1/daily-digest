@@ -401,7 +401,7 @@ export default function Dashboard() {
     // 보관 기간 판정은 하지 않는다 — 서버가 보관 범위 안의 기록만 주므로 digests에 있으면 볼 수 있는 기록이다.
     const target = digests.find(d => d.video_id === intent.videoId && !d.fail_reason)
     if (!target) {
-      showPreviewToast('그 요약을 열람 기록에서 찾지 못했어요. 보관 기간이 지났을 수 있습니다.')
+      showPreviewToast('그 요약을 열람 기록에서 찾지 못했습니다. 보관 기간이 지났을 수 있습니다.')
       return
     }
     setActiveTab('history')
