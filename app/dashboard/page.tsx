@@ -131,13 +131,13 @@ function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | 
 // 요약 기반(자막/설명/제목) 표기 키 — 이메일과 동일하게 카드 맨 아래에 둔다(성공 케이스 전용).
 // 이 문구가 AI 부정확 고지를 겸하므로 화면 맨 아래에 별도 고지를 또 넣지 않는다.
 // 실패·대기 항목은 상단 사유 라벨이 설명하므로 표시하지 않는다.
-// '제목' 분기는 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
+// 폐지된 '제목 기반 요약'을 비롯해 알 수 없는 값은 null → 라벨을 아예 렌더하지 않는다
+// (키 이름이나 빈 문자열이 노출되면 안 됨). lib/summary-basis.ts와 같은 원리.
 function summaryBasisKeys(d: Digest): { labelKey: string } | null {
   if (d.fail_reason) return null
   const basis = d.summary_basis ?? ''
   if (basis.includes('자막')) return { labelKey: 'history.basisTranscriptLabel' }
   if (basis.includes('설명')) return { labelKey: 'history.basisDescriptionLabel' }
-  if (basis.includes('제목')) return { labelKey: 'history.basisTitleLabel' }
   return null
 }
 

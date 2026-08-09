@@ -151,12 +151,12 @@ function footerBlock(locale: EmailLocale, email?: string): string {
 
 // summaryBasis(한국어 라벨)를 분석 소스 표기 번역 키로 매핑. 매칭 안 되면 null(표기 생략).
 // 이 문구가 AI 부정확 고지를 겸하므로 텔레그램도 같은 매핑을 쓴다(문구가 갈리면 안 됨).
-// '제목' 분기는 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
+// 폐지된 '제목 기반 요약'을 비롯해 알 수 없는 값은 null → 표기를 아예 렌더하지 않는다
+// (키 이름이나 빈 문자열이 노출되면 안 됨). lib/summary-basis.ts와 같은 원리.
 export function basisTranslationKey(summaryBasis?: string): string | null {
   if (!summaryBasis) return null
   if (summaryBasis.includes('자막')) return 'digest.basisTranscript'
   if (summaryBasis.includes('설명')) return 'digest.basisDescription'
-  if (summaryBasis.includes('제목')) return 'digest.basisTitle'
   return null
 }
 

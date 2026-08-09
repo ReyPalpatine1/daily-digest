@@ -99,12 +99,11 @@ const sectionLabelStyle: CSSProperties = {
 
 // summary_basis(한국어 라벨) → 근거 표기 문구. 이 문구가 AI 부정확 고지를 겸한다.
 // 판정 기준은 메일(basisTranslationKey)·열람기록(summaryBasisKeys)과 동일하게 맞출 것.
-// '제목' 분기는 폐지된 요약 방식 — 과거 데이터 호환용으로만 남긴다.
+// 폐지된 '제목 기반 요약'을 비롯해 알 수 없는 값은 null → 표기를 아예 렌더하지 않는다.
 function summaryBasisText(summaryBasis?: string | null): string | null {
   const basis = summaryBasis ?? ''
   if (basis.includes('자막')) return '자막을 기반으로 분석한 AI 요약입니다. 오류가 있을 수 있습니다.'
-  if (basis.includes('설명')) return '영상 설명을 기반으로 분석한 AI 요약입니다. 자막이 없어 실제 내용과 차이가 클 수 있습니다.'
-  if (basis.includes('제목')) return '영상 제목을 기반으로 분석한 AI 요약입니다. 실제 내용과 차이가 클 수 있습니다.'
+  if (basis.includes('설명')) return '영상 설명을 기반으로 분석한 AI 요약입니다. 자막이 없어 원문과 차이가 있을 수 있습니다.'
   return null
 }
 
