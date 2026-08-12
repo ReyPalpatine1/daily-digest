@@ -24,7 +24,7 @@ export type EmailDigestItem = {
     timeline: { time: string; content: string }[]
     summaryBasis?: string
     errorInfo?: string
-    failReason?: string // no_source | temporary | pending | live | pro_only — 실패·대기·라이브·Pro 전용 항목 표기용
+    failReason?: string // no_source | temporary | pending | live | pro_only | transcript_failed — 실패·대기·라이브·Pro 전용·자막 확보 실패 항목 표기용
   }
 }
 
@@ -255,18 +255,21 @@ function adBlock(locale: EmailLocale): string {
 }
 
 // 제휴 광고 슬롯 — 쿠팡 파트너스 카테고리 배너(날짜 로테이션).
-// 고지 문구(확정형)는 라벨 바로 아래 — 본문과 동등한 크기로 확인하기 쉬운 위치에 둘 것(광고 표시 의무).
+// 배치 순서는 웹 광고 카드(components/AdCard.tsx)와 맞춘다: 라벨 → 배너 → 고지 문구.
+// ★ 고지 문구(확정형)의 font-size 11px / color #525252 는 낮추지 말 것 —
+//   공정위 추천·보증 심사지침상 경제적 이해관계 고지는 소비자가 쉽게 인식할 수 있어야 하는데,
+//   위치가 배너 아래라 인식성이 이미 다소 떨어진다. 문구도 확정형 그대로 유지.
 // 배너 링크는 /api/ad-click 경유 — 클릭 기록 후 제휴 링크(lib/ads.ts)로 302.
 // 배너 내용이 날마다 바뀌므로 고정 텍스트(제목/설명/CTA)는 두지 않는다.
-// img alt는 이미지 차단 환경에서 링크 텍스트 역할을 한다.
+// img alt는 이미지 차단 환경에서 링크 텍스트 역할을 한다(고지 문구는 텍스트라 항상 보인다).
 function partnerBlock(locale: EmailLocale, banner: PartnerBanner): string {
   return `
     <div style="padding:16px 20px;background:#fafafa;border-top:1px solid #f0f0f0;">
       <div style="font-size:10px;color:#a0a0a4;letter-spacing:0.5px;margin-bottom:8px;">${et(locale, 'digest.adLabel')}</div>
-      <div style="font-size:11px;color:#525252;line-height:1.6;margin-bottom:10px;">${et(locale, 'digest.partnerDisclosure')}</div>
       <a href="${APP_URL}/api/ad-click?slot=partner&amp;src=email&amp;dest=${banner.key}" target="_blank">
-        <img src="${banner.img}" alt="${et(locale, 'digest.partnerCta')}" width="728" height="90" style="display:block;width:100%;max-width:728px;height:auto;border:0;border-radius:6px;margin-bottom:0;" />
+        <img src="${banner.img}" alt="${et(locale, 'digest.partnerCta')}" width="728" height="90" style="display:block;width:100%;max-width:728px;height:auto;border:0;border-radius:6px;margin-bottom:8px;" />
       </a>
+      <div style="font-size:11px;color:#525252;line-height:1.6;margin-bottom:0;">${et(locale, 'digest.partnerDisclosure')}</div>
     </div>`
 }
 
@@ -419,13 +422,21 @@ export function buildErrorPreviewHtml(locale: EmailLocale = 'ko'): string {
 // 미리보기용 더미 데이터.
 // ★ 관리자 미리보기 화면 전용 — 실제 발송 경로(mailer.ts·cron)는 이 함수를 쓰지 않는다.
 // summaryBasis는 실제 발송물과 같은 근거 표기(= AI 고지)를 확인하려고 넣는다.
-// 자막/설명 두 종류 + 실패 항목을 섞어 카드 3종을 한 화면에서 볼 수 있게 한다.
+// 정상 카드 3종(자막/설명/자막 확보 실패)과 실패·대기·라이브·Pro 전용 카드를 모두 담아
+// 문구를 고칠 때 모든 상태를 한 화면에서 확인할 수 있게 한다.
+// ★ summaryBasis는 DB에 저장되는 한국어 문자열 그대로 둘 것 — 판정이 문자열 매칭이라
+//   번역하면 근거 표기 분기가 깨진다(제목·요약·핵심 포인트만 각 언어로 옮긴다).
+// 언어별 항목 구성(개수·상태 종류·videoId·발행 시각)은 동일하게 맞춘다.
+// sample00003은 dummyBreakingItem이 쓰므로 여기서는 건너뛴다.
 export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
+  // 카드마다 시간 표기가 다르게 보이도록 발행 시각을 벌려 둔다.
+  const ago = (hours: number) => new Date(Date.now() - hours * 3600_000).toISOString()
+
   if (locale === 'en') {
     return [
       {
         channel: 'Bloomberg', category: 'Economy', emoji: '📈',
-        video: { videoId: 'sample00001', title: 'Fed Holds Rates Steady, Signals Caution', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
+        video: { videoId: 'sample00001', title: 'Fed Holds Rates Steady, Signals Caution', url: 'https://youtube.com', publishedAt: ago(0) },
         summary: {
           summary: 'The Federal Reserve kept interest rates unchanged, citing persistent inflation and a resilient labor market.',
           keyPoints: ['Rates unchanged at 5.25–5.50%', 'Inflation still above the 2% target', 'Two cuts projected later this year'],
@@ -435,7 +446,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
       },
       {
         channel: 'Marques Brownlee', category: 'Tech', emoji: '🎬',
-        video: { videoId: 'sample00002', title: 'The Best Phone Cameras of 2026', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 7200_000).toISOString() },
+        video: { videoId: 'sample00002', title: 'The Best Phone Cameras of 2026', url: 'https://youtube.com', publishedAt: ago(2) },
         summary: {
           summary: 'A blind comparison of flagship phone cameras, ranking low-light and color accuracy across eight devices.',
           keyPoints: ['Low-light winner surprised everyone', 'Color science still varies widely'],
@@ -444,20 +455,254 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
         },
       },
       {
-        // 요약 실패 카드 — 근거 표기(AI 고지)가 붙지 않는 것도 함께 확인하는 자리.
+        // 요약 실패 카드 — 근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
         channel: 'BBC News', category: 'World', emoji: '📰',
-        video: { videoId: 'sample00004', title: 'Live: Parliament Debates the Budget', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 10800_000).toISOString() },
+        video: { videoId: 'sample00004', title: 'Live: Parliament Debates the Budget', url: 'https://youtube.com', publishedAt: ago(3) },
         summary: {
           summary: '', keyPoints: [], timeline: [],
           failReason: 'no_source',
         },
       },
+      {
+        // 자막 확보 실패(크레딧 소진·API 오류)로 설명 대체된 요약 — Pro가 보는 화면.
+        // 요약 본문은 그대로 나가고 근거 표기만 '자막을 불러오지 못해…'로 바뀌는지 확인하는 자리.
+        channel: 'CNBC', category: 'Markets', emoji: '📊',
+        video: { videoId: 'sample00005', title: 'Dollar Surges Past a Key Level — What Changes', url: 'https://youtube.com', publishedAt: ago(4) },
+        summary: {
+          summary: 'A rundown of what is driving the dollar rally and how exporters and importers are affected.',
+          keyPoints: ['Rate differentials keep widening', 'Import costs are climbing'],
+          timeline: [],
+          summaryBasis: SUMMARY_BASIS_TRANSCRIPT_FAILED,
+        },
+      },
+      // ↓ 실패·대기·라이브·Pro 전용 카드 — 위 no_source 카드와 마찬가지로
+      //   근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
+      {
+        // 같은 자막 확보 실패지만 무료 사용자에게는 요약을 숨기고 사유만 표기한다.
+        channel: 'Lex Fridman', category: 'Tech', emoji: '🎙',
+        video: { videoId: 'sample00006', title: 'Semiconductor Outlook for the Second Half', url: 'https://youtube.com', publishedAt: ago(5) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'transcript_failed',
+        },
+      },
+      {
+        channel: 'Graham Stephan', category: 'Real Estate', emoji: '🏠',
+        video: { videoId: 'sample00007', title: 'Zoning Reform: Which Neighborhoods Actually Benefit', url: 'https://youtube.com', publishedAt: ago(6) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'pro_only',
+        },
+      },
+      {
+        channel: 'Sky News', category: 'Society', emoji: '📺',
+        video: { videoId: 'sample00008', title: 'Heavy Snow Warnings Across the Country', url: 'https://youtube.com', publishedAt: ago(9) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'pending',
+        },
+      },
+      {
+        channel: 'CNN', category: 'Politics', emoji: '🏛',
+        video: { videoId: 'sample00009', title: 'Budget Talks Enter the Final Stretch', url: 'https://youtube.com', publishedAt: ago(12) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'temporary',
+        },
+      },
+      {
+        channel: 'C-SPAN', category: 'Politics', emoji: '🔴',
+        video: { videoId: 'sample00010', title: 'LIVE: Oversight Hearing in Session', url: 'https://youtube.com', publishedAt: ago(17) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'live',
+        },
+      },
     ]
   }
+
+  if (locale === 'zh') {
+    return [
+      {
+        channel: '财新', category: '地缘政治', emoji: '📡',
+        video: { videoId: 'sample00001', title: '中美元首通话，贸易紧张出现缓和信号', url: 'https://youtube.com', publishedAt: ago(0) },
+        summary: {
+          summary: '两国元首在通话中讨论了下调关税的可能性，贸易摩擦出现缓和氛围。',
+          keyPoints: ['考虑分阶段下调关税', '就后续磋商日程达成一致', '市场立即作出积极反应'],
+          timeline: [{ time: '00:30', content: '通话背景说明' }, { time: '05:10', content: '主要共识梳理' }],
+          summaryBasis: '자동 생성 자막 기반 요약',
+        },
+      },
+      {
+        channel: '半导体观察', category: '经济', emoji: '💰',
+        video: { videoId: 'sample00002', title: '半导体周期，现在是底部吗？', url: 'https://youtube.com', publishedAt: ago(2) },
+        summary: {
+          summary: '根据存储芯片的价格走势和库存指标，判断周期见底的可能性。',
+          keyPoints: ['库存调整进入尾声', '预计下半年需求回暖'],
+          timeline: [],
+          summaryBasis: '영상 설명 기반 요약',
+        },
+      },
+      {
+        // 요약 실패 카드 — 근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
+        channel: '新华社', category: '社会', emoji: '📰',
+        video: { videoId: 'sample00004', title: '国会预算案审议现场直播', url: 'https://youtube.com', publishedAt: ago(3) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'no_source',
+        },
+      },
+      {
+        // 자막 확보 실패(크레딧 소진·API 오류)로 설명 대체된 요약 — Pro가 보는 화면.
+        // 요약 본문은 그대로 나가고 근거 표기만 '자막을 불러오지 못해…'로 바뀌는지 확인하는 자리.
+        channel: '第一财经', category: '经济', emoji: '📊',
+        video: { videoId: 'sample00005', title: '汇率突破关键点位，会带来什么变化', url: 'https://youtube.com', publishedAt: ago(4) },
+        summary: {
+          summary: '梳理了汇率急升的背景，以及对进出口企业的影响。',
+          keyPoints: ['美元走强与利差扩大', '进口物价上行压力'],
+          timeline: [],
+          summaryBasis: SUMMARY_BASIS_TRANSCRIPT_FAILED,
+        },
+      },
+      // ↓ 실패·대기·라이브·Pro 전용 카드 — 위 no_source 카드와 마찬가지로
+      //   근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
+      {
+        // 같은 자막 확보 실패지만 무료 사용자에게는 요약을 숨기고 사유만 표기한다.
+        channel: '科技早知道', category: '经济', emoji: '🎙',
+        video: { videoId: 'sample00006', title: '半导体行情检视 — 下半年展望', url: 'https://youtube.com', publishedAt: ago(5) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'transcript_failed',
+        },
+      },
+      {
+        channel: '房产观察', category: '房产', emoji: '🏠',
+        video: { videoId: 'sample00007', title: '重建规制放宽，实际受益的小区有哪些', url: 'https://youtube.com', publishedAt: ago(6) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'pro_only',
+        },
+      },
+      {
+        channel: '央视新闻', category: '社会', emoji: '📺',
+        video: { videoId: 'sample00008', title: '全国发布大雪预警，早高峰交通情况', url: 'https://youtube.com', publishedAt: ago(9) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'pending',
+        },
+      },
+      {
+        channel: '凤凰卫视', category: '政治', emoji: '🏛',
+        video: { videoId: 'sample00009', title: '朝野预算谈判进入最后阶段', url: 'https://youtube.com', publishedAt: ago(12) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'temporary',
+        },
+      },
+      {
+        channel: '直播中国', category: '社会', emoji: '🔴',
+        video: { videoId: 'sample00010', title: '【直播】国政监查现场', url: 'https://youtube.com', publishedAt: ago(17) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'live',
+        },
+      },
+    ]
+  }
+
+  if (locale === 'ja') {
+    return [
+      {
+        channel: 'テレ東BIZ', category: '地政学', emoji: '📡',
+        video: { videoId: 'sample00001', title: '米中首脳の電話会談、貿易摩擦の緩和シグナル', url: 'https://youtube.com', publishedAt: ago(0) },
+        summary: {
+          summary: '両国首脳が電話会談で関税引き下げの可能性を協議し、貿易摩擦の緩和ムードが生まれました。',
+          keyPoints: ['関税の段階的な引き下げを検討', '実務協議の日程で合意', '市場は即座に好反応'],
+          timeline: [{ time: '00:30', content: '会談の背景説明' }, { time: '05:10', content: '主な合意内容の整理' }],
+          summaryBasis: '자동 생성 자막 기반 요약',
+        },
+      },
+      {
+        channel: '日経チャンネル', category: '経済', emoji: '💰',
+        video: { videoId: 'sample00002', title: '半導体サイクル、今が底値か？', url: 'https://youtube.com', publishedAt: ago(2) },
+        summary: {
+          summary: 'メモリ半導体の価格動向と在庫指標をもとに、サイクルの底打ちの可能性を分析しました。',
+          keyPoints: ['在庫調整は最終局面', '下期の需要回復に期待'],
+          timeline: [],
+          summaryBasis: '영상 설명 기반 요약',
+        },
+      },
+      {
+        // 요약 실패 카드 — 근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
+        channel: 'NHKニュース', category: '社会', emoji: '📰',
+        video: { videoId: 'sample00004', title: '国会予算案の審議を生中継', url: 'https://youtube.com', publishedAt: ago(3) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'no_source',
+        },
+      },
+      {
+        // 자막 확보 실패(크레딧 소진·API 오류)로 설명 대체된 요약 — Pro가 보는 화면.
+        // 요약 본문은 그대로 나가고 근거 표기만 '자막을 불러오지 못해…'로 바뀌는지 확인하는 자리.
+        channel: 'TBS NEWS', category: '経済', emoji: '📊',
+        video: { videoId: 'sample00005', title: '円相場が節目を突破、何が変わるのか', url: 'https://youtube.com', publishedAt: ago(4) },
+        summary: {
+          summary: '為替の急変動の背景と、輸出入企業への影響を整理しました。',
+          keyPoints: ['ドル高と金利差の拡大', '輸入物価の上昇圧力'],
+          timeline: [],
+          summaryBasis: SUMMARY_BASIS_TRANSCRIPT_FAILED,
+        },
+      },
+      // ↓ 실패·대기·라이브·Pro 전용 카드 — 위 no_source 카드와 마찬가지로
+      //   근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
+      {
+        // 같은 자막 확보 실패지만 무료 사용자에게는 요약을 숨기고 사유만 표기한다.
+        channel: 'PIVOT', category: '経済', emoji: '🎙',
+        video: { videoId: 'sample00006', title: '半導体市況の点検 — 下期の見通し', url: 'https://youtube.com', publishedAt: ago(5) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'transcript_failed',
+        },
+      },
+      {
+        channel: '不動産チャンネル', category: '不動産', emoji: '🏠',
+        video: { videoId: 'sample00007', title: '再開発規制の緩和、実際に恩恵を受ける物件は', url: 'https://youtube.com', publishedAt: ago(6) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'pro_only',
+        },
+      },
+      {
+        channel: 'ANNnews', category: '社会', emoji: '📺',
+        video: { videoId: 'sample00008', title: '全国で大雪警報、通勤時間帯の交通状況', url: 'https://youtube.com', publishedAt: ago(9) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'pending',
+        },
+      },
+      {
+        channel: 'FNNプライム', category: '政治', emoji: '🏛',
+        video: { videoId: 'sample00009', title: '与野党の予算協議が最終局面に', url: 'https://youtube.com', publishedAt: ago(12) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'temporary',
+        },
+      },
+      {
+        channel: 'ライブ中継', category: '社会', emoji: '🔴',
+        video: { videoId: 'sample00010', title: '【LIVE】国政調査の現場中継', url: 'https://youtube.com', publishedAt: ago(17) },
+        summary: {
+          summary: '', keyPoints: [], timeline: [],
+          failReason: 'live',
+        },
+      },
+    ]
+  }
+
   return [
     {
       channel: 'YTN', category: '지정학', emoji: '📡',
-      video: { videoId: 'sample00001', title: '미·중 정상 통화, 무역 긴장 완화 신호', url: 'https://youtube.com', publishedAt: new Date().toISOString() },
+      video: { videoId: 'sample00001', title: '미·중 정상 통화, 무역 긴장 완화 신호', url: 'https://youtube.com', publishedAt: ago(0) },
       summary: {
         summary: '양국 정상이 통화에서 관세 인하 가능성을 논의하며 무역 갈등 완화 분위기가 형성됐습니다.',
         keyPoints: ['관세 단계적 인하 검토', '추가 실무 협상 일정 합의', '시장은 즉시 긍정 반응'],
@@ -467,7 +712,7 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
     },
     {
       channel: '소수몽키', category: '경제', emoji: '💰',
-      video: { videoId: 'sample00002', title: '반도체 사이클, 지금이 저점일까?', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 7200_000).toISOString() },
+      video: { videoId: 'sample00002', title: '반도체 사이클, 지금이 저점일까?', url: 'https://youtube.com', publishedAt: ago(2) },
       summary: {
         summary: '메모리 반도체 가격 흐름과 재고 지표를 근거로 사이클 저점 가능성을 진단했습니다.',
         keyPoints: ['재고 조정 막바지 국면', '하반기 수요 회복 기대'],
@@ -476,12 +721,67 @@ export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
       },
     },
     {
-      // 요약 실패 카드 — 근거 표기(AI 고지)가 붙지 않는 것도 함께 확인하는 자리.
+      // 요약 실패 카드 — 근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
       channel: '연합뉴스TV', category: '사회', emoji: '📰',
-      video: { videoId: 'sample00004', title: '국회 예산안 심사 생중계', url: 'https://youtube.com', publishedAt: new Date(Date.now() - 10800_000).toISOString() },
+      video: { videoId: 'sample00004', title: '국회 예산안 심사 생중계', url: 'https://youtube.com', publishedAt: ago(3) },
       summary: {
         summary: '', keyPoints: [], timeline: [],
         failReason: 'no_source',
+      },
+    },
+    {
+      // 자막 확보 실패(크레딧 소진·API 오류)로 설명 대체된 요약 — Pro가 보는 화면.
+      // 요약 본문은 그대로 나가고 근거 표기만 '자막을 불러오지 못해…'로 바뀌는지 확인하는 자리.
+      channel: '슈카월드', category: '경제', emoji: '📊',
+      video: { videoId: 'sample00005', title: '환율 1,400원 돌파, 무엇이 달라지나', url: 'https://youtube.com', publishedAt: ago(4) },
+      summary: {
+        summary: '환율 급등의 배경과 수출입 기업이 받는 영향을 정리했습니다.',
+        keyPoints: ['달러 강세와 금리차 확대', '수입 물가 상승 압력'],
+        timeline: [],
+        summaryBasis: SUMMARY_BASIS_TRANSCRIPT_FAILED,
+      },
+    },
+    // ↓ 실패·대기·라이브·Pro 전용 카드 — 위 no_source 카드와 마찬가지로
+    //   근거 표기(AI 고지)와 공유 버튼이 붙지 않는 것도 함께 확인하는 자리.
+    {
+      // 같은 자막 확보 실패지만 무료 사용자에게는 요약을 숨기고 사유만 표기한다.
+      channel: '삼프로TV', category: '경제', emoji: '🎙',
+      video: { videoId: 'sample00006', title: '반도체 업황 점검 — 하반기 전망', url: 'https://youtube.com', publishedAt: ago(5) },
+      summary: {
+        summary: '', keyPoints: [], timeline: [],
+        failReason: 'transcript_failed',
+      },
+    },
+    {
+      channel: '부읽남TV', category: '부동산', emoji: '🏠',
+      video: { videoId: 'sample00007', title: '재건축 규제 완화, 실제 수혜 단지는', url: 'https://youtube.com', publishedAt: ago(6) },
+      summary: {
+        summary: '', keyPoints: [], timeline: [],
+        failReason: 'pro_only',
+      },
+    },
+    {
+      channel: 'MBC뉴스', category: '사회', emoji: '📺',
+      video: { videoId: 'sample00008', title: '전국 대설특보, 출근길 교통 상황', url: 'https://youtube.com', publishedAt: ago(9) },
+      summary: {
+        summary: '', keyPoints: [], timeline: [],
+        failReason: 'pending',
+      },
+    },
+    {
+      channel: 'KBS 뉴스', category: '정치', emoji: '🏛',
+      video: { videoId: 'sample00009', title: '여야 예산안 협상 최종 국면', url: 'https://youtube.com', publishedAt: ago(12) },
+      summary: {
+        summary: '', keyPoints: [], timeline: [],
+        failReason: 'temporary',
+      },
+    },
+    {
+      channel: 'SBS 뉴스', category: '사회', emoji: '🔴',
+      video: { videoId: 'sample00010', title: '[LIVE] 국정감사 현장 생중계', url: 'https://youtube.com', publishedAt: ago(17) },
+      summary: {
+        summary: '', keyPoints: [], timeline: [],
+        failReason: 'live',
       },
     },
   ]
