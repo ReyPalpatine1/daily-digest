@@ -13,7 +13,7 @@ import {
   type UniqueChannel,
   type PoolVideo,
 } from '@/lib/video-pool'
-import { isDescriptionBasedSummary } from '@/lib/summary-basis'
+import { isDescriptionBasedSummary, isTranscriptFailedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 import { getAuthedUser, isAdminEmail } from '@/lib/route-auth'
 
@@ -58,6 +58,7 @@ const failTextKeys: Record<string, string> = {
   pending: 'digest.failPending',
   live: 'digest.failLive',
   pro_only: 'digest.proOnly',
+  transcript_failed: 'digest.failTranscriptFailed',
 }
 
 export async function POST() {
@@ -215,12 +216,15 @@ export async function POST() {
       let failReason: string | null = null
       if (!s) {
         failReason = v.fail_reason ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS ? 'temporary' : 'pending')
+      } else if (!isPro && isTranscriptFailedSummary(s.summary_basis)) {
+        // 자막 확보 실패(우리 쪽 사정) — 숨김은 pro_only와 같되 사유만 정직하게 표기 (digest 라우트와 동일).
+        failReason = 'transcript_failed'
       } else if (!isPro && isDescriptionBasedSummary(s.summary_basis)) {
         // 자막 없는 영상(설명 기반 요약)은 Pro 전용 — 무료 사용자에겐 안내 문구만.
         failReason = 'pro_only'
       }
-      // pro_only: 요약은 풀에 존재하지만 본문·포인트·타임라인을 메일/digests에 노출하지 않음
-      const withheld = failReason === 'pro_only'
+      // pro_only / transcript_failed: 요약은 풀에 존재하지만 본문·포인트·타임라인을 메일/digests에 노출하지 않음
+      const withheld = failReason === 'pro_only' || failReason === 'transcript_failed'
       return {
         channel: meta.alias,
         category: meta.category,

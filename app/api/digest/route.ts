@@ -10,7 +10,7 @@ import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delive
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed, hasDigestSentToday } from '@/lib/send-guard'
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
-import { isDescriptionBasedSummary } from '@/lib/summary-basis'
+import { isDescriptionBasedSummary, isTranscriptFailedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 import { isCronRequest, getAuthedUser, isAdminEmail } from '@/lib/route-auth'
 
@@ -252,6 +252,7 @@ async function runDigest(
       pending: 'digest.failPending',
       live: 'digest.failLive',
       pro_only: 'digest.proOnly',
+      transcript_failed: 'digest.failTranscriptFailed',
     }
 
     // 다이제스트 아이템 구성 (공유 요약 + 사용자별 속보 판정)
@@ -269,13 +270,17 @@ async function runDigest(
         failReason = isLive
           ? 'live'
           : (v.fail_reason ?? ((v.summary_attempts ?? 0) >= MAX_SUMMARY_ATTEMPTS ? 'temporary' : 'pending'))
+      } else if (!isPro && isTranscriptFailedSummary(s.summary_basis)) {
+        // 자막 확보 실패(크레딧 소진·API 오류)로 설명 대체된 요약 — 숨기는 것은 pro_only와 같되
+        // 우리 쪽 사정이므로 사유를 정직하게 표기하고 Pro 유도 문구는 쓰지 않는다.
+        failReason = 'transcript_failed'
       } else if (!isPro && isDescriptionBasedSummary(s.summary_basis)) {
         // 자막 없는 영상(설명 기반 요약)은 Pro 전용 — 무료 사용자에겐 안내 문구만 발송·저장.
         // 알 수 없는 basis 값은 게이트하지 않음(isDescriptionBasedSummary가 false 반환).
         failReason = 'pro_only'
       }
-      // pro_only: 요약은 풀에 존재하지만 본문·포인트·타임라인을 이메일/digests에 노출하지 않음
-      const withheld = failReason === 'pro_only'
+      // pro_only / transcript_failed: 요약은 풀에 존재하지만 본문·포인트·타임라인을 이메일/digests에 노출하지 않음
+      const withheld = failReason === 'pro_only' || failReason === 'transcript_failed'
       const item = {
         channel: meta.alias,
         category: meta.category,

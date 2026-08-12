@@ -6,6 +6,7 @@ import { nowUtc, toZoned } from './time'
 import { youtubeDeepLink } from '@/lib/video-time'
 import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
 import { boldMarkersToHtml, splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
+import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 
 export type { EmailLocale }
 
@@ -155,6 +156,8 @@ function footerBlock(locale: EmailLocale, email?: string): string {
 // (키 이름이나 빈 문자열이 노출되면 안 됨). lib/summary-basis.ts와 같은 원리.
 export function basisTranslationKey(summaryBasis?: string): string | null {
   if (!summaryBasis) return null
+  // '자막 확보 실패 기반 요약'도 '자막'을 포함하므로 아래 includes 판정보다 먼저 정확 일치로 거른다.
+  if (summaryBasis === SUMMARY_BASIS_TRANSCRIPT_FAILED) return 'digest.basisTranscriptFailed'
   if (summaryBasis.includes('자막')) return 'digest.basisTranscript'
   if (summaryBasis.includes('설명')) return 'digest.basisDescription'
   return null
@@ -167,6 +170,7 @@ function failReasonTranslationKey(failReason?: string): string | null {
   if (failReason === 'pending') return 'digest.failPending'
   if (failReason === 'live') return 'digest.failLive'
   if (failReason === 'pro_only') return 'digest.proOnly'
+  if (failReason === 'transcript_failed') return 'digest.failTranscriptFailed'
   return null
 }
 

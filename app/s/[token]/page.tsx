@@ -6,6 +6,7 @@ import { MessageSquareQuote, ShieldOff, Sparkles } from 'lucide-react'
 import { getShareByToken, isValidTokenFormat } from '@/lib/share'
 import { hashVisitor, resolveClientIpFromHeaders } from '@/lib/visit-guard'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
+import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 import ShareVideo from '@/components/ShareVideo'
 import ScrollTopButton from '@/components/ScrollTopButton'
 import ShareReportButton from '@/components/ShareReportButton'
@@ -102,6 +103,8 @@ const sectionLabelStyle: CSSProperties = {
 // 폐지된 '제목 기반 요약'을 비롯해 알 수 없는 값은 null → 표기를 아예 렌더하지 않는다.
 function summaryBasisText(summaryBasis?: string | null): string | null {
   const basis = summaryBasis ?? ''
+  // '자막 확보 실패 기반 요약'도 '자막'을 포함하므로 아래 includes 판정보다 먼저 정확 일치로 거른다.
+  if (basis === SUMMARY_BASIS_TRANSCRIPT_FAILED) return '자막을 불러오지 못해 영상 설명으로 요약했습니다. 원문과 차이가 있을 수 있습니다.'
   if (basis.includes('자막')) return '자막을 기반으로 분석한 AI 요약입니다. 오류가 있을 수 있습니다.'
   if (basis.includes('설명')) return '영상 설명을 기반으로 분석한 AI 요약입니다. 자막이 없어 원문과 차이가 있을 수 있습니다.'
   return null

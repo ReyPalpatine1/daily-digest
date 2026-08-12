@@ -438,7 +438,9 @@ async function summarizeAndStore(
   const skipTranscript = options?.skipTranscript === true || video.transcript_checked === true
   let transcript = ''
   let description = ''
-  let exhausted = false
+  // 이번 실행 소진으로 자막 API를 건너뛴 영상도 "자막 확보 실패"다(우리 쪽 사정).
+  // 단 자막 없음이 이미 확정된 영상(transcript_checked)은 소진 여부와 무관하게 '설명 기반'.
+  let exhausted = video.transcript_checked !== true && options?.skipTranscript === true
   if (skipTranscript) {
     console.log(
       `⏭ 자막 API 스킵(${options?.skipTranscript ? '이번 실행 소진' : '자막없음 확정'}) → 설명 기반 처리: ${video.video_id}`
@@ -466,7 +468,7 @@ async function summarizeAndStore(
 
   // video.description이 빈 문자열('')이면 ??가 통과시켜 getTranscript가 가져온 설명을 못 씀 → trim 검사
   const desc = video.description?.trim() ? video.description : description
-  const result = await summarizeVideo(null, video.title, transcript, desc, locale)
+  const result = await summarizeVideo(null, video.title, transcript, desc, locale, { transcriptExhausted: exhausted })
   // 일시적 실패(429/자막 실패 등)는 가짜 성공 객체로 돌아온다. 이걸 저장하면
   // 실패 문구가 공유 풀에 영구 캐시되어 모든 사용자가 영원히 실패본을 받는다.
   // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨 (단 상한까지만).

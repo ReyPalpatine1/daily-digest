@@ -1,5 +1,6 @@
 import { logApiUsage, SYSTEM_USER_ID } from '@/lib/api-usage'
 import { stripTimeMarkers } from '@/lib/summary-format'
+import { DESCRIPTION_SUMMARY_BASIS, SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 import type { Locale } from './i18n/translations'
 
 // -latest alias는 실험 모델(프로덕션 부적합, 엄격한 rate limit, 가용성 미보장)이라
@@ -105,7 +106,10 @@ export async function summarizeVideo(
   title: string,
   transcript: string,
   description?: string,
-  locale: Locale = 'ko'
+  locale: Locale = 'ko',
+  // transcriptExhausted: 자막 API 크레딧 소진(429/402)·오류로 자막을 못 받은 상태.
+  // 설명 폴백으로 요약할 때 "자막 없음"과 "우리 쪽 사정"을 구분해 저장하기 위해 받는다.
+  options?: { transcriptExhausted?: boolean }
 ): Promise<SummaryResult> {
   const fnStart = Date.now()
 
@@ -127,7 +131,9 @@ summary는 2~5개 문단으로 나눈다(영상이 아무리 길어도 5개를 �
 keyPoints는 근거 3~5개(논점이 적으면 3개, 많으면 5개까지. 억지로 5개를 채우지 말 것). **각 항목은 \`**앵커.**\` 형식(마크다운 볼드 + 마침표)으로 시작하고, 공백 하나 뒤에 부연 문장을 이어 쓴다. 앵커는 항목 내용을 압축한 짧은 명사구이며, 상세 요약의 앵커와 같은 형식이다. em dash(—)나 콜론으로 구분하지 말 것.** 제공된 자막에는 [m:ss] 형식의 실제 시간 앵커가 포함되어 있다. timeline의 time은 반드시 자막에 실제로 등장한 [m:ss] 시각만 사용하고 창작 금지. 앵커 없으면 timeline은 []. timeline은 의미 있는 구간 4~6개, 각 content는 그 구간 주제.`
   } else if (description && description.length > 20) {
     content = `영상 설명:\n${description.slice(0, 2000)}`
-    summaryBasis = '영상 설명 기반 요약'
+    // 자막 없음(콘텐츠에 자막이 없음)과 자막 확보 실패(크레딧 소진·API 오류)를 구분해 저장한다.
+    // 후자는 자막이 멀쩡한 영상이므로 "자막이 없어서"라는 표기·Pro 유도를 해선 안 된다.
+    summaryBasis = options?.transcriptExhausted ? SUMMARY_BASIS_TRANSCRIPT_FAILED : DESCRIPTION_SUMMARY_BASIS
     lengthGuide = "summary는 3~4문장을 1~2개 문단으로 나누고, 문단 사이는 빈 줄(\\n\\n)로 분리하며 각 문단은 `**앵커.**`(20자 이내 명사구, 마크다운 볼드+마침표) 형식으로 시작한다. keyPoints는 3~4개, 각 항목은 `**앵커.**` 형식(마크다운 볼드 + 마침표)으로 시작하고, 공백 하나 뒤에 부연 문장을 이어 쓴다. 앵커는 항목 내용을 압축한 짧은 명사구이며, 상세 요약의 앵커와 같은 형식이다. em dash(—)나 콜론으로 구분하지 말 것. timeline은 빈 배열 []."
   } else {
     // 자막·설명 모두 없음 → 제목만으로는 요약하지 않는다 (환각 위험). Gemini 미호출 즉시 실패.

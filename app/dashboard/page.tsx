@@ -19,6 +19,7 @@ import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
 import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
+import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 import { usePending } from '@/lib/use-pending'
 import { TOAST_MS } from '@/lib/toast'
 import { SkeletonList } from '@/components/Skeleton'
@@ -121,6 +122,8 @@ function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | 
   switch (d.fail_reason) {
     case 'no_source': return { labelKey: 'history.failNoSourceLabel', noteKey: 'history.failNoSourceNote' }
     case 'temporary': return { labelKey: 'history.failTemporaryLabel', noteKey: 'history.failTemporaryNote' }
+    // 자막 확보 실패(우리 쪽 사정) — pro_only와 달리 요금제 링크를 붙이지 않는다(아래 렌더 분기 참조).
+    case 'transcript_failed': return { labelKey: 'history.failTranscriptFailedLabel', noteKey: 'history.failTranscriptFailedNote' }
     case 'pending': return { labelKey: 'history.failPendingLabel', noteKey: 'history.failPendingNote' }
     case 'live': return { labelKey: 'history.failLiveLabel', noteKey: 'history.failLiveNote' }
     case 'pro_only': return { labelKey: 'history.proOnlyLabel', noteKey: 'history.proOnlyNote' }
@@ -136,6 +139,8 @@ function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | 
 function summaryBasisKeys(d: Digest): { labelKey: string } | null {
   if (d.fail_reason) return null
   const basis = d.summary_basis ?? ''
+  // '자막 확보 실패 기반 요약'도 '자막'을 포함하므로 아래 includes 판정보다 먼저 정확 일치로 거른다.
+  if (basis === SUMMARY_BASIS_TRANSCRIPT_FAILED) return { labelKey: 'history.basisTranscriptFailedLabel' }
   if (basis.includes('자막')) return { labelKey: 'history.basisTranscriptLabel' }
   if (basis.includes('설명')) return { labelKey: 'history.basisDescriptionLabel' }
   return null
