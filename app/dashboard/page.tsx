@@ -2729,7 +2729,7 @@ export default function Dashboard() {
                                           cursor: 'pointer', textDecoration: 'underline',
                                           textUnderlineOffset: 2,
                                         }}>
-                                        {t('history.proOnlyPricingLink')}
+                                        {t('nav.proUpgrade')}
                                       </button>
                                     )}
                                     {isAdmin && digest.fail_detail && (
