@@ -116,17 +116,24 @@ type HistoryOverviewRow = {
   is_read: boolean | null
 }
 
-// 기록 항목의 실패·대기·라이브 사유 라벨 키 (카드 상단).
-// 매칭 없으면 null → 라벨 생략 (과거 데이터 호환: fail_reason 없는 행).
+// 기록 항목의 상태 라벨 키 (카드 상단). 매칭 없으면 null → 라벨 생략 (과거 데이터 호환).
+// fail_reason은 DB에 6종 그대로 저장하되 사용자에게 보이는 문구는 3종으로 묶는다
+// (6종을 그대로 보여주면 사용자가 차이를 구분할 수 없다).
+//   곧 반영됨 ← pending / live / transcript_failed  (요약이 생기면 크론이 사후 갱신)
+//   제공 불가 ← no_source / temporary              (재시도가 끝난 상태)
+//   Pro 전용 ← pro_only                            (요약은 있으나 플랜으로 잠김 — 요금제 링크는 아래 렌더 분기)
+// ★ 이메일(email-templates failReasonTranslationKey)과 반드시 같은 묶음을 쓸 것.
 function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
   switch (d.fail_reason) {
-    case 'no_source': return { labelKey: 'history.failNoSourceLabel', noteKey: 'history.failNoSourceNote' }
-    case 'temporary': return { labelKey: 'history.failTemporaryLabel', noteKey: 'history.failTemporaryNote' }
-    // 자막 확보 실패(우리 쪽 사정) — pro_only와 달리 요금제 링크를 붙이지 않는다(아래 렌더 분기 참조).
-    case 'transcript_failed': return { labelKey: 'history.failTranscriptFailedLabel', noteKey: 'history.failTranscriptFailedNote' }
-    case 'pending': return { labelKey: 'history.failPendingLabel', noteKey: 'history.failPendingNote' }
-    case 'live': return { labelKey: 'history.failLiveLabel', noteKey: 'history.failLiveNote' }
-    case 'pro_only': return { labelKey: 'history.proOnlyLabel', noteKey: 'history.proOnlyNote' }
+    case 'pending':
+    case 'live':
+    case 'transcript_failed':
+      return { labelKey: 'history.failPreparingLabel', noteKey: 'history.failPreparingNote' }
+    case 'no_source':
+    case 'temporary':
+      return { labelKey: 'history.failUnavailableLabel', noteKey: 'history.failUnavailableNote' }
+    case 'pro_only':
+      return { labelKey: 'history.proOnlyLabel', noteKey: 'history.proOnlyNote' }
   }
   return null
 }

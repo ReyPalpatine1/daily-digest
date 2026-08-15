@@ -50,7 +50,7 @@ export default function EmailPreviewPage() {
   }
 
   const html =
-    type === 'digest' ? buildDigestHtml(dummyDigestItems(emailLocale), 'Daily Video Digest', emailLocale, adminEmail, plan === 'pro')
+    type === 'digest' ? buildDigestHtml(dummyDigestItems(emailLocale, plan === 'pro' ? 'pro' : 'free'), 'Daily Video Digest', emailLocale, adminEmail, plan === 'pro')
       : type === 'breaking' ? buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Video Digest', emailLocale, adminEmail)
         : type === 'welcome' ? buildWelcomeHtml(emailLocale)
           : buildErrorPreviewHtml(emailLocale)

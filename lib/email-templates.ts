@@ -163,14 +163,20 @@ export function basisTranslationKey(summaryBasis?: string): string | null {
   return null
 }
 
-// fail_reason 코드 → 실패·대기·라이브·Pro 전용 문구 번역 키. 매칭 안 되면 null(정상 요약 표기).
+// fail_reason 코드 → 문구 번역 키. 매칭 안 되면 null(정상 요약 표기).
+// videos.fail_reason은 6종을 그대로 저장하되, 사용자에게 보이는 문구는 3종으로 묶는다
+// (6종을 그대로 보여주면 사용자가 차이를 구분할 수 없다).
+//   곧 반영됨 ← pending / live / transcript_failed
+//   제공 불가 ← no_source / temporary
+//   Pro 전용 ← pro_only
+// ★ 열람 기록(dashboard summaryStatusKeys)과 반드시 같은 묶음을 쓸 것 — 갈라지면
+//   같은 항목이 메일과 화면에서 다른 상태로 보인다.
 function failReasonTranslationKey(failReason?: string): string | null {
-  if (failReason === 'no_source') return 'digest.failNoSource'
-  if (failReason === 'temporary') return 'digest.failTemporary'
-  if (failReason === 'pending') return 'digest.failPending'
-  if (failReason === 'live') return 'digest.failLive'
+  if (failReason === 'pending' || failReason === 'live' || failReason === 'transcript_failed') {
+    return 'digest.failPreparing'
+  }
+  if (failReason === 'no_source' || failReason === 'temporary') return 'digest.failUnavailable'
   if (failReason === 'pro_only') return 'digest.proOnly'
-  if (failReason === 'transcript_failed') return 'digest.failTranscriptFailed'
   return null
 }
 
@@ -428,7 +434,22 @@ export function buildErrorPreviewHtml(locale: EmailLocale = 'ko'): string {
 //   번역하면 근거 표기 분기가 깨진다(제목·요약·핵심 포인트만 각 언어로 옮긴다).
 // 언어별 항목 구성(개수·상태 종류·videoId·발행 시각)은 동일하게 맞춘다.
 // sample00003은 dummyBreakingItem이 쓰므로 여기서는 건너뛴다.
-export function dummyDigestItems(locale: EmailLocale): EmailDigestItem[] {
+// 플랜별로 실제 발송에 나올 수 있는 조합만 남긴다 — 한 사용자가 동시에 볼 수 없는 카드가
+// 한 화면에 섞이면 검수 도구로 쓸 수 없다. videoId로 고르므로 언어별 배열은 손대지 않는다.
+//   Pro : 자막 기반 / 설명 기반(근거 라벨 노출) / 제공 불가 / 준비 중  → pro_only 없음
+//   무료: 자막 기반 / 제공 불가 / Pro 전용 / 준비 중                  → 설명 기반 본문 없음
+//        (무료에게 설명 기반 요약은 실제로 pro_only 카드로 나간다)
+const PREVIEW_VIDEO_IDS: Record<'free' | 'pro', string[]> = {
+  pro: ['sample00001', 'sample00002', 'sample00004', 'sample00008'],
+  free: ['sample00001', 'sample00004', 'sample00007', 'sample00008'],
+}
+
+export function dummyDigestItems(locale: EmailLocale, plan: 'free' | 'pro' = 'pro'): EmailDigestItem[] {
+  const allowed = new Set(PREVIEW_VIDEO_IDS[plan])
+  return dummyDigestItemsAll(locale).filter(item => !!item.video.videoId && allowed.has(item.video.videoId))
+}
+
+function dummyDigestItemsAll(locale: EmailLocale): EmailDigestItem[] {
   // 카드마다 시간 표기가 다르게 보이도록 발행 시각을 벌려 둔다.
   const ago = (hours: number) => new Date(Date.now() - hours * 3600_000).toISOString()
 

@@ -51,14 +51,15 @@ const COLLECT_BUDGET_MS = 20_000
 // 미리보기로 요약할 영상 수
 const PREVIEW_VIDEO_LIMIT = 3
 
-// 실패 사유 코드 → 문구 번역 키 (digest 라우트와 동일)
+// 실패 사유 코드 → 문구 번역 키 (digest 라우트와 동일).
+// 사용자에게 보이는 문구는 3종으로 묶는다 — email-templates의 failReasonTranslationKey와 동일 규칙.
 const failTextKeys: Record<string, string> = {
-  no_source: 'digest.failNoSource',
-  temporary: 'digest.failTemporary',
-  pending: 'digest.failPending',
-  live: 'digest.failLive',
+  pending: 'digest.failPreparing',
+  live: 'digest.failPreparing',
+  transcript_failed: 'digest.failPreparing',
+  no_source: 'digest.failUnavailable',
+  temporary: 'digest.failUnavailable',
   pro_only: 'digest.proOnly',
-  transcript_failed: 'digest.failTranscriptFailed',
 }
 
 export async function POST() {

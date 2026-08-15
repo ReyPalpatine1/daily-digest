@@ -110,6 +110,93 @@ async function markFirstDigest(userId: string) {
   }
 }
 
+// 발송 시점 스냅샷 보정 — digests는 발송 순간의 상태를 그대로 굳혀 두므로, 발송 뒤에
+// 요약이 만들어져도 열람 기록은 "요약 준비 중"인 채로 남는다. 안내를 보고 다시 들어온
+// 사용자가 영영 같은 화면을 보지 않도록, 보관 기간 안의 대기 항목만 훑어 채운다.
+// - 대상은 아직 결론이 나지 않은 사유뿐. 'temporary'·'no_source'는 재시도가 끝난 상태라 제외하고,
+//   'pro_only'는 요약이 있는데 플랜 때문에 잠근 것이라 절대 대상에 넣지 않는다(넣으면 무료에게 풀림).
+// - 이미 채워진 행(fail_reason IS NULL)은 조회 조건에서 빠지고, UPDATE에도 같은 조건을 걸어
+//   조회~갱신 사이에 채워진 행을 덮어쓰지 않는다.
+// 실패는 전부 삼키고 갱신 건수만 돌려준다 — 발송 경로에 영향을 주지 않는다.
+const BACKFILL_TARGET_REASONS = ['pending', 'live', 'transcript_failed']
+
+async function backfillPendingDigests(
+  userId: string,
+  userLocale: EmailLocale,
+  isPro: boolean
+): Promise<number> {
+  try {
+    // 보관 기간 밖은 화면에 뜨지도 않으므로 굳이 채우지 않는다(무료 7일 / Pro 30일).
+    const retentionDays = isPro ? 30 : 7
+    const cutoffIso = new Date(Date.now() - retentionDays * 86_400_000).toISOString()
+
+    const { data: rows, error } = await supabase
+      .from('digests')
+      .select('id, video_id, fail_reason')
+      .eq('user_id', userId)
+      .in('fail_reason', BACKFILL_TARGET_REASONS)
+      .gte('created_at', cutoffIso)
+    if (error) {
+      console.error(`[digest] 사후 갱신 대상 조회 실패 (userId=${userId}): ${error.message}`)
+      return 0
+    }
+    const targets = (rows ?? []) as { id: string; video_id: string; fail_reason: string }[]
+    if (targets.length === 0) return 0
+
+    // service_role이라 RLS와 무관하게 풀 요약을 그대로 읽는다.
+    const summaries = await getSummariesFromPool(targets.map(r => r.video_id), userLocale)
+
+    let updated = 0
+    for (const row of targets) {
+      const s = summaries.get(row.video_id)
+      if (!s) continue // 아직 요약이 안 생김 → 다음 실행에서 다시 본다
+
+      // 요약이 생겼어도 채우기 전에 발송 경로와 같은 게이트를 한 번 더 통과시킨다.
+      let patch: Record<string, unknown>
+      if (!isPro && isTranscriptFailedSummary(s.summary_basis)) {
+        // 자막 확보 실패(우리 쪽 사정)로 설명 대체된 요약 — 무료에겐 계속 숨기고 사유만 정정한다.
+        if (row.fail_reason === 'transcript_failed') continue // 이미 그 사유 → 갱신할 것 없음
+        patch = { fail_reason: 'transcript_failed', fail_detail: null }
+      } else if (!isPro && isDescriptionBasedSummary(s.summary_basis)) {
+        // 자막 없는 영상의 설명 기반 요약은 Pro 전용 — 본문을 채우지 말고 잠금 사유로 바꾼다.
+        patch = { fail_reason: 'pro_only', fail_detail: null }
+      } else {
+        // 자막 기반이거나 Pro → 본문을 채우고 사유를 지운다.
+        // key_points 정규화는 발송 경로의 upsert와 동일 (풀은 JSONB, digests는 text[]).
+        const keyPoints = (Array.isArray(s.key_points) ? s.key_points : []).map((p: any) =>
+          typeof p === 'string' ? p : (p?.point ?? p?.text ?? JSON.stringify(p))
+        )
+        patch = {
+          summary: s.summary,
+          tldr: s.tldr ?? null,
+          key_points: keyPoints,
+          timeline: Array.isArray(s.timeline) ? s.timeline : [],
+          summary_basis: s.summary_basis ?? '요약',
+          fail_reason: null,
+          fail_detail: null,
+        }
+      }
+
+      const { data: changed, error: updateError } = await supabase
+        .from('digests')
+        .update(patch)
+        .eq('id', row.id)
+        // 조회 이후 다른 경로가 이미 채웠으면(fail_reason IS NULL) 여기서 걸러진다.
+        .in('fail_reason', BACKFILL_TARGET_REASONS)
+        .select('id')
+      if (updateError) {
+        console.error(`[digest] 사후 갱신 실패 (${row.video_id}): ${updateError.message}`)
+        continue
+      }
+      updated += changed?.length ?? 0
+    }
+    return updated
+  } catch (e) {
+    console.error(`[digest] 사후 갱신 예외 (userId=${userId}):`, e)
+    return 0
+  }
+}
+
 async function runDigest(
   userId: string,
   trigger: DigestTrigger
@@ -245,14 +332,15 @@ async function runDigest(
       }
     }
 
-    // 실패 사유 코드 → 이메일 문구 번역 키
+    // 실패 사유 코드 → 이메일 문구 번역 키.
+    // 사용자에게 보이는 문구는 3종으로 묶는다 — email-templates의 failReasonTranslationKey와 동일 규칙.
     const failTextKeys: Record<string, string> = {
-      no_source: 'digest.failNoSource',
-      temporary: 'digest.failTemporary',
-      pending: 'digest.failPending',
-      live: 'digest.failLive',
+      pending: 'digest.failPreparing',
+      live: 'digest.failPreparing',
+      transcript_failed: 'digest.failPreparing',
+      no_source: 'digest.failUnavailable',
+      temporary: 'digest.failUnavailable',
       pro_only: 'digest.proOnly',
-      transcript_failed: 'digest.failTranscriptFailed',
     }
 
     // 다이제스트 아이템 구성 (공유 요약 + 사용자별 속보 판정)
@@ -410,6 +498,12 @@ async function runDigest(
     await supabase.rpc('delete_old_digests')
     await cleanupOldErrorLogs()
     await cleanupExpiredShares()
+
+    // 발송 판정과 무관하게(오늘 이미 발송돼 스킵됐어도) 지난 대기 항목을 채운다.
+    const backfilled = await backfillPendingDigests(userId, userLocale, !!isPro)
+    if (backfilled > 0) {
+      console.log(`🔄 [digest] 열람 기록 사후 갱신 ${backfilled}건 (userId=${userId})`)
+    }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     const successCount = digestItems.length - failedItems.length
