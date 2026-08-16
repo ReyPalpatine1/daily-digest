@@ -15,6 +15,7 @@ import {
 } from '@/lib/video-pool'
 import { isDescriptionBasedSummary, isTranscriptFailedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
+import { failReasonTranslationKeys } from '@/lib/email-templates'
 import { getAuthedUser, isAdminEmail } from '@/lib/route-auth'
 
 // 가입 직후 "미리보기" — 구독 채널의 최신 영상 3개를 지금 요약해 열람 기록에만 저장한다.
@@ -51,15 +52,12 @@ const COLLECT_BUDGET_MS = 20_000
 // 미리보기로 요약할 영상 수
 const PREVIEW_VIDEO_LIMIT = 3
 
-// 실패 사유 코드 → 문구 번역 키 (digest 라우트와 동일).
-// 사용자에게 보이는 문구는 3종으로 묶는다 — email-templates의 failReasonTranslationKey와 동일 규칙.
-const failTextKeys: Record<string, string> = {
-  pending: 'digest.failPreparing',
-  live: 'digest.failPreparing',
-  transcript_failed: 'digest.failPreparing',
-  no_source: 'digest.failUnavailable',
-  temporary: 'digest.failUnavailable',
-  pro_only: 'digest.proOnly',
+// 실패 사유 → 요약 자리에 넣을 문구(라벨+설명). 묶음은 email-templates의
+// failReasonTranslationKeys 하나만 쓴다 — 채널마다 매핑이 갈리지 않도록 (digest 라우트와 동일).
+function failText(locale: EmailLocale, failReason: string | null): string | null {
+  const keys = failReasonTranslationKeys(failReason ?? undefined)
+  if (!keys) return null
+  return `${et(locale, keys.labelKey)}\n${et(locale, keys.noteKey)}`
 }
 
 export async function POST() {
@@ -239,7 +237,7 @@ export async function POST() {
         },
         summary: {
           tldr: (!withheld && typeof s?.tldr === 'string') ? s.tldr : undefined,
-          summary: (withheld ? null : s?.summary) ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
+          summary: (withheld ? null : s?.summary) ?? failText(userLocale, failReason) ?? et(userLocale, 'digest.summaryUnavailable'),
           keyPoints: !withheld && Array.isArray(s?.key_points) ? s.key_points : [],
           timeline: !withheld && Array.isArray(s?.timeline) ? s.timeline : [],
           summaryBasis: s?.summary_basis ?? '요약',

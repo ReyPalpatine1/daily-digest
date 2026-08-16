@@ -12,6 +12,7 @@ import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking
 import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
 import { isDescriptionBasedSummary, isTranscriptFailedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
+import { failReasonTranslationKeys } from '@/lib/email-templates'
 import { isCronRequest, getAuthedUser, isAdminEmail } from '@/lib/route-auth'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
@@ -238,6 +239,15 @@ async function runDigest(
       currentPlan === 'vip' ||
       (profile?.email && adminEmails.includes(String(profile.email).toLowerCase()))
 
+    // 지난 대기 항목 사후 갱신 — 발송과 무관한 정리 작업이므로 이 아래의 어떤 early return
+    // (채널 없음 / 새 영상 0개)에도 걸리지 않도록 사용자·플랜 판정 직후에 실행한다.
+    // 새 영상이 없는 날이야말로 지난 대기 항목이 남아 있을 가능성이 높다.
+    // 내부에서 전부 try-catch → 실패해도 발송에 영향 없음.
+    const backfilled = await backfillPendingDigests(userId, userLocale, !!isPro)
+    if (backfilled > 0) {
+      console.log(`🔄 [digest] 열람 기록 사후 갱신 ${backfilled}건 (userId=${userId})`)
+    }
+
     // 채널 목록 가져오기
     const { data: allChannels } = await supabase
       .from('channels')
@@ -332,15 +342,14 @@ async function runDigest(
       }
     }
 
-    // 실패 사유 코드 → 이메일 문구 번역 키.
-    // 사용자에게 보이는 문구는 3종으로 묶는다 — email-templates의 failReasonTranslationKey와 동일 규칙.
-    const failTextKeys: Record<string, string> = {
-      pending: 'digest.failPreparing',
-      live: 'digest.failPreparing',
-      transcript_failed: 'digest.failPreparing',
-      no_source: 'digest.failUnavailable',
-      temporary: 'digest.failUnavailable',
-      pro_only: 'digest.proOnly',
+    // 실패 사유 → 요약 자리에 넣을 문구(라벨+설명). 묶음은 email-templates의
+    // failReasonTranslationKeys 하나만 쓴다 — 채널마다 매핑이 갈리지 않도록.
+    // 메일 카드는 이 문자열 대신 failReason으로 직접 렌더하므로, 이 값은
+    // digests.summary 저장분과 텔레그램 본문에 쓰인다.
+    const failText = (failReason: string | null): string | null => {
+      const keys = failReasonTranslationKeys(failReason ?? undefined)
+      if (!keys) return null
+      return `${et(userLocale, keys.labelKey)}\n${et(userLocale, keys.noteKey)}`
     }
 
     // 다이제스트 아이템 구성 (공유 요약 + 사용자별 속보 판정)
@@ -384,7 +393,7 @@ async function runDigest(
           // 역피라미드 최상단 한 줄(이메일 전용). 요약 숨김(pro_only) 시 미노출, null→undefined 정규화.
           tldr: (!withheld && typeof s?.tldr === 'string') ? s.tldr : undefined,
           // 요약 없음·pro_only: 사유별 구분 문구 (텔레그램 등 요약 텍스트를 그대로 쓰는 채널 호환)
-          summary: (withheld ? null : s?.summary) ?? et(userLocale, failTextKeys[failReason!] ?? 'digest.summaryUnavailable'),
+          summary: (withheld ? null : s?.summary) ?? failText(failReason) ?? et(userLocale, 'digest.summaryUnavailable'),
           // 풀(JSONB)에서 온 값이 배열이 아닐 수 있음 → 이후 .map() TypeError 방지
           keyPoints: !withheld && Array.isArray(s?.key_points) ? s.key_points : [],
           timeline: !withheld && Array.isArray(s?.timeline) ? s.timeline : [],
@@ -498,12 +507,6 @@ async function runDigest(
     await supabase.rpc('delete_old_digests')
     await cleanupOldErrorLogs()
     await cleanupExpiredShares()
-
-    // 발송 판정과 무관하게(오늘 이미 발송돼 스킵됐어도) 지난 대기 항목을 채운다.
-    const backfilled = await backfillPendingDigests(userId, userLocale, !!isPro)
-    if (backfilled > 0) {
-      console.log(`🔄 [digest] 열람 기록 사후 갱신 ${backfilled}건 (userId=${userId})`)
-    }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     const successCount = digestItems.length - failedItems.length

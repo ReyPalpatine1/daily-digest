@@ -122,7 +122,8 @@ type HistoryOverviewRow = {
 //   곧 반영됨 ← pending / live / transcript_failed  (요약이 생기면 크론이 사후 갱신)
 //   제공 불가 ← no_source / temporary              (재시도가 끝난 상태)
 //   Pro 전용 ← pro_only                            (요약은 있으나 플랜으로 잠김 — 요금제 링크는 아래 렌더 분기)
-// ★ 이메일(email-templates failReasonTranslationKey)과 반드시 같은 묶음을 쓸 것.
+// ★ 이메일(email-templates failReasonTranslationKeys)과 반드시 같은 묶음·같은 문장을 쓸 것 —
+//   갈라지면 메일에서 열람 기록으로 넘어온 사용자가 다른 안내를 보게 된다.
 function summaryStatusKeys(d: Digest): { labelKey: string; noteKey?: string } | null {
   switch (d.fail_reason) {
     case 'pending':

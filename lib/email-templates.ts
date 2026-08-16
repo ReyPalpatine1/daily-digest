@@ -163,20 +163,30 @@ export function basisTranslationKey(summaryBasis?: string): string | null {
   return null
 }
 
-// fail_reason 코드 → 문구 번역 키. 매칭 안 되면 null(정상 요약 표기).
+// fail_reason 코드 → 문구 번역 키(라벨+설명). 매칭 안 되면 null(정상 요약 표기).
 // videos.fail_reason은 6종을 그대로 저장하되, 사용자에게 보이는 문구는 3종으로 묶는다
 // (6종을 그대로 보여주면 사용자가 차이를 구분할 수 없다).
 //   곧 반영됨 ← pending / live / transcript_failed
 //   제공 불가 ← no_source / temporary
 //   Pro 전용 ← pro_only
-// ★ 열람 기록(dashboard summaryStatusKeys)과 반드시 같은 묶음을 쓸 것 — 갈라지면
-//   같은 항목이 메일과 화면에서 다른 상태로 보인다.
-function failReasonTranslationKey(failReason?: string): string | null {
+// ★ 열람 기록(dashboard summaryStatusKeys)과 반드시 같은 묶음·같은 문장을 쓸 것 —
+//   갈라지면 "메일에서 열람 기록을 보라고 해서 갔더니 다른 말이 쓰여 있는" 상황이 된다.
+//   그래서 메일도 한 줄로 줄이지 않고 라벨+설명 두 줄을 그대로 싣는다.
+//   특히 '요약 준비 중'의 설명은 "이미 받은 메일에는 반영되지 않는다"를 알려 주는 핵심 정보라
+//   메일에서 빼면 사용자가 같은 메일을 다시 확인하며 기다리게 된다.
+// 발송 라우트(digest·preview)도 이 매핑을 그대로 쓴다 → 채널마다 묶음이 갈리지 않게 export.
+export function failReasonTranslationKeys(
+  failReason?: string
+): { labelKey: string; noteKey: string } | null {
   if (failReason === 'pending' || failReason === 'live' || failReason === 'transcript_failed') {
-    return 'digest.failPreparing'
+    return { labelKey: 'digest.failPreparingLabel', noteKey: 'digest.failPreparingNote' }
   }
-  if (failReason === 'no_source' || failReason === 'temporary') return 'digest.failUnavailable'
-  if (failReason === 'pro_only') return 'digest.proOnly'
+  if (failReason === 'no_source' || failReason === 'temporary') {
+    return { labelKey: 'digest.failUnavailableLabel', noteKey: 'digest.failUnavailableNote' }
+  }
+  if (failReason === 'pro_only') {
+    return { labelKey: 'digest.proOnlyLabel', noteKey: 'digest.proOnlyNote' }
+  }
   return null
 }
 
@@ -184,7 +194,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
   const kp = safeArray<string>(item.summary.keyPoints)
   const tl = safeArray<{ time: string; content: string }>(item.summary.timeline)
   const basisKey = basisTranslationKey(item.summary.summaryBasis)
-  const failKey = failReasonTranslationKey(item.summary.failReason)
+  const failKey = failReasonTranslationKeys(item.summary.failReason)
   // 공유 링크 — 대시보드에서 공유 시트를 여는 보조 버튼("영상 보기"와 같은 줄).
   // 실패·대기·라이브·pro_only 항목은 공유할 요약이 없으므로 넣지 않는다(대시보드 카드와 동일 기준).
   const shareLink = !failKey && item.video.videoId
@@ -203,8 +213,9 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         ${escapeHtml(formatTime(item.video.publishedAt, locale))} ${et(locale, 'digest.uploadedAt')}
       </div>
       ${failKey ? `
-      <div style="font-size:12px;color:#A1A1AA;line-height:1.7;margin-bottom:12px;">
-        ${escapeHtml(et(locale, failKey))}
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;color:#1a1a1c;line-height:1.6;">${escapeHtml(et(locale, failKey.labelKey))}</div>
+        <div style="font-size:11px;color:#8a8a8e;line-height:1.7;margin-top:3px;">${escapeHtml(et(locale, failKey.noteKey))}</div>
       </div>` : `
       ${item.summary.tldr ? `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:20px;">
