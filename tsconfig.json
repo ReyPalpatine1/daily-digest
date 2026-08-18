@@ -30,5 +30,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // scripts/ 는 개발자용 도구라 앱 빌드 대상이 아니다(배포 번들·타입체크에서 제외).
+  // npm run check:i18n 이 tsc CLI에 파일을 직접 넘겨 따로 컴파일한다.
+  // .tmp-i18n 은 그 컴파일 산출물 폴더.
+  "exclude": ["node_modules", "scripts", ".tmp-i18n"]
 }

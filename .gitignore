@@ -46,4 +46,7 @@ worker-configuration.d.ts
 
 # typescript
 *.tsbuildinfo
+
+# check:i18n 컴파일 산출물
+/.tmp-i18n/
 next-env.d.ts
