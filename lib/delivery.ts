@@ -39,8 +39,9 @@ export async function deliverDigest(
   locale: string | null = 'ko',
   userId: string | null = null,
   isPro = true,
-  // email_logs에 남길 타입. 기본 'digest'(정기·수동 발송), 미리보기만 'preview'.
-  logType: 'digest' | 'preview' = 'digest'
+  // email_logs에 남길 타입. 기본 'digest'(정기 발송).
+  // 'preview'=가입 직후 미리보기, 'admin'=관리자 수동 실행 — 둘 다 정기 발송 중복 판정에서 빠진다.
+  logType: 'digest' | 'preview' | 'admin' = 'digest'
 ): Promise<void> {
   const method = effectiveMethod(settings.delivery_method, isPro)
 
@@ -84,7 +85,9 @@ export async function deliverEmptyDigest(
   settings: DeliverySettings,
   userName: string,
   locale: string | null = 'ko',
-  userId: string | null = null
+  userId: string | null = null,
+  // email_logs에 남길 타입. 기본 'digest'(정기 발송) — 관리자 수동 실행만 'admin'.
+  logType: 'digest' | 'preview' | 'admin' = 'digest'
 ): Promise<void> {
-  await sendEmptyDigestEmail(settings.email, userName, locale, userId)
+  await sendEmptyDigestEmail(settings.email, userName, locale, userId, logType)
 }

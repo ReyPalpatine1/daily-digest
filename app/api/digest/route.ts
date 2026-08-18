@@ -9,7 +9,7 @@ import { cleanupExpiredShares } from '@/lib/share'
 import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed, hasDigestSentToday } from '@/lib/send-guard'
-import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS } from '@/lib/video-pool'
+import { getVideosFromPool, getSummariesFromPool, summarizeNow, matchesKeyword, MAX_SUMMARY_ATTEMPTS, SUMMARY_LOOKBACK_DAYS } from '@/lib/video-pool'
 import { isDescriptionBasedSummary, isTranscriptFailedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 import { failReasonTranslationKeys } from '@/lib/email-templates'
@@ -118,14 +118,28 @@ async function markFirstDigest(userId: string) {
 //   'pro_only'는 요약이 있는데 플랜 때문에 잠근 것이라 절대 대상에 넣지 않는다(넣으면 무료에게 풀림).
 // - 이미 채워진 행(fail_reason IS NULL)은 조회 조건에서 빠지고, UPDATE에도 같은 조건을 걸어
 //   조회~갱신 사이에 채워진 행을 덮어쓰지 않는다.
-// 실패는 전부 삼키고 갱신 건수만 돌려준다 — 발송 경로에 영향을 주지 않는다.
+// 항목별 판정 순서:
+//   ① 공유 풀에 요약이 생김            → 채운다(플랜 게이트 통과 후)
+//   ② 요약 없음 + 요약 창(2일) 이내     → 그대로 둔다('요약 준비 중' 유지)
+//   ③ 요약 없음 + 요약 창 초과          → 'no_source'로 확정('요약 제공 불가'로 표시)
+// ③이 필요한 이유: getVideosWithoutSummary가 published_at 기준 SUMMARY_LOOKBACK_DAYS
+// 이내만 요약 대상으로 뽑으므로, 그 창을 넘긴 영상은 영영 요약되지 않는다. 그런데도 화면은
+// "요약이 완료되면 반영됩니다"라고 계속 안내해 사용자가 오지 않을 것을 기다리게 된다.
+// 새 fail_reason 값을 만들지 않고 기존 'no_source'를 재사용한다 — 사용자에게 보이는 문구
+// 종류를 늘리지 않기 위함(화면 매핑상 '요약 제공 불가').
+// 실패는 전부 삼키고 건수만 돌려준다 — 발송 경로에 영향을 주지 않는다.
 const BACKFILL_TARGET_REASONS = ['pending', 'live', 'transcript_failed']
+
+type BackfillResult = {
+  filled: number  // ① 요약이 생겨 채우거나 사유를 정정한 건수
+  expired: number // ③ 요약 창을 넘겨 '제공 불가'로 확정한 건수
+}
 
 async function backfillPendingDigests(
   userId: string,
   userLocale: EmailLocale,
   isPro: boolean
-): Promise<number> {
+): Promise<BackfillResult> {
   try {
     // 보관 기간 밖은 화면에 뜨지도 않으므로 굳이 채우지 않는다(무료 7일 / Pro 30일).
     const retentionDays = isPro ? 30 : 7
@@ -133,26 +147,67 @@ async function backfillPendingDigests(
 
     const { data: rows, error } = await supabase
       .from('digests')
-      .select('id, video_id, fail_reason')
+      .select('id, video_id, fail_reason, published_at')
       .eq('user_id', userId)
       .in('fail_reason', BACKFILL_TARGET_REASONS)
       .gte('created_at', cutoffIso)
     if (error) {
       console.error(`[digest] 사후 갱신 대상 조회 실패 (userId=${userId}): ${error.message}`)
-      return 0
+      return { filled: 0, expired: 0 }
     }
-    const targets = (rows ?? []) as { id: string; video_id: string; fail_reason: string }[]
-    if (targets.length === 0) return 0
+    const targets = (rows ?? []) as {
+      id: string; video_id: string; fail_reason: string; published_at: string | null
+    }[]
+    if (targets.length === 0) return { filled: 0, expired: 0 }
 
+    const videoIds = targets.map(r => r.video_id)
     // service_role이라 RLS와 무관하게 풀 요약을 그대로 읽는다.
-    const summaries = await getSummariesFromPool(targets.map(r => r.video_id), userLocale)
+    const summaries = await getSummariesFromPool(videoIds, userLocale)
+
+    // 요약 창(SUMMARY_LOOKBACK_DAYS) 판정용 업로드 시각. 요약 대상 선정이 videos.published_at
+    // 기준이므로 같은 원본을 우선 본다. 다만 비공개·삭제 영상은 videos에서 제거되므로
+    // (video-pool이 delete) 그 행은 여기서 안 잡힌다 → 발송 때 굳혀 둔 digests.published_at으로
+    // 폴백한다. 폴백이 없으면 삭제된 영상의 항목이 '요약 준비 중'인 채 영구히 남는다.
+    // 둘 다 없으면 ③ 판정만 건너뛴다(그대로 '준비 중' 유지).
+    const publishedAt = new Map<string, string>()
+    const { data: videoRows, error: videoError } = await supabase
+      .from('videos')
+      .select('video_id, published_at')
+      .in('video_id', videoIds)
+    if (videoError) {
+      console.error(`[digest] 사후 갱신 published_at 조회 실패 (userId=${userId}): ${videoError.message}`)
+    } else {
+      for (const v of videoRows ?? []) {
+        const pub = (v as any).published_at
+        if (pub) publishedAt.set((v as any).video_id, pub)
+      }
+    }
+    const lookbackCutoff = Date.now() - SUMMARY_LOOKBACK_DAYS * 86_400_000
 
     let updated = 0
+    let expired = 0
     for (const row of targets) {
       const s = summaries.get(row.video_id)
-      if (!s) continue // 아직 요약이 안 생김 → 다음 실행에서 다시 본다
+      if (!s) {
+        // ②/③ — 요약이 아직 없다. 요약 창 안이면 그대로 두고, 넘겼으면 제공 불가로 확정한다.
+        const pub = publishedAt.get(row.video_id) ?? row.published_at
+        if (!pub) continue // 업로드 시각을 모르면 섣불리 확정하지 않는다
+        if (new Date(pub).getTime() >= lookbackCutoff) continue // ② 아직 요약될 수 있음
+        const { data: expiredRows, error: expireError } = await supabase
+          .from('digests')
+          .update({ fail_reason: 'no_source', fail_detail: null })
+          .eq('id', row.id)
+          .in('fail_reason', BACKFILL_TARGET_REASONS)
+          .select('id')
+        if (expireError) {
+          console.error(`[digest] 사후 확정 실패 (${row.video_id}): ${expireError.message}`)
+          continue
+        }
+        expired += expiredRows?.length ?? 0
+        continue
+      }
 
-      // 요약이 생겼어도 채우기 전에 발송 경로와 같은 게이트를 한 번 더 통과시킨다.
+      // ① 요약이 생겼어도 채우기 전에 발송 경로와 같은 게이트를 한 번 더 통과시킨다.
       let patch: Record<string, unknown>
       if (!isPro && isTranscriptFailedSummary(s.summary_basis)) {
         // 자막 확보 실패(우리 쪽 사정)로 설명 대체된 요약 — 무료에겐 계속 숨기고 사유만 정정한다.
@@ -191,10 +246,10 @@ async function backfillPendingDigests(
       }
       updated += changed?.length ?? 0
     }
-    return updated
+    return { filled: updated, expired }
   } catch (e) {
     console.error(`[digest] 사후 갱신 예외 (userId=${userId}):`, e)
-    return 0
+    return { filled: 0, expired: 0 }
   }
 }
 
@@ -244,8 +299,11 @@ async function runDigest(
     // 새 영상이 없는 날이야말로 지난 대기 항목이 남아 있을 가능성이 높다.
     // 내부에서 전부 try-catch → 실패해도 발송에 영향 없음.
     const backfilled = await backfillPendingDigests(userId, userLocale, !!isPro)
-    if (backfilled > 0) {
-      console.log(`🔄 [digest] 열람 기록 사후 갱신 ${backfilled}건 (userId=${userId})`)
+    if (backfilled.filled > 0) {
+      console.log(`🔄 [digest] 열람 기록 사후 갱신 ${backfilled.filled}건 (userId=${userId})`)
+    }
+    if (backfilled.expired > 0) {
+      console.log(`⏹ [digest] 요약 창(${SUMMARY_LOOKBACK_DAYS}일) 초과 → 제공 불가 확정 ${backfilled.expired}건 (userId=${userId})`)
     }
 
     // 채널 목록 가져오기
@@ -323,7 +381,9 @@ async function runDigest(
     if (rawVideoCount === 0) {
       if (trigger === 'cron' && settings.notify_when_empty !== false) {
         try {
-          await deliverEmptyDigest(settings, userName, userLocale, userId)
+          // 위 분기가 trigger === 'cron' 한정이라 현재 isManual은 항상 false지만,
+          // 조건이 바뀌어도 수동 실행이 정기 발송 장부에 섞이지 않도록 같은 기준을 건다.
+          await deliverEmptyDigest(settings, userName, userLocale, userId, isManual ? 'admin' : 'digest')
           // 정기 발송이 실제로 나갔으므로 첫 발송 시각 기록 (Cloudflare에서 floating promise는
           // 완료 보장이 안 되므로 await).
           await markFirstDigest(userId)
@@ -424,7 +484,11 @@ async function runDigest(
       if (alreadySent) {
         console.log(`[digest] 오늘 이미 발송됨(email_logs) → 발송 스킵, sent 마킹만 진행 user=${userId}`)
       } else {
-        await deliverDigest(settings, userName, digestItems, userLocale, userId, isPro)
+        // 관리자 수동 실행은 email_logs에 'admin'으로 남긴다 — 'digest'로 남기면
+        // hasDigestSentToday가 이를 세어 그날 정기 발송이 통째로 스킵된다.
+        // ※ manual 경로 자체는 관리자 전용이 아니다(세션 본인도 호출 가능). 다만 현재 UI에서
+        //   manual을 호출하는 곳은 /admin/system뿐이라 'admin'으로 기록해도 무방하다.
+        await deliverDigest(settings, userName, digestItems, userLocale, userId, isPro, isManual ? 'admin' : 'digest')
       }
       // 정기 발송(스킵 포함 = 오늘 이미 발송됨) 완료 → 첫 발송 시각 기록.
       if (trigger === 'cron') await markFirstDigest(userId)

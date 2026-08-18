@@ -34,7 +34,10 @@ const supabase: ServiceClient = new Proxy({} as ServiceClient, {
 // 증분 수집(last_video_published_at 이후만)이므로 2페이지면 신규분 충분.
 const MAX_PAGES = 2
 // 요약 대상 기간 (일). 발송에 쓰이는 어제+당일만 요약 → 과거 영상 Gemini 낭비 방지.
-const SUMMARY_LOOKBACK_DAYS = 2
+// ⚠️ 이 창을 넘긴 영상은 getVideosWithoutSummary가 더는 뽑지 않으므로 영영 요약되지 않는다.
+//    열람 기록의 대기 항목을 '제공 불가'로 확정하는 기준도 같은 값을 써야 하므로 export한다
+//    (digest 라우트 backfillPendingDigests). 별도 상수를 만들면 요약 창과 표시 기준이 어긋난다.
+export const SUMMARY_LOOKBACK_DAYS = 2
 // 한 번 수집 실행에서 요약할 영상 상한 (60초 budget 보호)
 // ⚠️ 요약은 영상당 자막+Gemini로 느려서 작게 유지. 나머지는 다음 주기 + 발송 시 폴백 C가 처리.
 const SUMMARY_LIMIT = 5

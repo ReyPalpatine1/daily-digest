@@ -22,8 +22,9 @@ function getSupabase(): SupabaseClient {
   return _supabase
 }
 
-// 'preview'는 가입 직후 1회 미리보기 발송 — 정기 발송 중복 판정(type='digest'만 셈)과 분리.
-type TelegramLogType = 'digest' | 'breaking' | 'preview'
+// 'preview'는 가입 직후 1회 미리보기, 'admin'은 관리자 수동 실행 —
+// 둘 다 정기 발송 중복 판정(type='digest'만 셈)과 분리한다.
+type TelegramLogType = 'digest' | 'breaking' | 'preview' | 'admin'
 
 // 발송 결과를 email_logs에 기록(이메일과 동일 테이블 재사용). recipient 컬럼엔 chat_id 저장.
 // 실패해도 발송 흐름을 막지 않음.
@@ -192,7 +193,8 @@ export async function sendDigestTelegram(
   items: DigestItem[],
   locale: string | null = 'ko',
   userId: string | null = null,
-  // email_logs에 남길 타입. 기본 'digest'(정기·수동 발송), 미리보기만 'preview'.
+  // email_logs에 남길 타입. 기본 'digest'(정기 발송).
+  // 'preview'=가입 직후 미리보기, 'admin'=관리자 수동 실행 — 둘 다 정기 발송 중복 판정에서 빠진다.
   logType: TelegramLogType = 'digest'
 ): Promise<void> {
   const lc = normalizeLocale(locale)

@@ -53,7 +53,9 @@ const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
 
 // 'preview'는 가입 직후 1회 미리보기 발송 — 정기 발송 중복 판정(hasDigestSentToday는
 // type='digest'만 센다)에 섞이지 않도록 별도 타입으로 기록한다.
-export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome' | 'preview'
+// 'preview'는 가입 직후 1회 미리보기, 'admin'은 관리자 수동 실행 — 둘 다 정기 발송
+// 중복 판정(hasDigestSentToday가 type='digest'만 셈)에서 빠져야 그날 정기 발송이 살아남는다.
+export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome' | 'preview' | 'admin'
 
 // 발송 결과를 email_logs에 기록. 실패해도 메일 발송 흐름을 막지 않음.
 async function logEmailResult(
@@ -106,7 +108,8 @@ export async function sendDigestEmail(
   userId: string | null = null,
   // 기본값 true = 광고 없음. 무료 사용자임이 확실할 때만 false로 광고 노출.
   isPro = true,
-  // email_logs에 남길 타입. 기본 'digest'(정기·수동 발송), 미리보기만 'preview'.
+  // email_logs에 남길 타입. 기본 'digest'(정기 발송).
+  // 'preview'=가입 직후 미리보기, 'admin'=관리자 수동 실행 — 둘 다 정기 발송 중복 판정에서 빠진다.
   logType: EmailLogType = 'digest'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
@@ -136,7 +139,9 @@ export async function sendEmptyDigestEmail(
   to: string,
   userName: string,
   locale: string | null = 'ko',
-  userId: string | null = null
+  userId: string | null = null,
+  // email_logs에 남길 타입. 기본 'digest'(정기 발송) — 관리자 수동 실행만 'admin'.
+  logType: EmailLogType = 'digest'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
   const date = new Date().toLocaleDateString(dateLocaleByEmailLocale[lc], {
@@ -164,9 +169,9 @@ export async function sendEmptyDigestEmail(
       subject: et(lc, 'digest.emptySubject', { date }),
       html,
     })
-    await logEmailResult(userId, to, 'digest', true)
+    await logEmailResult(userId, to, logType, true)
   } catch (e) {
-    await logEmailResult(userId, to, 'digest', false, String(e))
+    await logEmailResult(userId, to, logType, false, String(e))
     throw e
   }
 }
