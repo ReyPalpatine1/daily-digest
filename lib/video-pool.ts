@@ -469,6 +469,28 @@ async function summarizeAndStore(
     }
   }
 
+  // 자막 확보 실패(크레딧 소진·API 오류)로 자막이 비었으면 요약을 만들지 않고 다음 주기로 미룬다.
+  // 설명으로 대체 요약해 저장하면 재생성 로직이 없어 그 영상은 크레딧이 복구돼도 영구히
+  // 저품질 요약으로 남고, 무료 사용자는 우리 쪽 사정으로 요약을 못 받는다.
+  // 보류해 두면 크레딧 복구 후 자막 기반 요약이 만들어지고, digest 라우트의 사후 갱신
+  // (backfillPendingDigests)이 열람 기록까지 자동으로 채운다.
+  // ⚠️ exhausted는 자막 없음 확정(transcript_checked=true) 영상에선 항상 false다
+  //    (그 경우 skipTranscript로 getTranscript를 건너뛰고 초기값 false가 유지됨)
+  //    → 자막이 원래 없는 영상은 여기 걸리지 않고 종전대로 설명 기반 요약을 만든다.
+  // ⚠️ summary_attempts는 올리지 않는다 — 우리 쪽 사정인데 3회 상한에 닿아 temporary로
+  //    확정되면 안 된다. transcript_checked도 세우지 않는다(위 분기가 !exhausted 조건).
+  // 소진이 SUMMARY_LOOKBACK_DAYS(2일)를 넘겨 이어지면 요약 대상에서 빠지고, 사후 갱신이
+  // '요약 제공 불가'로 확정한다(의도된 동작).
+  if (!transcript && exhausted) {
+    const { error } = await supabase
+      .from('videos')
+      .update({ fail_reason: 'pending', fail_detail: '자막 확보 실패(크레딧 소진·API 오류) → 다음 주기 재시도' })
+      .eq('video_id', video.video_id)
+    if (error) console.error(`❌ 보류 상태 기록 실패 (${video.video_id}): ${error.message}`)
+    console.log(`⏸ 자막 확보 실패 → 요약 보류(설명 폴백 안 함), 다음 주기 재시도: ${video.video_id}`)
+    return { stored: false, transcriptExhausted: true }
+  }
+
   // video.description이 빈 문자열('')이면 ??가 통과시켜 getTranscript가 가져온 설명을 못 씀 → trim 검사
   const desc = video.description?.trim() ? video.description : description
   const result = await summarizeVideo(null, video.title, transcript, desc, locale, { transcriptExhausted: exhausted })
