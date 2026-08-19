@@ -131,6 +131,15 @@ function endsWithNounForm(core: string): boolean {
   return false
 }
 
+// (7) 말줄임표로 끝나는 값인지 — ASCII('...')와 전각('…') 모두 인정.
+// 진행 중 표시('불러오는 중...')는 문장이 아니라 상태 표기라 언어를 막론하고 말줄임표로 끝난다.
+// zh/ja 종결 부호에 ASCII '.'를 넣어 버리면 평서문의 마침표 누락까지 통과하므로,
+// 마침표가 아니라 "말줄임표"만 예외로 둔다.
+function endsWithEllipsis(value: string): boolean {
+  const t = value.trim()
+  return t.slice(-3) === '...' || t.slice(-1) === '…'
+}
+
 // (7) 값이 해당 언어의 종결 부호로 끝나면 그 부호를, 아니면 null을 돌려준다.
 function terminalPunct(value: string, locale: Locale): string | null {
   const last = value.trim().slice(-1)
@@ -238,7 +247,8 @@ function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets):
       }
 
       // (7) 종결 부호 일관성 — ko 기준으로 있고/없고가 같아야 한다.
-      if (!skipTerminalCheck(path, koValue, value)) {
+      // 양쪽 다 말줄임표로 끝나면 종결 부호가 일치하는 것으로 본다.
+      if (!skipTerminalCheck(path, koValue, value) && !(endsWithEllipsis(koValue) && endsWithEllipsis(value))) {
         const koEnd = terminalPunct(koValue, BASE)
         const targetEnd = terminalPunct(value, locale)
         if (koEnd && !targetEnd) {
