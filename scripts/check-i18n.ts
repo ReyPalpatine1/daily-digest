@@ -52,6 +52,15 @@ const PREDICATE_TAIL = ['다', '요', '까']
 // 관행이며 규칙 (1) "제목·라벨은 마침표 없음"에 해당한다(메일 제목 등).
 const TITLE_KEY_SUFFIXES = ['subject', 'heading']
 
+// (5) 마침표 검사에서 제외할 빈 상태 라벨 키 꼬리.
+// 빈 상태 라벨(목록이 비었을 때 뜨는 표시)은 문장이 아니라 라벨이므로 마침표를 붙이지 않는다.
+// en/zh/ja 세 언어도 공통으로 종결 부호를 쓰지 않는다.
+// ※ 'empty'/'noMatch'로 정확히 끝나는 키만 대상이다 — 'emptyDesc'는 안내 문장이라 계속 검사한다.
+// ※ (7) 종결 부호 검사에는 이 예외를 넣지 않는다. (7)은 "ko에 부호가 없으면 다른 언어에도
+//    없어야 한다"를 보므로 네 언어가 모두 부호 없는 현재 상태에서 이미 통과한다 —
+//    예외를 넣으면 검사만 약해진다.
+const EMPTY_STATE_KEY_SUFFIXES = ['empty', 'nomatch']
+
 // (5) 마침표 검사에서 제외할 명사형 종결.
 // 검출기가 마지막 "음절"만 보기 때문에 '확인 필요'·'Pro 업그레이드 필요'처럼
 // '요'로 끝나는 명사구를 서술어로 오인한다 → 명사형으로 끝나면 판정 자체를 건너뛴다.
@@ -118,6 +127,16 @@ function isTitleKey(path: string): boolean {
   const parts = path.split('.')
   const leaf = (parts[parts.length - 1] || '').toLowerCase()
   for (const suffix of TITLE_KEY_SUFFIXES) {
+    if (leaf.length >= suffix.length && leaf.slice(-suffix.length) === suffix) return true
+  }
+  return false
+}
+
+// (5) 빈 상태 라벨 키인지 — 키 경로의 마지막 조각이 empty/noMatch로 끝나는가.
+function isEmptyStateKey(path: string): boolean {
+  const parts = path.split('.')
+  const leaf = (parts[parts.length - 1] || '').toLowerCase()
+  for (const suffix of EMPTY_STATE_KEY_SUFFIXES) {
     if (leaf.length >= suffix.length && leaf.slice(-suffix.length) === suffix) return true
   }
   return false
@@ -197,11 +216,11 @@ function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets):
     }
 
     // (5) 마침표 규칙 — 오탐이 있을 수 있어 경고로만 낸다.
-    //     여러 줄·HTML이 섞인 값, 제목류 키(subject·heading), FAQ 질문(.q)은
-    //     판정에서 제외해 소음을 줄인다.
+    //     여러 줄·HTML이 섞인 값, 제목류 키(subject·heading), FAQ 질문(.q),
+    //     빈 상태 라벨(empty·noMatch)은 판정에서 제외해 소음을 줄인다.
     if (
       hasHangul(trimmed) && trimmed.indexOf('\n') === -1 && trimmed.indexOf('<') === -1 &&
-      !isTitleKey(path) && !FAQ_QUESTION_PATH.test(path)
+      !isTitleKey(path) && !FAQ_QUESTION_PATH.test(path) && !isEmptyStateKey(path)
     ) {
       const endsWithPeriod = trimmed.slice(-1) === '.'
       const core = endsWithPeriod ? trimmed.slice(0, -1) : trimmed
