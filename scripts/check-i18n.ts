@@ -55,11 +55,13 @@ const TITLE_KEY_SUFFIXES = ['subject', 'heading']
 // (5) 마침표 검사에서 제외할 빈 상태 라벨 키 꼬리.
 // 빈 상태 라벨(목록이 비었을 때 뜨는 표시)은 문장이 아니라 라벨이므로 마침표를 붙이지 않는다.
 // en/zh/ja 세 언어도 공통으로 종결 부호를 쓰지 않는다.
-// ※ 'empty'/'noMatch'로 정확히 끝나는 키만 대상이다 — 'emptyDesc'는 안내 문장이라 계속 검사한다.
+// ※ leaf(키 경로의 마지막 조각)가 정확히 일치하는 경우만 대상이다.
+//    endsWith로 넓히면 toastEmpty 같은 문장형 키까지 검사에서 빠진다
+//    (preview.toastEmpty는 두 문장짜리 토스트, schedule.notifyEmpty는 설정 항목 라벨이다).
 // ※ (7) 종결 부호 검사에는 이 예외를 넣지 않는다. (7)은 "ko에 부호가 없으면 다른 언어에도
 //    없어야 한다"를 보므로 네 언어가 모두 부호 없는 현재 상태에서 이미 통과한다 —
 //    예외를 넣으면 검사만 약해진다.
-const EMPTY_STATE_KEY_SUFFIXES = ['empty', 'nomatch']
+const EMPTY_STATE_KEYS = ['empty', 'nomatch']
 
 // (5) 마침표 검사에서 제외할 명사형 종결.
 // 검출기가 마지막 "음절"만 보기 때문에 '확인 필요'·'Pro 업그레이드 필요'처럼
@@ -132,14 +134,11 @@ function isTitleKey(path: string): boolean {
   return false
 }
 
-// (5) 빈 상태 라벨 키인지 — 키 경로의 마지막 조각이 empty/noMatch로 끝나는가.
+// (5) 빈 상태 라벨 키인지 — 키 경로의 마지막 조각이 정확히 empty/noMatch인가.
 function isEmptyStateKey(path: string): boolean {
   const parts = path.split('.')
   const leaf = (parts[parts.length - 1] || '').toLowerCase()
-  for (const suffix of EMPTY_STATE_KEY_SUFFIXES) {
-    if (leaf.length >= suffix.length && leaf.slice(-suffix.length) === suffix) return true
-  }
-  return false
+  return EMPTY_STATE_KEYS.indexOf(leaf) !== -1
 }
 
 // (5) 명사형으로 끝나는 값인지 (서술어 오인 방지)
