@@ -38,9 +38,11 @@ const PROPER_NOUNS = [
 // (4) '합니다'체 통일 규칙을 어긴 종결어미.
 const CASUAL_ENDINGS = ['해요', '이에요', '어요', '드릴게요', '봐요']
 
-// (4) 문체 검사에서 제외할 키 — FAQ의 질문(.q)은 사용자가 실제로 할 법한 구어체여야 하고,
-// 답변이 정중체라 대비도 자연스럽다(의도된 문체이지 규칙 위반이 아니다).
-// 답변(.a)은 계속 검사 대상 — 답변은 '합니다'체가 맞다.
+// (4)(5) 두 검사에서 모두 제외할 키 — FAQ의 질문(.q).
+//   문체: 사용자가 실제로 할 법한 구어체여야 하고, 답변이 정중체라 대비도 자연스럽다.
+//   마침표: 물음 형태의 제목류라 화면에서도 마침표 없이 표시된다.
+// 어느 쪽도 규칙 위반이 아니라 의도된 표기다.
+// 답변(.a)은 두 검사 모두 계속 대상 — 답변은 '합니다'체 + 마침표가 맞다.
 const FAQ_QUESTION_PATH = /faq\[\d+\]\.q$/
 
 // (5) 한국어 서술어 종결 음절 (마침표 규칙 판정용)
@@ -157,10 +159,11 @@ function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets):
     }
 
     // (5) 마침표 규칙 — 오탐이 있을 수 있어 경고로만 낸다.
-    //     여러 줄·HTML이 섞인 값과 제목류 키(subject·heading)는 판정에서 제외해 소음을 줄인다.
+    //     여러 줄·HTML이 섞인 값, 제목류 키(subject·heading), FAQ 질문(.q)은
+    //     판정에서 제외해 소음을 줄인다.
     if (
       hasHangul(trimmed) && trimmed.indexOf('\n') === -1 && trimmed.indexOf('<') === -1 &&
-      !isTitleKey(path)
+      !isTitleKey(path) && !FAQ_QUESTION_PATH.test(path)
     ) {
       const endsWithPeriod = trimmed.slice(-1) === '.'
       const core = endsWithPeriod ? trimmed.slice(0, -1) : trimmed

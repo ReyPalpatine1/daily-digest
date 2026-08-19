@@ -66,7 +66,7 @@ export const emailTranslations = {
     error: {
       subject: '[Daily Video Digest] 시스템 알림',
       heading: '⚠️ 오류 알림',
-      message: '다음 오류가 발생했습니다',
+      message: '다음 오류가 발생했습니다.',
       time: '시간',
       action: '확인 필요',
     },
@@ -163,7 +163,7 @@ export const emailTranslations = {
     error: {
       subject: '[Daily Video Digest] System Alert',
       heading: '⚠️ Error Alert',
-      message: 'The following error occurred',
+      message: 'The following error occurred.',
       time: 'Time',
       action: 'Action Required',
     },
@@ -260,7 +260,7 @@ export const emailTranslations = {
     error: {
       subject: '[Daily Video Digest] 系统通知',
       heading: '⚠️ 错误通知',
-      message: '发生了以下错误',
+      message: '发生了以下错误。',
       time: '时间',
       action: '需要确认',
     },
@@ -357,7 +357,7 @@ export const emailTranslations = {
     error: {
       subject: '[Daily Video Digest] システム通知',
       heading: '⚠️ エラー通知',
-      message: '次のエラーが発生しました',
+      message: '次のエラーが発生しました。',
       time: '時刻',
       action: '確認が必要',
     },
