@@ -18,22 +18,42 @@ type Locale = 'ko' | 'en' | 'zh' | 'ja'
 const BASE: Locale = 'ko'
 const TARGETS: Locale[] = ['en', 'zh', 'ja']
 
-// (3) 미번역 의심에서 제외할 고유명사·브랜드·약어.
+// (3) 미번역 의심에서 제외할 고유명사·브랜드·업계 약어.
+// 번역 대상이 아닌 고유명사·업계 약어 — 오탐이 늘면 여기 추가할 것.
 // 이 단어들만으로 이루어진 값은 네 언어에서 똑같은 것이 정상이다
-// (예: stats.proOnly는 4개 언어 모두 'Pro'). 값에서 이 단어들을 모두 빼고 나서
-// 글자(한글·영문·가나·한자)가 하나도 남지 않으면 "고유명사뿐"으로 보고 건너뛴다.
+// (예: stats.proOnly는 4개 언어 모두 'Pro').
+// 판정은 완전 일치가 아니라 포함 검사다 — 값에서 괄호·공백·기호를 지우고 이 단어들을
+// 모두 빼고 나서 글자(한글·영문·가나·한자)가 남지 않으면 "고유명사뿐"으로 보고 건너뛴다.
+//   · 'CVC'는 실물 카드에 그대로 인쇄된 표기라 번역하면 사용자가 못 찾는다.
+//   · 'DAU'·'MAU'는 관리자 화면의 업계 표준 지표 약어다.
+//   · 'AI Studio'는 'AI'보다 먼저 지워져야 하므로 아래에서 긴 것부터 정렬해 제거한다.
 const PROPER_NOUNS = [
   'Daily Video Digest',
   'YouTube', 'Telegram', 'WhatsApp', 'KakaoTalk', 'LINE', 'Coupang', 'Gold Box',
-  'Gemini', 'Supabase', 'Cloudflare',
+  'Gemini', 'Supabase', 'Cloudflare', 'Google Cloud Console', 'AI Studio',
+  'Chat ID', 'DAU', 'MAU', 'CVC',
   'Pro', 'PRO', 'Free', 'FREE', 'VIP', 'ADMIN', 'AI', 'AD', 'CTA', 'ID', 'URL',
 ]
 
 // (4) '합니다'체 통일 규칙을 어긴 종결어미.
 const CASUAL_ENDINGS = ['해요', '이에요', '어요', '드릴게요', '봐요']
 
+// (4) 문체 검사에서 제외할 키 — FAQ의 질문(.q)은 사용자가 실제로 할 법한 구어체여야 하고,
+// 답변이 정중체라 대비도 자연스럽다(의도된 문체이지 규칙 위반이 아니다).
+// 답변(.a)은 계속 검사 대상 — 답변은 '합니다'체가 맞다.
+const FAQ_QUESTION_PATH = /faq\[\d+\]\.q$/
+
 // (5) 한국어 서술어 종결 음절 (마침표 규칙 판정용)
 const PREDICATE_TAIL = ['다', '요', '까']
+
+// (5) 마침표 검사에서 제외할 키 이름 꼬리 — 제목·제목 줄에 마침표를 붙이지 않는 것은
+// 관행이며 규칙 (1) "제목·라벨은 마침표 없음"에 해당한다(메일 제목 등).
+const TITLE_KEY_SUFFIXES = ['subject', 'heading']
+
+// (5) 마침표 검사에서 제외할 명사형 종결.
+// 검출기가 마지막 "음절"만 보기 때문에 '확인 필요'·'Pro 업그레이드 필요'처럼
+// '요'로 끝나는 명사구를 서술어로 오인한다 → 명사형으로 끝나면 판정 자체를 건너뛴다.
+const NOUN_ENDINGS = ['필요', '가능', '완료', '중', '없음', '있음']
 
 type Finding = { dict: string; path: string; detail: string }
 
@@ -58,11 +78,42 @@ function flatten(node: unknown, path: string, out: Map<string, string>): void {
 }
 
 // ── 판정 헬퍼 ──────────────────────────────────────────────────
-// 값에서 고유명사를 모두 제거한 뒤 글자가 남는지 검사
+// 괄호·공백·기호를 지우고 글자와 숫자만 남긴다.
+// 'Gemini (AI Studio)' → 'GeminiAIStudio' 처럼 표기 차이를 없애고 비교하기 위함.
+function lettersOnly(value: string): string {
+  return value.replace(/[^0-9A-Za-zㄱ-ㆎ가-힣぀-ヿ一-鿿]/g, '')
+}
+
+// 긴 고유명사부터 지운다 — 'AI'가 먼저 지워지면 'AI Studio'가 'Studio'만 남아 오탐이 된다.
+const PROPER_NOUNS_STRIPPED = PROPER_NOUNS
+  .map(lettersOnly)
+  .filter(function (n) { return n.length > 0 })
+  .sort(function (a, b) { return b.length - a.length })
+
+// 값이 고유명사 조합만으로 이루어져 있는지 (미번역 판정에서 제외할지) 검사.
 function isProperNounOnly(value: string): boolean {
-  let rest = value
-  for (const noun of PROPER_NOUNS) rest = rest.split(noun).join('')
+  let rest = lettersOnly(value)
+  if (!rest) return true // 기호·숫자뿐인 값(예: '10:30')은 번역 대상이 아니다
+  for (const noun of PROPER_NOUNS_STRIPPED) rest = rest.split(noun).join('')
   return !/[a-zA-Zㄱ-ㆎ가-힣぀-ヿ一-鿿]/.test(rest)
+}
+
+// (5) 제목류 키인지 — 키 경로의 마지막 조각이 subject/heading으로 끝나는가.
+function isTitleKey(path: string): boolean {
+  const parts = path.split('.')
+  const leaf = (parts[parts.length - 1] || '').toLowerCase()
+  for (const suffix of TITLE_KEY_SUFFIXES) {
+    if (leaf.length >= suffix.length && leaf.slice(-suffix.length) === suffix) return true
+  }
+  return false
+}
+
+// (5) 명사형으로 끝나는 값인지 (서술어 오인 방지)
+function endsWithNounForm(core: string): boolean {
+  for (const ending of NOUN_ENDINGS) {
+    if (core.length >= ending.length && core.slice(-ending.length) === ending) return true
+  }
+  return false
 }
 
 // {name} 형태 토큰 집합 추출 (중복 제거 후 정렬 → 순서 차이는 불일치로 보지 않음)
@@ -94,25 +145,34 @@ function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets):
     const trimmed = value.trim()
     if (!trimmed) return
 
-    // (4) 해요체: 종결어미 + 선택적 문장부호로 끝나는가
-    for (const ending of CASUAL_ENDINGS) {
-      if (new RegExp(ending + '[.!?]?$').test(trimmed)) {
-        b.casual.push({ dict: dictName, path, detail: "'" + ending + "'로 끝남 → " + trimmed })
-        break
+    // (4) 해요체: 종결어미 + 선택적 문장부호로 끝나는가.
+    //     FAQ 질문(.q)은 의도된 구어체라 제외한다.
+    if (!FAQ_QUESTION_PATH.test(path)) {
+      for (const ending of CASUAL_ENDINGS) {
+        if (new RegExp(ending + '[.!?]?$').test(trimmed)) {
+          b.casual.push({ dict: dictName, path, detail: "'" + ending + "'로 끝남 → " + trimmed })
+          break
+        }
       }
     }
 
     // (5) 마침표 규칙 — 오탐이 있을 수 있어 경고로만 낸다.
-    //     여러 줄·HTML이 섞인 값은 판정에서 제외해 소음을 줄인다.
-    if (hasHangul(trimmed) && trimmed.indexOf('\n') === -1 && trimmed.indexOf('<') === -1) {
+    //     여러 줄·HTML이 섞인 값과 제목류 키(subject·heading)는 판정에서 제외해 소음을 줄인다.
+    if (
+      hasHangul(trimmed) && trimmed.indexOf('\n') === -1 && trimmed.indexOf('<') === -1 &&
+      !isTitleKey(path)
+    ) {
       const endsWithPeriod = trimmed.slice(-1) === '.'
       const core = endsWithPeriod ? trimmed.slice(0, -1) : trimmed
       const last = core.slice(-1)
-      const isPredicate = PREDICATE_TAIL.indexOf(last) !== -1
-      if (isPredicate && !endsWithPeriod) {
-        b.period.push({ dict: dictName, path, detail: '서술어 종결인데 마침표 없음 → ' + trimmed })
-      } else if (!isPredicate && endsWithPeriod && /[가-힣]/.test(last)) {
-        b.period.push({ dict: dictName, path, detail: '명사 종결인데 마침표 있음 → ' + trimmed })
+      // 명사형 종결('… 필요' 등)은 서술어로 오인되므로 판정 자체를 건너뛴다.
+      if (!endsWithNounForm(core)) {
+        const isPredicate = PREDICATE_TAIL.indexOf(last) !== -1
+        if (isPredicate && !endsWithPeriod) {
+          b.period.push({ dict: dictName, path, detail: '서술어 종결인데 마침표 없음 → ' + trimmed })
+        } else if (!isPredicate && endsWithPeriod && /[가-힣]/.test(last)) {
+          b.period.push({ dict: dictName, path, detail: '명사 종결인데 마침표 있음 → ' + trimmed })
+        }
       }
     }
   })
