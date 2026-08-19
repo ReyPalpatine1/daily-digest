@@ -8,7 +8,7 @@
 // 사전을 문자열로 파싱하지 않고 import한다 — 실제 런타임이 읽는 값과 같은 것을 본다.
 //
 // 종료 코드: 오류(키 누락·잉여 키·플레이스홀더 불일치)가 하나라도 있으면 1, 아니면 0.
-//   미번역 의심·문체·마침표는 사람의 판단이 필요한 '경고'라 빌드를 막지 않는다.
+//   미번역 의심·문체·마침표·종결 부호는 사람의 판단이 필요한 '경고'라 빌드를 막지 않는다.
 
 import { translations } from '../lib/i18n/translations'
 import { emailTranslations } from '../lib/i18n/email-translations'
@@ -56,6 +56,19 @@ const TITLE_KEY_SUFFIXES = ['subject', 'heading']
 // 검출기가 마지막 "음절"만 보기 때문에 '확인 필요'·'Pro 업그레이드 필요'처럼
 // '요'로 끝나는 명사구를 서술어로 오인한다 → 명사형으로 끝나면 판정 자체를 건너뛴다.
 const NOUN_ENDINGS = ['필요', '가능', '완료', '중', '없음', '있음']
+
+// (7) 언어별 문장 종결 부호.
+// (5)는 한국어 값만 보므로 다른 언어에서 종결 부호가 빠져도 잡히지 않는다.
+// (7)은 ko를 기준으로 삼아 "ko에 종결 부호가 있으면 대상 언어에도 있어야 하고,
+// 없으면 대상 언어에도 없어야 한다"를 대조한다.
+// 중국어·일본어는 전각 부호(。！？)를 쓴다 — ASCII 마침표로 끝나면 어긋난 것으로 본다.
+// 물음표·느낌표는 서로 대응만 되면 통과시킨다(ko '…나요?' ↔ zh '…？').
+const TERMINAL_PUNCT: Record<Locale, string[]> = {
+  ko: ['.', '!', '?'],
+  en: ['.', '!', '?'],
+  zh: ['。', '！', '？'],
+  ja: ['。', '！', '？'],
+}
 
 type Finding = { dict: string; path: string; detail: string }
 
@@ -118,6 +131,21 @@ function endsWithNounForm(core: string): boolean {
   return false
 }
 
+// (7) 값이 해당 언어의 종결 부호로 끝나면 그 부호를, 아니면 null을 돌려준다.
+function terminalPunct(value: string, locale: Locale): string | null {
+  const last = value.trim().slice(-1)
+  return TERMINAL_PUNCT[locale].indexOf(last) !== -1 ? last : null
+}
+
+// (7) 종결 부호 검사에서 제외할 항목인지 — 제외 규칙은 (5)와 같은 것을 그대로 쓴다
+// (FAQ 질문 / 제목류 키 / 고유명사뿐인 값). 새 규칙을 만들지 않는다.
+function skipTerminalCheck(path: string, koValue: string, value: string): boolean {
+  if (FAQ_QUESTION_PATH.test(path)) return true
+  if (isTitleKey(path)) return true
+  if (isProperNounOnly(koValue) || isProperNounOnly(value)) return true
+  return false
+}
+
 // {name} 형태 토큰 집합 추출 (중복 제거 후 정렬 → 순서 차이는 불일치로 보지 않음)
 function placeholders(value: string): string[] {
   const found = value.match(/\{(\w+)\}/g) || []
@@ -136,6 +164,7 @@ type Buckets = {
   casual: Finding[]       // (4) 해요체
   period: Finding[]       // (5) 마침표 규칙 위반 의심
   placeholder: Finding[]  // (6) 플레이스홀더 불일치
+  terminal: Finding[]     // (7) 종결 부호가 ko와 어긋남
 }
 
 function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets): void {
@@ -207,6 +236,25 @@ function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets):
           detail: 'ko=[' + (koTokens.join(' ') || '없음') + '] vs ' + locale + '=[' + (tokens.join(' ') || '없음') + ']',
         })
       }
+
+      // (7) 종결 부호 일관성 — ko 기준으로 있고/없고가 같아야 한다.
+      if (!skipTerminalCheck(path, koValue, value)) {
+        const koEnd = terminalPunct(koValue, BASE)
+        const targetEnd = terminalPunct(value, locale)
+        if (koEnd && !targetEnd) {
+          b.terminal.push({
+            dict: dictName,
+            path: locale + ': ' + path,
+            detail: '대상 언어에 종결 부호 없음 → ' + koValue + ' ↔ ' + value,
+          })
+        } else if (!koEnd && targetEnd) {
+          b.terminal.push({
+            dict: dictName,
+            path: locale + ': ' + path,
+            detail: 'ko에는 없는 종결 부호 있음 → ' + koValue + ' ↔ ' + value,
+          })
+        }
+      }
     })
 
     target.forEach((value, path) => {
@@ -227,7 +275,9 @@ function report(title: string, findings: Finding[], isError: boolean): void {
 }
 
 function main(): void {
-  const b: Buckets = { missing: [], extra: [], untranslated: [], casual: [], period: [], placeholder: [] }
+  const b: Buckets = {
+    missing: [], extra: [], untranslated: [], casual: [], period: [], placeholder: [], terminal: [],
+  }
 
   checkDict('translations.ts', translations as unknown as Record<string, unknown>, b)
   checkDict('email-translations.ts', emailTranslations as unknown as Record<string, unknown>, b)
@@ -246,9 +296,10 @@ function main(): void {
   report('(3) 미번역 의심 — 값이 ko와 완전히 동일', b.untranslated, false)
   report("(4) 문체 위반 — '합니다'체가 아닌 ko 문구", b.casual, false)
   report('(5) 마침표 규칙 위반 의심 — 오탐 가능', b.period, false)
+  report('(7) 종결 부호 불일치 — ko와 다른 언어의 문장 끝 부호가 어긋남', b.terminal, false)
 
   const errors = b.missing.length + b.extra.length + b.placeholder.length
-  const warnings = b.untranslated.length + b.casual.length + b.period.length
+  const warnings = b.untranslated.length + b.casual.length + b.period.length + b.terminal.length
 
   console.log('\n' + line)
   console.log('요약')
@@ -259,6 +310,7 @@ function main(): void {
   console.log('  (3) 미번역 의심        : ' + b.untranslated.length)
   console.log('  (4) 문체 위반          : ' + b.casual.length)
   console.log('  (5) 마침표 의심        : ' + b.period.length)
+  console.log('  (7) 종결 부호 불일치    : ' + b.terminal.length)
   console.log('  ── 경고 합계           : ' + warnings)
   console.log(line)
 

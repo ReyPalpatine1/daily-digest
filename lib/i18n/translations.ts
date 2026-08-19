@@ -1394,7 +1394,7 @@ export const translations = {
       edit: '编辑',
       add: '添加',
       addSubmit: '添加',
-      proFeature: '这是 Pro 功能',
+      proFeature: '这是 Pro 功能。',
       localeChangedNotice: '语言已更改。已收到的摘要保持不变，从下次推送开始将使用新语言。',
       confirm: '确认',
       loading: '加载中...',
