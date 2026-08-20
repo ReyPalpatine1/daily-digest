@@ -11,7 +11,8 @@ import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import HelpPopup from '@/components/HelpPopup'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, CreditCard } from 'lucide-react'
+import { requestCardRegistration } from '@/lib/toss-billing'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -32,6 +33,8 @@ export default function ProfilePage() {
   const [showHelp, setShowHelp] = useState(false)
   const [settings, setSettings] = useState<{ help_seen: boolean } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  // 등록된 카드 표시명(예: KB국민카드 **** 7508). 서버가 표시명만 내려준다 — 빌링키는 받지 않는다.
+  const [cardLabel, setCardLabel] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -70,6 +73,21 @@ export default function ProfilePage() {
     })
     return () => { cancelled = true }
   }, [router])
+
+  // 등록된 카드 표시명 조회. 카드가 없으면 null이고, 그 경우 카드 줄 자체를 그리지 않는다.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/billing/card')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled) return
+        setCardLabel(typeof data?.cardLabel === 'string' ? data.cardLabel : null)
+      })
+      .catch(() => {
+        // 조회 실패는 조용히 넘긴다 — 카드 줄이 안 보일 뿐 다른 기능에는 영향이 없다.
+      })
+    return () => { cancelled = true }
+  }, [])
 
   // HelpPopup 반응형 분기용 (대시보드와 동일 브레이크포인트)
   useEffect(() => {
@@ -114,6 +132,23 @@ export default function ProfilePage() {
       setToastKey(null)
       toastTimerRef.current = null
     }, TOAST_MS)
+  }
+
+  // 카드 변경 — 구독 시작 때와 같은 토스 카드 등록창을 연다.
+  // intent=card라 결과 화면이 카드만 교체하고 결제로 넘어가지 않는다.
+  // 등록은 user_id 기준 upsert라 기존 카드가 교체된다(계정당 1장).
+  async function changeCard() {
+    if (!user) return
+    try {
+      await requestCardRegistration(user.id, 'card')
+    } catch (e) {
+      // 창을 닫은 것(USER_CANCEL)은 오류가 아니다 — 그 외에만 원인을 드러낸다.
+      const code = (e as { code?: string } | null)?.code
+      if (code !== 'USER_CANCEL') {
+        console.error('[profile] 카드 변경 실패:', code ?? e)
+        showToast('adminUsers.actionFailed')
+      }
+    }
   }
 
   // 결제 기능은 아직 미구현 — 결제/구독 관리 액션은 안내만
@@ -222,6 +257,31 @@ export default function ProfilePage() {
                 : t('profile.freeUpsell')}
             </span>
           </div>
+
+          {/* 등록된 카드 — 무슨 카드로 결제되는지 보여준다. 카드가 없으면 표시하지 않는다. */}
+          {cardLabel && (
+            <>
+            <div style={{
+              marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, flexWrap: 'wrap',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <CreditCard size={15} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  {t('profile.registeredCard')}: {cardLabel}
+                </span>
+              </div>
+              <button style={btnSecondary} onClick={changeCard}>
+                {t('profile.changeCard')}
+              </button>
+            </div>
+            {/* 재등록은 계정당 1장 upsert라 기존 카드를 교체한다 — 그 사실을 미리 알린다. */}
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+              {t('profile.cardReplaceNotice')}
+            </div>
+            </>
+          )}
         </div>
 
         {/* ============ 위험 영역: 회원 탈퇴 ============ */}

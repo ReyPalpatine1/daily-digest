@@ -9,6 +9,7 @@ import { TOAST_MS } from '@/lib/toast'
 import { AppHeader } from '@/components/AppHeader'
 import { CreditCard, Lock, Ban } from 'lucide-react'
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
+import { requestCardRegistration } from '@/lib/toss-billing'
 
 const PRICE_MONTHLY = 4900
 
@@ -107,32 +108,60 @@ function SubscribeContent() {
     }
   }
 
-  // 카드 등록(빌링키 발급 인증)만 수행한다 — 이 단계에서 결제는 일어나지 않는다.
+  // 토스 결제창에서 돌아온 예외를 공통 처리한다.
+  // 사용자가 창을 닫은 것(USER_CANCEL)은 오류가 아니므로 조용히 화면만 되돌리고,
+  // 그 외(클라이언트 키 문제 등 설정 오류)는 침묵하면 버튼이 무반응으로 보여 원인을
+  // 찾을 수 없으므로 토스트로 드러낸다.
+  function handleTossError(where: string, e: unknown) {
+    const code = (e as { code?: string } | null)?.code
+    if (code !== 'USER_CANCEL') {
+      console.error(`[subscribe] ${where} 실패:`, code ?? e)
+      showToast('adminUsers.actionFailed')
+    }
+    setSubmitting(false)
+  }
+
+  // 자동 갱신: 카드 등록(빌링키 발급 인증) → 결과 화면이 이어서 결제까지 처리한다.
   // 카드 정보는 토스 결제창이 직접 받으므로 우리 화면·서버는 카드번호를 만지지 않는다(PCI).
   async function registerCard() {
+    if (!userId) { router.push('/'); return }
+    setSubmitting(true)
+    try {
+      await requestCardRegistration(userId, 'subscribe')
+      // 성공 시 토스가 successUrl로 이동시키므로 여기로는 돌아오지 않는다.
+    } catch (e) {
+      handleTossError('카드 등록', e)
+    }
+  }
+
+  // 1개월권: 빌링키 없이 일반 결제창으로 그때 한 번만 결제한다.
+  // orderId·금액은 서버가 먼저 만들어 둔다 — 클라이언트가 만든 주문번호를 쓰면
+  // 남의 주문에 붙거나 금액이 다른 주문을 재사용당할 수 있다.
+  async function payOnce() {
     if (!userId) { router.push('/'); return }
     const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY
     if (!clientKey) { showToast('adminUsers.actionFailed'); return }
     setSubmitting(true)
     try {
+      const res = await fetch('/api/billing/order', { method: 'POST' })
+      const order = await res.json().catch(() => ({}))
+      if (!res.ok || !order?.orderId) {
+        showToast('adminUsers.actionFailed')
+        setSubmitting(false)
+        return
+      }
       const toss = await loadTossPayments(clientKey)
       const origin = window.location.origin
-      await toss.payment({ customerKey: userId }).requestBillingAuth({
+      await toss.payment({ customerKey: userId }).requestPayment({
         method: 'CARD',
-        successUrl: origin + '/subscribe/billing-result',
-        failUrl: origin + '/subscribe/billing-result?fail=1',
+        amount: { value: order.amount, currency: 'KRW' },
+        orderId: order.orderId,
+        orderName: order.orderName,
+        successUrl: origin + '/subscribe/payment-result',
+        failUrl: origin + '/subscribe/payment-result?fail=1',
       })
-      // 성공 시 토스가 successUrl로 이동시키므로 여기로는 돌아오지 않는다.
     } catch (e) {
-      // 사용자가 창을 닫은 것(USER_CANCEL)은 오류가 아니므로 조용히 화면만 되돌린다.
-      // 그 외(클라이언트 키 종류 불일치 등 설정 오류)는 침묵하면 버튼이 무반응으로 보여
-      // 원인을 찾을 수 없으므로 토스트로 드러낸다.
-      const code = (e as { code?: string } | null)?.code
-      if (code !== 'USER_CANCEL') {
-        console.error('[subscribe] 카드 등록 실패:', code ?? e)
-        showToast('adminUsers.actionFailed')
-      }
-      setSubmitting(false)
+      handleTossError('1개월권 결제', e)
     }
   }
 
@@ -140,7 +169,7 @@ function SubscribeContent() {
     if (!canSubmit) { showToast('subscribe.needAgree'); return }
     if (mode === 'trial') { startTrial(); return }
     if (payType === 'auto') { registerCard(); return }
-    showToast('profile.paymentComingSoon')
+    payOnce()
   }
 
   const card: React.CSSProperties = {
@@ -285,6 +314,17 @@ function SubscribeContent() {
             </label>
           )}
         </div>
+
+        {mode === 'pay' && (
+          <div style={{
+            marginBottom: 12, padding: '10px 12px',
+            background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
+            borderRadius: 8,
+            fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
+          }}>
+            {subscribe.refundNotice}
+          </div>
+        )}
 
         <button style={canSubmit ? primaryBtn : disabledBtn} onClick={handleSubmit} disabled={submitting}>
           {submitting

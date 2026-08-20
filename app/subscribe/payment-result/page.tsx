@@ -7,25 +7,16 @@ import { translations } from '@/lib/i18n/translations'
 import { AppHeader } from '@/components/AppHeader'
 import { CheckCircle2, XCircle, CreditCard } from 'lucide-react'
 
-// 토스 카드 등록창의 리다이렉트 착지점.
-// 성공: ?customerKey=&authKey= → /api/billing/authorize 로 넘겨 빌링키를 발급받는다.
-// 실패: ?fail=1 또는 ?code=&message= (사용자가 창을 닫으면 code=USER_CANCEL).
-//
-// ?intent= 로 등록 이후 흐름이 갈린다.
-//   subscribe : 등록에 이어 바로 결제한다(/api/billing/charge)
-//   card      : 카드만 교체한다 — 결제하지 않는다(/profile의 카드 변경)
+// 1개월권(단건 결제) 결제창의 리다이렉트 착지점.
+// 성공: ?paymentKey=&orderId=&amount= → /api/billing/confirm 이 승인한다.
+//   · 승인 전까지는 결제가 확정되지 않는다 — 이 페이지를 거쳐야 결제가 끝난다.
+//   · amount는 서버가 저장해 둔 금액과 대조만 한다(위변조 방지). 서버가 최종 판단한다.
+//   · 새로고침해도 서버가 멱등 처리하므로 두 번 결제되지 않는다.
+// 실패: ?fail=1 또는 ?code=&message= (창을 닫으면 code=USER_CANCEL).
 
-type Status =
-  | 'loading'       // 빌링키 발급 중
-  | 'charging'      // 카드 등록 완료, 결제 진행 중
-  | 'paid'          // 결제까지 완료
-  | 'alreadyActive' // 카드는 등록됐고, 이미 이용 중이라 결제하지 않음
-  | 'cardChanged'   // 카드만 교체
-  | 'chargeFailed'  // 카드는 등록됐으나 결제 실패
-  | 'fail'          // 카드 등록 자체 실패
-  | 'canceled'      // 사용자가 창을 닫음
+type Status = 'loading' | 'success' | 'fail' | 'canceled'
 
-function BillingResultContent() {
+function PaymentResultContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t, locale } = useTranslation()
@@ -33,12 +24,12 @@ function BillingResultContent() {
   const [status, setStatus] = useState<Status>('loading')
   const [failMessage, setFailMessage] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
-  // 개발 모드의 이펙트 2회 실행으로 authKey가 두 번 소비되지 않게 한다.
+  // 개발 모드의 이펙트 2회 실행으로 승인이 두 번 요청되지 않게 한다.
   const startedRef = useRef(false)
 
-  const authKey = searchParams.get('authKey')
-  const customerKey = searchParams.get('customerKey')
-  const intent = searchParams.get('intent') === 'card' ? 'card' : 'subscribe'
+  const paymentKey = searchParams.get('paymentKey')
+  const orderId = searchParams.get('orderId')
+  const amount = searchParams.get('amount')
   const failFlag = searchParams.get('fail')
   const failCode = searchParams.get('code')
   const failMessageParam = searchParams.get('message')
@@ -47,7 +38,6 @@ function BillingResultContent() {
     if (startedRef.current) return
     startedRef.current = true
 
-    // 토스 실패 리다이렉트 — 창을 닫은 것(USER_CANCEL)은 오류가 아니라 취소로 본다.
     if (failFlag || failCode) {
       if (failCode === 'USER_CANCEL') { setStatus('canceled'); return }
       setFailMessage(failMessageParam)
@@ -55,44 +45,27 @@ function BillingResultContent() {
       return
     }
 
-    if (!authKey || !customerKey) { setStatus('fail'); return }
+    if (!paymentKey || !orderId) { setStatus('fail'); return }
 
-    async function run() {
-      const res = await fetch('/api/billing/authorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authKey, customerKey }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.ok) {
+    fetch('/api/billing/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentKey, orderId, amount: Number(amount) }),
+    })
+      .then(async res => {
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data?.ok) {
+          setExpiresAt(typeof data.planExpiresAt === 'string' ? data.planExpiresAt : null)
+          setStatus('success')
+          return
+        }
         setFailMessage(typeof data?.message === 'string' ? data.message : null)
         setStatus('fail')
-        return
-      }
+      })
+      .catch(() => setStatus('fail'))
+  }, [paymentKey, orderId, amount, failFlag, failCode, failMessageParam])
 
-      // 카드 변경 흐름은 여기서 끝난다 — 결제하지 않는다.
-      if (intent === 'card') { setStatus('cardChanged'); return }
-
-      setStatus('charging')
-      const chargeRes = await fetch('/api/billing/charge', { method: 'POST' })
-      const charge = await chargeRes.json().catch(() => ({}))
-      if (chargeRes.ok && charge?.ok) {
-        setExpiresAt(typeof charge.planExpiresAt === 'string' ? charge.planExpiresAt : null)
-        setStatus('paid')
-        return
-      }
-      // 이미 이용 중이면 중복 청구를 막은 것이므로 오류가 아니다.
-      if (chargeRes.status === 409) { setStatus('alreadyActive'); return }
-      setFailMessage(
-        charge?.error === 'no_card'
-          ? t('billingResult.noCard')
-          : (typeof charge?.message === 'string' ? charge.message : null)
-      )
-      setStatus('chargeFailed')
-    }
-    run().catch(() => setStatus('fail'))
-  }, [authKey, customerKey, intent, failFlag, failCode, failMessageParam, t])
-
+  const paymentResult = (((translations as Record<string, any>)[locale]?.paymentResult) ?? translations.en.paymentResult) as typeof translations.ko.paymentResult
   const billingResult = (((translations as Record<string, any>)[locale]?.billingResult) ?? translations.en.billingResult) as typeof translations.ko.billingResult
   const subscribeSuccess = (((translations as Record<string, any>)[locale]?.subscribeSuccess) ?? translations.en.subscribeSuccess) as typeof translations.ko.subscribeSuccess
 
@@ -125,21 +98,14 @@ function BillingResultContent() {
     fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.7, marginTop: 8,
   }
 
-  const isDone = status === 'paid' || status === 'alreadyActive' || status === 'cardChanged'
-
   const title =
-    status === 'paid' ? billingResult.paidTitle
-      : status === 'cardChanged' ? billingResult.cardChangedTitle
-        : status === 'alreadyActive' ? billingResult.successTitle
-          : status === 'chargeFailed' ? billingResult.chargeFailedTitle
-            : status === 'canceled' ? billingResult.canceledTitle
-              : billingResult.failTitle
+    status === 'success' ? paymentResult.successTitle
+      : status === 'canceled' ? paymentResult.canceledTitle
+        : paymentResult.failTitle
   const desc =
-    status === 'paid' ? (expiresLabel ? t('billingResult.paidDesc', { date: expiresLabel }) : null)
-      : status === 'cardChanged' ? billingResult.cardChangedDesc
-        : status === 'alreadyActive' ? billingResult.alreadyActiveDesc
-          : status === 'canceled' ? billingResult.canceledDesc
-            : failMessage
+    status === 'success' ? (expiresLabel ? t('paymentResult.successDesc', { date: expiresLabel }) : null)
+      : status === 'canceled' ? paymentResult.canceledDesc
+        : failMessage
 
   return (
     <div style={{
@@ -151,26 +117,22 @@ function BillingResultContent() {
       <AppHeader showBack />
 
       <main style={{ maxWidth: 460, margin: '0 auto', padding: '32px 20px 64px' }}>
-        {status === 'loading' || status === 'charging' ? (
+        {status === 'loading' ? (
           <div style={card}>
             <CreditCard size={28} style={{ color: 'var(--text-tertiary)' }} />
-            {/* 카드 등록이 끝난 뒤 결제를 기다리는 동안 무엇이 진행 중인지 밝힌다. */}
-            {status === 'charging' && <h1 style={titleStyle}>{billingResult.successTitle}</h1>}
-            <div style={descStyle}>
-              {status === 'charging' ? billingResult.successDesc : billingResult.registering}
-            </div>
+            <div style={descStyle}>{paymentResult.confirming}</div>
           </div>
         ) : (
           <>
             <div style={{ ...card, marginBottom: 16 }}>
-              {isDone
+              {status === 'success'
                 ? <CheckCircle2 size={30} style={{ color: 'var(--success)' }} />
                 : <XCircle size={30} style={{ color: status === 'canceled' ? 'var(--text-tertiary)' : 'var(--danger)' }} />}
               <h1 style={titleStyle}>{title}</h1>
               {desc && <div style={descStyle}>{desc}</div>}
             </div>
 
-            {isDone ? (
+            {status === 'success' ? (
               <button style={primaryBtn} onClick={() => router.push('/dashboard')}>
                 {subscribeSuccess.goDashboard}
               </button>
@@ -186,10 +148,10 @@ function BillingResultContent() {
   )
 }
 
-export default function BillingResultPage() {
+export default function PaymentResultPage() {
   return (
     <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />}>
-      <BillingResultContent />
+      <PaymentResultContent />
     </Suspense>
   )
 }

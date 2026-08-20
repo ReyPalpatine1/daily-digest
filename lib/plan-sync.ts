@@ -3,6 +3,7 @@
 //    클라이언트 컴포넌트에서 import 금지.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { nowUtc } from './time'
+import { PERIOD_DAYS } from './billing'
 
 // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
 // service client를 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
@@ -63,6 +64,54 @@ export async function restoreDeliveryToEmail(userId: string): Promise<void> {
     .update({ delivery_method: 'email' })
     .eq('user_id', userId)
     .neq('delivery_method', 'email')
+}
+
+// 결제 성공 시 유료 플랜 반영 (자동갱신 / 1개월권 공용).
+// 만료일 규칙:
+//   · auto    : 지금부터 30일 (정기 결제라 주기가 매번 새로 시작한다)
+//   · onetime : max(기존 만료일, 지금) + 30일
+//     이용약관 제7조 2항 — 만료 전에 다시 구매하면 남은 기간이 소멸하지 않고 뒤에 이어붙는다.
+//
+// 체험 알림 플래그 4개를 반드시 null로 되돌린다(lib/trial-notify.ts 상단 주석의 요구).
+// 리셋하지 않으면 유료 전환 뒤 만료 안내가 다시 나가지 않거나 지난 팝업이 다시 뜬다.
+// trial_used는 건드리지 않는다 — 재체험 방지 기록이다.
+export async function applyPaidPlan(userId: string, kind: 'auto' | 'onetime'): Promise<string> {
+  const now = nowUtc()
+  let base = now
+
+  if (kind === 'onetime') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('plan_expires_at')
+      .eq('id', userId)
+      .single()
+    const current = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null
+    // 이미 지난 만료일에 이어붙이면 과거로 계산된다 — 지금보다 미래일 때만 기준으로 삼는다.
+    if (current && current > now) base = current
+  }
+
+  const expiresAt = new Date(base.getTime() + PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      plan: 'pro',
+      plan_status: kind === 'auto' ? 'active' : 'onetime',
+      plan_expires_at: expiresAt,
+      plan_changed_at: now.toISOString(),
+      trial_ending_notified_at: null,
+      trial_ended_notified_at: null,
+      trial_ending_popup_seen_at: null,
+      trial_ended_popup_seen_at: null,
+    })
+    .eq('id', userId)
+  if (error) throw new Error(`플랜 반영 실패: ${error.message}`)
+
+  // 무료 강등 때 잠긴 채널을 되살린다.
+  await activateAllChannels(userId)
+
+  console.log(`💳 유료 플랜 반영: ${userId} (${kind}) → ${expiresAt}`)
+  return expiresAt
 }
 
 // 만료 체크 + 동기화 (cron/digest에서 호출).
