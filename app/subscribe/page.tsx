@@ -123,8 +123,15 @@ function SubscribeContent() {
         failUrl: origin + '/subscribe/billing-result?fail=1',
       })
       // 성공 시 토스가 successUrl로 이동시키므로 여기로는 돌아오지 않는다.
-    } catch {
-      // 사용자가 창을 닫은 경우도 여기로 온다 — 별도 오류 표시 없이 화면을 되돌린다.
+    } catch (e) {
+      // 사용자가 창을 닫은 것(USER_CANCEL)은 오류가 아니므로 조용히 화면만 되돌린다.
+      // 그 외(클라이언트 키 종류 불일치 등 설정 오류)는 침묵하면 버튼이 무반응으로 보여
+      // 원인을 찾을 수 없으므로 토스트로 드러낸다.
+      const code = (e as { code?: string } | null)?.code
+      if (code !== 'USER_CANCEL') {
+        console.error('[subscribe] 카드 등록 실패:', code ?? e)
+        showToast('adminUsers.actionFailed')
+      }
       setSubmitting(false)
     }
   }
