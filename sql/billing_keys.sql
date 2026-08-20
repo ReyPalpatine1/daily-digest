@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.billing_keys (
   user_id      uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE, -- 탈퇴 시 함께 삭제
   billing_key  text NOT NULL,                    -- 토스 빌링키(민감 — 서버 외부로 내보내지 말 것)
   customer_key text NOT NULL,                    -- 토스 customerKey = 사용자 UUID
-  card_label   text,                             -- 예: '신한 **** 1234' (표시용 마스킹만)
+  card_label   text,                             -- 예: 'KB국민카드 **** 7508' (표시용 마스킹만)
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now()
 );

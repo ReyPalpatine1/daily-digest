@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
+import { buildCardLabel } from '@/lib/toss-cards'
 
 // 토스 카드 등록(빌링키 발급) — 결제창에서 받은 authKey를 빌링키로 교환해 저장한다.
 // 이 라우트에서 실제 결제는 일어나지 않는다(카드 등록까지만).
@@ -21,17 +22,6 @@ type TossBillingResponse = {
   card?: { issuerCode?: string; number?: string; cardType?: string }
   code?: string
   message?: string
-}
-
-// '신한 **** 1234' 같은 표시명만 만든다 — 카드번호 원문은 저장하지 않는다.
-// 토스가 주는 number는 이미 마스킹된 값(예: '12345678****123*')이라 뒤 4자리만 뽑아 쓴다.
-function buildCardLabel(card?: { issuerCode?: string; number?: string }): string | null {
-  if (!card) return null
-  const digits = (card.number ?? '').replace(/\D/g, '')
-  const last4 = digits.length >= 4 ? digits.slice(-4) : ''
-  const issuer = card.issuerCode ?? ''
-  if (!issuer && !last4) return null
-  return [issuer, last4 ? `**** ${last4}` : ''].filter(Boolean).join(' ')
 }
 
 export async function POST(req: Request) {
@@ -109,13 +99,14 @@ export async function POST(req: Request) {
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
   const now = new Date().toISOString()
+  const cardLabel = buildCardLabel(toss.card)
   const { error: upsertError } = await serviceClient
     .from('billing_keys')
     .upsert({
       user_id: user.id,
       billing_key: toss.billingKey,
       customer_key: customerKey,
-      card_label: buildCardLabel(toss.card),
+      card_label: cardLabel,
       updated_at: now,
     }, { onConflict: 'user_id' })
 
@@ -126,5 +117,5 @@ export async function POST(req: Request) {
 
   console.log('[billing/authorize] 카드 등록 완료:', user.id)
   // 빌링키는 응답에 담지 않는다 — 클라이언트는 표시명만 알면 된다.
-  return NextResponse.json({ ok: true, cardLabel: buildCardLabel(toss.card) })
+  return NextResponse.json({ ok: true, cardLabel })
 }
