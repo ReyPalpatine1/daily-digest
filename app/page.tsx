@@ -283,7 +283,7 @@ export default function Home() {
               </a>
             </div>
             <div>통신판매업신고: 제2026-성남수정-0528호 | 호스팅서비스 제공: Cloudflare, Inc.</div>
-            <div>주소: 경기도 성남시 수정구 수정로 319, 130동 604호</div>
+            <div>주소: 경기도 성남시 중원구 산성대로378번길 3-4, 201호 (금광동)</div>
             <div>
               문의: support@dailyvideodigest.com | 전화:{' '}
               {showPhone ? (
