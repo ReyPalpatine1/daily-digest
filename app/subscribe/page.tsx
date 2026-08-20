@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { TOAST_MS } from '@/lib/toast'
 import { AppHeader } from '@/components/AppHeader'
 import { CreditCard, Lock, Ban } from 'lucide-react'
+import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 
 const PRICE_MONTHLY = 4900
 
@@ -21,11 +22,9 @@ function SubscribeContent() {
   const mode: 'trial' | 'pay' = searchParams.get('mode') === 'trial' ? 'trial' : 'pay'
 
   const [ready, setReady] = useState(false)
+  // 토스 customerKey로 그대로 쓰는 값 — 추측 불가·고유해야 하므로 Supabase UUID를 쓴다(이메일 금지).
+  const [userId, setUserId] = useState<string | null>(null)
   const [payType, setPayType] = useState<PayType>('auto')
-  const [cardNumber, setCardNumber] = useState('')
-  const [expiry, setExpiry] = useState('')
-  const [cvc, setCvc] = useState('')
-  const [cardHolder, setCardHolder] = useState('')
   const [agreeTerms, setAgreeTerms] = useState(false)
   const [agreeAutoPay, setAgreeAutoPay] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
@@ -40,6 +39,7 @@ function SubscribeContent() {
     supabase.auth.getUser().then(({ data }) => {
       if (cancelled) return
       if (!data.user) { router.push('/'); return }
+      setUserId(data.user.id)
       setReady(true)
     })
     return () => { cancelled = true }
@@ -107,9 +107,32 @@ function SubscribeContent() {
     }
   }
 
+  // 카드 등록(빌링키 발급 인증)만 수행한다 — 이 단계에서 결제는 일어나지 않는다.
+  // 카드 정보는 토스 결제창이 직접 받으므로 우리 화면·서버는 카드번호를 만지지 않는다(PCI).
+  async function registerCard() {
+    if (!userId) { router.push('/'); return }
+    const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY
+    if (!clientKey) { showToast('adminUsers.actionFailed'); return }
+    setSubmitting(true)
+    try {
+      const toss = await loadTossPayments(clientKey)
+      const origin = window.location.origin
+      await toss.payment({ customerKey: userId }).requestBillingAuth({
+        method: 'CARD',
+        successUrl: origin + '/subscribe/billing-result',
+        failUrl: origin + '/subscribe/billing-result?fail=1',
+      })
+      // 성공 시 토스가 successUrl로 이동시키므로 여기로는 돌아오지 않는다.
+    } catch {
+      // 사용자가 창을 닫은 경우도 여기로 온다 — 별도 오류 표시 없이 화면을 되돌린다.
+      setSubmitting(false)
+    }
+  }
+
   function handleSubmit() {
     if (!canSubmit) { showToast('subscribe.needAgree'); return }
     if (mode === 'trial') { startTrial(); return }
+    if (payType === 'auto') { registerCard(); return }
     showToast('profile.paymentComingSoon')
   }
 
@@ -121,12 +144,6 @@ function SubscribeContent() {
     boxSizing: 'border-box',
   }
   const sectionTitle: React.CSSProperties = { fontSize: 14, fontWeight: 600, marginBottom: 12 }
-  const inputStyle: React.CSSProperties = {
-    width: '100%', background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-    borderRadius: 8, padding: '9px 12px', color: 'var(--text-primary)',
-    fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
-  }
-  const label: React.CSSProperties = { fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6, display: 'block' }
   const primaryBtn: React.CSSProperties = {
     width: '100%', padding: '13px 16px', borderRadius: 9, border: 'none',
     background: 'var(--accent)', color: 'var(--bg-card)',
@@ -223,53 +240,18 @@ function SubscribeContent() {
               {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`)}
             </div>
 
-            {/* 결제 수단 (카드) */}
-            <div style={{ ...card, marginBottom: 16 }}>
-              <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <CreditCard size={16} style={{ color: 'var(--text-secondary)' }} />
-                {subscribe.creditCard}
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <span style={label}>{subscribe.cardNumber}</span>
-                <input
-                  style={inputStyle}
-                  value={cardNumber}
-                  onChange={e => setCardNumber(e.target.value)}
-                  placeholder="0000 0000 0000 0000"
-                  inputMode="numeric"
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <span style={label}>{subscribe.expiry}</span>
-                  <input
-                    style={inputStyle}
-                    value={expiry}
-                    onChange={e => setExpiry(e.target.value)}
-                    placeholder="MM/YY"
-                  />
+            {/* 결제 수단 (카드) — 입력은 토스 결제창이 직접 받는다. 여기서는 안내만 한다. */}
+            {payType === 'auto' && (
+              <div style={{ ...card, marginBottom: 16 }}>
+                <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <CreditCard size={16} style={{ color: 'var(--text-secondary)' }} />
+                  {subscribe.creditCard}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <span style={label}>{subscribe.cvc}</span>
-                  <input
-                    style={inputStyle}
-                    value={cvc}
-                    onChange={e => setCvc(e.target.value)}
-                    placeholder="CVC"
-                    inputMode="numeric"
-                  />
+                <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+                  {subscribe.cardNotice}
                 </div>
               </div>
-              <div>
-                <span style={label}>{subscribe.cardHolder}</span>
-                <input
-                  style={inputStyle}
-                  value={cardHolder}
-                  onChange={e => setCardHolder(e.target.value)}
-                  placeholder={subscribe.cardHolder}
-                />
-              </div>
-            </div>
+            )}
           </>
         )}
 
@@ -298,7 +280,11 @@ function SubscribeContent() {
         </div>
 
         <button style={canSubmit ? primaryBtn : disabledBtn} onClick={handleSubmit} disabled={submitting}>
-          {submitting ? '···' : mode === 'trial' ? subscribe.startTrialCta : subscribe.payCta}
+          {submitting
+            ? '···'
+            : mode === 'trial'
+              ? subscribe.startTrialCta
+              : payType === 'auto' ? subscribe.registerCardCta : subscribe.payCta}
         </button>
 
         <div style={{
