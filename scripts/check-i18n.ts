@@ -1,13 +1,19 @@
 // i18n 사전 검수 스크립트 (앱 런타임과 무관 — 개발자용 도구).
 //
 // 실행: npm run check:i18n
-//   package.json이 tsc로 이 파일만 .tmp-i18n/에 컴파일한 뒤 node로 돌린다.
-//   (tsx·ts-node를 새로 설치하지 않기 위한 구성. tsconfig에서 scripts/는 제외되어
+//   scripts/tsconfig.json으로 .tmp-i18n/에 컴파일한 뒤 node로 돌린다.
+//   (tsx·ts-node를 새로 설치하지 않기 위한 구성. 루트 tsconfig에서 scripts/는 제외되어
 //    앱 빌드 타입체크·배포 번들에는 들어가지 않는다.)
+//   ★ tsc에 파일을 커맨드라인으로 넘기지 않는다 — 넘기면 TypeScript 버전에 따라
+//     TS5112로 컴파일이 실패해 검사가 아예 실행되지 않는 환경이 생긴다.
 //
 // 사전을 문자열로 파싱하지 않고 import한다 — 실제 런타임이 읽는 값과 같은 것을 본다.
 //
-// 종료 코드: 오류(키 누락·잉여 키·플레이스홀더 불일치)가 하나라도 있으면 1, 아니면 0.
+// 본 검사 전에 self-test를 먼저 돌린다 — 검사 도구가 고장 난 채로 "0건"을 내는 것이
+// 가장 위험하기 때문이다("0건"이 사전이 깨끗해서인지 검사가 죽어서인지 구분되어야 한다).
+//
+// 종료 코드: self-test 실패 시 1.
+//   본 검사는 오류(키 누락·잉여 키·플레이스홀더 불일치)가 하나라도 있으면 1, 아니면 0.
 //   미번역 의심·문체·마침표·종결 부호는 사람의 판단이 필요한 '경고'라 빌드를 막지 않는다.
 
 import { translations } from '../lib/i18n/translations'
@@ -293,6 +299,128 @@ function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets):
   }
 }
 
+// ── 자체 검증(self-test) ──────────────────────────────────────
+// 검사 도구는 자기가 고장 났을 때 조용히 통과하는 것이 가장 위험하다.
+// 그래서 본 검사 전에, 일부러 위반을 심어 둔 가짜 사전을 같은 checkDict()에 통과시켜
+// 7개 항목이 "잡아야 할 것을 잡고, 잡으면 안 되는 것을 안 잡는지"를 매번 확인한다.
+// ★ 이 픽스처는 lib/i18n의 실제 사전과 완전히 분리돼 있다(이 파일 안 상수).
+const SELF_TEST_DICT: Record<string, unknown> = {
+  ko: {
+    shared: 'Pro',                                // (1)(2) 음성 · (3) 음성(고유명사뿐)
+    onlyInKo: '한국어에만 있는 값입니다.',          // (1) 양성
+    untranslated: '번역되지 않은 문구입니다.',      // (3) 양성
+    casual: '요약을 보내드릴게요.',                 // (4) 양성
+    withPlaceholder: '{name} 님께 보냈습니다.',     // (6) 양성
+    okPlaceholder: '{count}건 처리했습니다.',       // (6) 음성
+    noPeriod: '요약을 보내드립니다',                // (5) 양성
+    empty: '표시할 항목이 없습니다',                // (5) 음성(빈 상태 라벨)
+    terminal: '메일을 보냈습니다.',                 // (7) 양성(zh에 종결 부호 없음)
+    ellipsis: '불러오는 중...',                     // (7) 음성(양쪽 말줄임표)
+    faq: [{ q: '요약이 안 되는 영상이 있어요', a: '자막이 없으면 요약할 수 없습니다.' }], // (4) 음성
+  },
+  en: {
+    shared: 'Pro',
+    untranslated: '번역되지 않은 문구입니다.',
+    casual: 'We will send your summary.',
+    withPlaceholder: 'Sent to you.',              // {name} 누락 → (6) 양성
+    okPlaceholder: 'Processed {count} items.',
+    noPeriod: 'We send summaries',
+    empty: 'No items',
+    terminal: 'Email sent.',
+    ellipsis: 'Loading...',
+    faq: [{ q: 'Some videos are not summarized', a: 'Videos without captions cannot be summarized.' }],
+    onlyInEn: 'Only in English.',                 // (2) 양성
+  },
+  zh: {
+    shared: 'Pro',
+    untranslated: '这是未翻译的文案。',
+    casual: '我们会发送摘要。',
+    withPlaceholder: '已发送给 {name}。',
+    okPlaceholder: '已处理 {count} 项。',
+    noPeriod: '我们会发送摘要',
+    empty: '没有项目',
+    terminal: '邮件已发送',                        // 종결 부호 없음 → (7) 양성
+    ellipsis: '加载中...',
+    faq: [{ q: '有些视频没有摘要', a: '没有字幕的视频无法生成摘要。' }],
+  },
+  ja: {
+    shared: 'Pro',
+    untranslated: 'これは未翻訳の文言です。',
+    casual: '要約をお送りします。',
+    withPlaceholder: '{name} 様に送信しました。',
+    okPlaceholder: '{count} 件処理しました。',
+    noPeriod: 'まとめを送ります',
+    empty: '項目がありません',
+    terminal: 'メールを送信しました。',
+    ellipsis: '読み込み中...',
+    faq: [{ q: '要約されない動画があります', a: '字幕がない動画は要約できません。' }],
+  },
+}
+
+// 위 픽스처를 넣었을 때 각 항목이 내야 하는 결과(정확히 이 목록이어야 한다).
+// negative 칸은 "일부러 넣어 둔, 검출되면 안 되는 샘플"이다 — 실패 메시지에 근거로 쓴다.
+const SELF_TEST_EXPECT: {
+  key: keyof Buckets; label: string; expect: string[]; negative: string
+}[] = [
+  { key: 'missing', label: '(1) 키 누락',
+    expect: ['en: onlyInKo', 'zh: onlyInKo', 'ja: onlyInKo'],
+    negative: 'shared(네 언어에 모두 있는 키)' },
+  { key: 'extra', label: '(2) 잉여 키',
+    expect: ['en: onlyInEn'],
+    negative: 'shared(네 언어에 모두 있는 키)' },
+  { key: 'untranslated', label: '(3) 미번역 의심',
+    expect: ['en: untranslated'],
+    negative: "shared='Pro'(고유명사뿐이라 네 언어가 같아도 정상)" },
+  { key: 'casual', label: '(4) 문체 위반',
+    expect: ['casual'],
+    negative: "faq[0].q='…있어요'(FAQ 질문은 의도된 구어체)" },
+  { key: 'period', label: '(5) 마침표 규칙',
+    expect: ['noPeriod'],
+    negative: "empty='표시할 항목이 없습니다'(빈 상태 라벨)" },
+  { key: 'placeholder', label: '(6) 플레이스홀더 불일치',
+    expect: ['en: withPlaceholder'],
+    negative: 'okPlaceholder({count}가 네 언어에 모두 있음)' },
+  { key: 'terminal', label: '(7) 종결 부호 불일치',
+    expect: ['zh: terminal'],
+    negative: "ellipsis='불러오는 중...'(양쪽 말줄임표)" },
+]
+
+// self-test 실행. 하나라도 어긋나면 "검사기 자체가 고장났다"를 분명히 알리고 exit 1.
+// 사전 위반과 혼동되면 안 되므로 문구를 확실히 구분한다.
+function runSelfTest(): void {
+  const b: Buckets = {
+    missing: [], extra: [], untranslated: [], casual: [], period: [], placeholder: [], terminal: [],
+  }
+  checkDict('self-test', SELF_TEST_DICT, b)
+
+  const problems: string[] = []
+  for (const spec of SELF_TEST_EXPECT) {
+    const actual = b[spec.key].map(f => f.path).sort()
+    const expect = spec.expect.slice().sort()
+    if (actual.join('|') !== expect.join('|')) {
+      problems.push(
+        '  ' + spec.label + '\n' +
+        '      기대: [' + expect.join(', ') + ']\n' +
+        '      실제: [' + (actual.join(', ') || '없음') + ']\n' +
+        '      오탐 방지 샘플: ' + spec.negative
+      )
+    }
+  }
+
+  if (problems.length > 0) {
+    console.error('')
+    console.error('########################################################################')
+    console.error('## 검사기 자체가 고장났습니다 (self-test 실패)')
+    console.error('## → 아래는 사전의 문제가 아니라 scripts/check-i18n.ts의 판정 로직 문제입니다.')
+    console.error('##   검사 결과("0건")를 신뢰하지 마십시오.')
+    console.error('########################################################################')
+    for (const p of problems) console.error(p)
+    console.error('')
+    process.exit(1)
+  }
+  console.log('[self-test] ' + SELF_TEST_EXPECT.length + '개 항목 정상')
+}
+
 // ── 출력 ───────────────────────────────────────────────────────
 function report(title: string, findings: Finding[], isError: boolean): void {
   const mark = findings.length === 0 ? 'OK  ' : isError ? 'FAIL' : 'WARN'
@@ -303,6 +431,9 @@ function report(title: string, findings: Finding[], isError: boolean): void {
 }
 
 function main(): void {
+  // 본 검사보다 먼저 — 검사기가 죽은 채 "0건"을 내는 상황을 막는다.
+  runSelfTest()
+
   const b: Buckets = {
     missing: [], extra: [], untranslated: [], casual: [], period: [], placeholder: [], terminal: [],
   }
