@@ -76,8 +76,14 @@ export async function POST(req: Request) {
     })
     toss = await res.json().catch(() => ({})) as TossBillingResponse
     if (!res.ok || !toss.billingKey) {
-      // 토스 오류는 { code, message } 형태 — message를 그대로 사용자에게 보여 준다.
-      console.error('[billing/authorize] 발급 실패:', user.id, toss.code ?? res.status)
+      // 토스 오류는 { code, message } 형태 — 원인 파악을 위해 둘 다 그대로 남기고,
+      // message는 클라이언트에도 그대로 전달해 화면에 표시한다.
+      // ※ 응답 전체를 덤프하지 않는다 — billingKey 같은 민감값이 섞여 들어갈 수 있다.
+      console.error('[billing/authorize] 토스 발급 실패:', user.id, {
+        status: res.status,
+        code: toss.code ?? null,
+        message: toss.message ?? null,
+      })
       return NextResponse.json(
         { error: toss.code ?? 'issue_failed', message: toss.message ?? null },
         { status: 400 }
