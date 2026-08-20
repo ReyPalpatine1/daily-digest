@@ -57,7 +57,20 @@ export async function POST(req: Request) {
   }
 
   if (!tossSecretKey) {
-    console.error('[billing/authorize] TOSS_SECRET_KEY 미설정')
+    // 원인 구분용 진단 — 런타임에 실제로 보이는 변수 "이름"만 남긴다.
+    // (값은 절대 남기지 않는다. 이름만으로 오타·미등록·런타임 미반영을 구분할 수 있다.)
+    //   · TOSS 계열이 빈 배열   → 런타임에 등록 안 됨(빌드 변수에만 있거나 다른 워커/환경)
+    //   · 비슷한 이름이 보임    → 오타·공백
+    //   · SUPABASE 개수가 0     → 런타임 변수 주입 자체가 안 되는 상태
+    const envNames = Object.keys(process.env)
+    console.error(
+      '[billing/authorize] TOSS_SECRET_KEY 미설정 — 런타임 TOSS 계열 이름:',
+      envNames.filter(k => /toss/i.test(k)),
+      '/ SUPABASE 계열 개수:',
+      envNames.filter(k => /supabase/i.test(k)).length,
+      '/ 전체 개수:',
+      envNames.length
+    )
     return NextResponse.json({ error: 'not_configured' }, { status: 500 })
   }
 
