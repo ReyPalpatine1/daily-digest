@@ -9,7 +9,7 @@ import type { Profile } from '@/lib/supabase'
 import { checkPurchaseBlock } from '@/lib/purchase-guard'
 import { TOAST_MS } from '@/lib/toast'
 import { AppHeader } from '@/components/AppHeader'
-import { CreditCard, Lock, Ban } from 'lucide-react'
+import { CreditCard, Ban } from 'lucide-react'
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import { requestCardRegistration } from '@/lib/toss-billing'
 
@@ -104,6 +104,11 @@ function SubscribeContent() {
     ? new Date(profile.plan_expires_at).toLocaleDateString(dateLocale)
     : ''
 
+  // 이용 기간이 남아 있으면 자동 갱신 등록 시 즉시 결제하지 않는다(서버도 같은 판정).
+  // 남은 기간을 그대로 쓰고 만료일부터 매월 결제된다 — 기간을 잃지 않게 하는 규칙이다.
+  const keepsCurrentPeriod =
+    profile?.plan === 'pro' && !!profile.plan_expires_at && new Date(profile.plan_expires_at) > new Date()
+
   // 기본 선택(자동 갱신)이 막혀 있고 1개월권은 열려 있으면 열린 쪽으로 옮겨 준다.
   useEffect(() => {
     if (blockAuto && !blockOnetime) setPayType('onetime')
@@ -188,6 +193,9 @@ function SubscribeContent() {
       const origin = window.location.origin
       await toss.payment({ customerKey: userId }).requestPayment({
         method: 'CARD',
+        // 카드/간편결제 통합결제창. 계좌이체·가상계좌·휴대폰결제는 method가 'CARD'라 애초에 뜨지 않는다.
+        // (결제위젯은 위젯 전용 클라이언트 키가 필요해 이 연동 키로는 쓸 수 없다.)
+        card: { flowMode: 'DEFAULT' },
         amount: { value: order.amount, currency: 'KRW' },
         orderId: order.orderId,
         orderName: order.orderName,
@@ -330,8 +338,14 @@ function SubscribeContent() {
                   {subscribe.creditCard}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
-                  {subscribe.cardNotice}
+                  {subscribe.autoCardOnly} {subscribe.cardNotice}
                 </div>
+                {/* 기간이 남은 사용자에게는 "지금 결제되지 않는다"는 사실이 가장 중요한 정보다. */}
+                {keepsCurrentPeriod && (
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.7, marginTop: 8 }}>
+                    {t('subscribe.autoRenewFromDate', { date: expiresLabel })}
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -380,13 +394,15 @@ function SubscribeContent() {
               : payType === 'auto' ? subscribe.registerCardCta : subscribe.payCta}
         </button>
 
-        <div style={{
-          marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          fontSize: 12, color: 'var(--text-muted)',
-        }}>
-          {mode === 'trial' ? <Ban size={13} /> : <Lock size={13} />}
-          {mode === 'trial' ? subscribe.noCardNote : subscribe.secureNote}
-        </div>
+        {mode === 'trial' && (
+          <div style={{
+            marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            fontSize: 12, color: 'var(--text-muted)',
+          }}>
+            <Ban size={13} />
+            {subscribe.noCardNote}
+          </div>
+        )}
       </main>
 
       {/* 토스트 */}

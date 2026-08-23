@@ -201,11 +201,6 @@ export default function ProfilePage() {
     }
   }
 
-  // 결제 기능은 아직 미구현 — 결제/구독 관리 액션은 안내만
-  function comingSoon() {
-    showToast('profile.paymentComingSoon')
-  }
-
   function openDeleteModal() {
     setDeleteAgree(false)
     setShowDelete(true)
@@ -291,13 +286,7 @@ export default function ProfilePage() {
               <span style={{ ...sectionTitle, marginBottom: 0, marginRight: 8 }}>{t('profile.planSection')}</span>
               <UserPlanBadge plan={plan} size="md" />
             </div>
-            {plan === 'PRO' ? (
-              <button style={btnSecondary} onClick={comingSoon}>
-                {t('profile.manageSubscription')}
-              </button>
-            ) : (
-              <UpgradeButton />
-            )}
+            {plan === 'FREE' && <UpgradeButton />}
           </div>
           {/* 아랫줄: 멘트 */}
           <div style={{ marginTop: 10 }}>

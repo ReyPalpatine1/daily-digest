@@ -123,6 +123,30 @@ export async function applyPaidPlan(userId: string, kind: 'auto' | 'onetime'): P
   return expiresAt
 }
 
+// 결제 없이 자동 갱신만 켠다 — 이미 이용 기간이 남아 있는 사용자용.
+//
+// 남은 기간이 있는데 즉시 결제해 버리면 만료일이 now+30일로 "줄어들어" 기간을 빼앗기고
+// 돈까지 내는 상태가 된다(1개월권 60일 남은 사용자가 자동 갱신을 켜면 60일 → 30일).
+// 그래서 이 경우엔 카드 등록만 하고 결제는 만료일에 runRenewals()가 하도록 넘긴다.
+// plan_expires_at은 손대지 않는다 — 줄이지도, 늘리지도 않는다.
+// 결제가 일어나지 않았으므로 payments에 행을 만들지 않는 것이 정상이다.
+export async function activateAutoRenew(userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      plan_status: 'active',
+      // 해지 예약 중이었다면 되살린다(다시 자동 갱신을 켠 것이므로).
+      cancel_at_period_end: false,
+      // 지난 갱신 실패 이력은 새 카드와 무관하다.
+      renew_fail_count: 0,
+      renew_failed_at: null,
+      renew_notified_at: null,
+    })
+    .eq('id', userId)
+  if (error) throw new Error(`자동 갱신 전환 실패: ${error.message}`)
+  console.log(`🔁 자동 갱신 전환(즉시 결제 없음): ${userId}`)
+}
+
 // 만료 체크 + 동기화 (cron/digest에서 호출).
 // Pro인데 plan_expires_at 경과 시 free로 강등하고 채널 정리.
 export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vip'> {

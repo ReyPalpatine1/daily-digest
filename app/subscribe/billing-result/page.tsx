@@ -20,6 +20,7 @@ type Status =
   | 'loading'       // 빌링키 발급 중
   | 'charging'      // 카드 등록 완료, 결제 진행 중
   | 'paid'          // 결제까지 완료
+  | 'scheduled'     // 카드만 등록 — 남은 기간이 있어 만료일부터 결제된다
   | 'alreadyActive' // 카드는 등록됐고, 이미 이용 중이라 결제하지 않음
   | 'cardChanged'   // 카드만 교체
   | 'chargeFailed'  // 카드는 등록됐으나 결제 실패
@@ -82,7 +83,8 @@ function BillingResultContent() {
       const charge = await chargeRes.json().catch(() => ({}))
       if (chargeRes.ok && charge?.ok) {
         setExpiresAt(typeof charge.planExpiresAt === 'string' ? charge.planExpiresAt : null)
-        setStatus('paid')
+        // 이용 기간이 남아 있으면 지금 결제되지 않는다 — 만료일부터 매월 결제된다.
+        setStatus(charge.charged === false ? 'scheduled' : 'paid')
         setPlanRefreshKey(k => k + 1)
         return
       }
@@ -134,10 +136,11 @@ function BillingResultContent() {
     fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 6,
   }
 
-  const isDone = status === 'paid' || status === 'alreadyActive' || status === 'cardChanged'
+  const isDone = status === 'paid' || status === 'scheduled' || status === 'alreadyActive' || status === 'cardChanged'
 
   const title =
     status === 'paid' ? billingResult.paidTitle
+      : status === 'scheduled' ? billingResult.successTitle
       : status === 'cardChanged' ? billingResult.cardChangedTitle
         : status === 'alreadyActive' ? billingResult.successTitle
           : status === 'chargeFailed' ? billingResult.chargeFailedTitle
@@ -145,6 +148,7 @@ function BillingResultContent() {
               : billingResult.failTitle
   const desc =
     status === 'paid' ? (expiresLabel ? t('billingResult.paidDesc', { date: expiresLabel }) : null)
+      : status === 'scheduled' ? (expiresLabel ? t('subscribe.autoRenewFromDate', { date: expiresLabel }) : null)
       : status === 'cardChanged' ? billingResult.cardChangedDesc
         : status === 'alreadyActive' ? billingResult.alreadyActiveDesc
           : status === 'canceled' ? billingResult.canceledDesc

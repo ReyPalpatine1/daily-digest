@@ -4,6 +4,7 @@ import { getAuthedUser } from '@/lib/route-auth'
 import { makeOrderId } from '@/lib/billing'
 import { checkPurchaseBlock } from '@/lib/purchase-guard'
 import { chargeWithBillingKey } from '@/lib/billing-charge'
+import { activateAutoRenew } from '@/lib/plan-sync'
 
 // 자동 갱신(빌링키) 결제 — 등록된 카드로 즉시 1개월분을 청구한다.
 //
@@ -42,6 +43,31 @@ export async function POST() {
     return NextResponse.json({ error: block === 'active_subscription' ? 'already_active' : block }, { status: 409 })
   }
 
+  // 이용 기간이 남아 있으면 지금 결제하지 않는다.
+  // 즉시 결제하면 만료일이 now+30일로 다시 계산돼 남은 기간이 사라진다
+  // (1개월권 60일 남은 사용자가 자동 갱신을 켜면 60일 → 30일 + 4,900원 청구).
+  // 카드 등록만 끝났으므로 자동 갱신만 켜 두고, 결제는 만료일에 runRenewals()가 한다.
+  // ★ 화면이 보낸 상태를 믿지 않고 DB의 plan_expires_at으로 직접 판단한다.
+  const keepsCurrentPeriod =
+    profile?.plan === 'pro' &&
+    !!profile.plan_expires_at &&
+    new Date(profile.plan_expires_at) > new Date()
+
+  if (keepsCurrentPeriod) {
+    try {
+      await activateAutoRenew(user.id)
+    } catch (e) {
+      console.error('[billing/charge] 자동 갱신 전환 실패:', user.id, e instanceof Error ? e.message : e)
+      return NextResponse.json({ error: 'plan_sync_failed' }, { status: 500 })
+    }
+    // 결제가 없었으므로 payments에는 아무 행도 남기지 않는다.
+    return NextResponse.json({
+      ok: true,
+      charged: false,
+      planExpiresAt: profile!.plan_expires_at,
+    })
+  }
+
   const orderId = makeOrderId(user.id, 'auto')
   const result = await chargeWithBillingKey(serviceClient, user.id, orderId, 'billing/charge')
 
@@ -61,6 +87,7 @@ export async function POST() {
 
   return NextResponse.json({
     ok: true,
+    charged: true,
     planExpiresAt: result.planExpiresAt,
     receiptUrl: result.receiptUrl,
   })
