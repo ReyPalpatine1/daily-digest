@@ -241,11 +241,12 @@ function SubscribeContent() {
     title: string,
     desc: string,
     block: ReturnType<typeof checkPurchaseBlock>,
-    note?: string | null
+    notes: (string | null | undefined)[] = []
   ) {
     const selected = payType === value && !block
-    // 막혀 있으면 이유가 우선이다 — 못 고르는 방식에 "고르면 이렇게 된다"를 덧붙일 이유가 없다.
-    const line = blockReason(block) ?? note
+    // 막혀 있으면 이유만 보여준다 — 못 고르는 방식에 "고르면 이렇게 된다"를 덧붙일 이유가 없다.
+    const reason = blockReason(block)
+    const lines = reason ? [reason] : notes.filter((n): n is string => !!n)
     return (
       <button
         onClick={() => { if (!block) setPayType(value) }}
@@ -268,9 +269,12 @@ function SubscribeContent() {
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: block ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>{title}</div>
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{desc}</div>
-          {line && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.6 }}>
-              {line}
+          {lines.length > 0 && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 4,
+              fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.6,
+            }}>
+              {lines.map(line => <div key={line}>{line}</div>)}
             </div>
           )}
         </div>
@@ -338,14 +342,14 @@ function SubscribeContent() {
                 subscribe.proMonthly,
                 `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`,
                 blockAuto,
-                // 기간이 남아 있으면 지금 결제되지 않는다 — 이 방식을 고를 때 가장 중요한 정보다.
-                keepsCurrentPeriod ? t('subscribe.autoRenewFromDate', { date: expiresLabel }) : null
+                [
+                  // 기간이 남아 있으면 지금 결제되지 않는다 — 이 방식을 고를 때 가장 중요한 정보라 위에 둔다.
+                  keepsCurrentPeriod ? t('subscribe.autoRenewFromDate', { date: expiresLabel }) : null,
+                  // 카드 입력칸이 없는 이유를 밝히는 줄. 카드 등록에만 해당해 여기에 붙인다.
+                  subscribe.cardNotice,
+                ]
               )}
               {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`, blockOnetime)}
-              {/* 어느 방식을 골라도 해당되는 안내라 박스 맨 아래에 한 줄로 둔다. */}
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 10, lineHeight: 1.6 }}>
-                {subscribe.cardNotice}
-              </div>
             </div>
           </>
         )}
