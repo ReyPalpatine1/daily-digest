@@ -43,7 +43,6 @@ export function AppHeader({
   const [user, setUser] = useState<any>(undefined)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [adminPlanMode, setAdminPlanMode] = useState<'free' | 'pro'>('free')
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 언어 하위 메뉴: 데스크탑은 옆 플라이아웃, 모바일은 인라인 아코디언으로 분기
@@ -55,14 +54,14 @@ export function AppHeader({
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const settingsBtnRef = useRef<HTMLButtonElement>(null)
 
-  // 플랜 판정 (대시보드와 동일: 관리자는 미리보기 토글 우선, 일반 사용자는 실제 plan 기반)
-  // showTabs(대시보드) 모드에선 주입된 adminPlanMode를 우선 사용, 아니면 자체 상태(localStorage 기반).
-  // 미리보기 판정은 토글이 있는 showTabs(대시보드)에서만 — 토글 없는 하위 페이지(profile 등)에서
-  // 관리자가 미리보기 기본값 'free'에 갇혀 FREE로 오표시되는 것을 막는다.
-  const realIsPro = checkIsPro(profile, isAdmin)
-  const effectiveAdminPlanMode = showTabs && adminPlanModeProp ? adminPlanModeProp : adminPlanMode
-  const isPro = isAdmin && showTabs ? effectiveAdminPlanMode === 'pro' : realIsPro
+  // 플랜 판정은 화면 어디서나 실제 DB(profiles) 하나만 본다 — 관리자도 예외가 없다.
+  // 관리자 토글은 DB를 바꾸는 도구일 뿐이라, 토글 값으로 표시를 갈아끼우지 않는다.
+  const isPro = checkIsPro(profile)
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
+  // 토글의 선택 표시용 값. 대시보드가 넘겨주면 그것을, 아니면 실제 플랜을 쓴다.
+  const effectiveAdminPlanMode = adminPlanModeProp ?? (isPro ? 'pro' : 'free')
+  // VIP는 관리자가 수동 부여한 값이라 이 토글로 덮어쓰면 복구가 어렵다 → 아예 노출하지 않는다.
+  const isVipAccount = profile?.plan === 'vip'
 
   // 로그인 상태 분기. isLoggedIn=계정/플랜 UI 노출, isLoggedOut(=null)=로그인 버튼 노출.
   // 로딩 중(undefined)엔 둘 다 false → 계정 영역을 비워둔다(PRO 깜빡임·오표시 방지).
@@ -94,9 +93,6 @@ export function AppHeader({
         .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
       const isAdminUser = adminEmails.includes(data.user.email?.toLowerCase() ?? '')
       setIsAdmin(isAdminUser)
-      if (isAdminUser) {
-        try { if (localStorage.getItem('admin_plan_mode') === 'pro') setAdminPlanMode('pro') } catch {}
-      }
 
       const { data: profileRow } = await supabase
         .from('profiles')
@@ -432,8 +428,20 @@ export function AppHeader({
               {t('nav.proUpgrade')}
             </button>
           )}
-          {/* 대시보드 전용: 관리자 Free/Pro 미리보기 토글 (데스크톱). 상태는 주입값, 클릭은 콜백 우선 */}
-          {showTabs && !isMobile && isLoggedIn && isAdmin && (
+          {/* VIP 계정에서는 토글을 아예 내린다 — 누르면 VIP가 덮어써지는데 되돌리기 어렵다.
+              눌러도 안 되는 버튼을 남기지 않고, 왜 없는지 한 줄로 알린다. */}
+          {showTabs && !isMobile && isLoggedIn && isAdmin && isVipAccount && (
+            <span
+              title={t('plans.vipLocked')}
+              style={{
+                fontSize: 11, color: 'var(--text-tertiary)',
+                border: '0.5px dashed var(--border)', borderRadius: 7, padding: '4px 10px',
+              }}>
+              {t('plans.vipLocked')}
+            </span>
+          )}
+          {/* 대시보드 전용: 관리자 Free/Pro 토글 (데스크톱). 실제 DB plan을 바꾼다 */}
+          {showTabs && !isMobile && isLoggedIn && isAdmin && !isVipAccount && (
             <div title={t('plans.previewHint')}
               style={{
                 display: 'inline-flex',
@@ -447,10 +455,7 @@ export function AppHeader({
                 const label = mode === 'pro' ? 'Pro' : 'Free'
                 return (
                   <button key={mode}
-                    onClick={() => {
-                      if (onAdminPlanModeChange) onAdminPlanModeChange(mode)
-                      else { setAdminPlanMode(mode); try { localStorage.setItem('admin_plan_mode', mode) } catch {} }
-                    }}
+                    onClick={() => onAdminPlanModeChange?.(mode)}
                     onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)' }}
                     onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-tertiary)' }}
                     style={{

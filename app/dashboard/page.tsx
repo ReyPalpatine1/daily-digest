@@ -274,9 +274,8 @@ export default function Dashboard() {
   } | null>(null)
 
   // isPro는 항상 실제 profile.plan 기준(관리자도 동일). 관리자 Free/Pro 토글이
-  // 실제 DB plan을 바꾸므로 별도 미리보기 플래그(adminPlanMode)를 두지 않는다.
-  // checkIsPro의 2번째 인자(isAdmin)를 false로 고정해 "관리자=무조건 Pro" 단축을 끈다.
-  const isPro = checkIsPro(profile, false)
+  // 실제 DB plan을 바꾸므로 별도 미리보기 플래그(localStorage)를 두지 않는다.
+  const isPro = checkIsPro(profile)
   // VIP/Pro 모두 사용자에겐 "PRO"로 표시 (구분 없음)
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
   // 광고 노출 조건 — Pro면 애초에 없고, 닫으면 그 영역만 사라진다.
@@ -395,8 +394,7 @@ export default function Dashboard() {
           .then(() => {}, () => {})
 
         // isPro state는 아직 갱신 전이므로 방금 확정한 프로필 기준으로 계산해 넘긴다.
-        // (isAdmin=false 고정은 상단 isPro 계산과 같은 규칙 — "관리자=무조건 Pro" 단축을 끈다)
-        await loadData(data.user.id, checkIsPro(loadedProfile, false))
+        await loadData(data.user.id, checkIsPro(loadedProfile))
       } finally {
         // 실패해도 스켈레톤이 남지 않도록 반드시 해제
         setInitialLoading(false)
@@ -762,9 +760,12 @@ export default function Dashboard() {
   }, [historySearchApplied, historyFilter, historyDate, historyChannel, historyCategory])
 
   // 프로필만 재로드 (관리자 토글로 plan 변경 후 isPro 갱신용)
-  async function reloadProfile(userId: string) {
+  // 방금 조회한 프로필을 돌려준다 — setProfile 직후엔 state가 아직 옛값이라
+  // 호출부가 이 반환값으로 플랜을 계산해 넘겨야 한다(loadData의 isProHint).
+  async function reloadProfile(userId: string): Promise<Profile | null> {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
     if (data) setProfile(data as Profile)
+    return (data as Profile | null) ?? null
   }
 
   // Free 플랜 채널 한도 도달 시 업그레이드 유도 (확인 시 /pricing 이동)
@@ -1045,11 +1046,11 @@ export default function Dashboard() {
         console.error('[Admin] set-plan 실패:', await res.text())
         return
       }
-      // 다른 페이지(프로필/요금제/헤더)의 미리보기 표시를 위해 localStorage도 동기화
-      try { localStorage.setItem('admin_plan_mode', mode) } catch {}
-      // 실제 plan 기반으로 isPro가 갱신되도록 프로필 + 설정(delivery_method 복구 등) 재로드
-      await reloadProfile(user.id)
-      await loadData(user.id)
+      // 실제 plan 기반으로 isPro가 갱신되도록 프로필 + 설정(delivery_method 복구 등) 재로드.
+      // state의 isPro는 이 시점에 아직 옛값이라, 방금 받은 프로필로 계산해 힌트로 넘긴다
+      // (안 넘기면 Free→Pro 직후 열람기록이 7일치만 조회된다).
+      const freshProfile = await reloadProfile(user.id)
+      await loadData(user.id, checkIsPro(freshProfile))
     } catch (e) {
       console.error('[Admin] set-plan 호출 오류:', e)
     }

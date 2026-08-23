@@ -101,7 +101,9 @@ export default function AdminUsersPage() {
       const res = await fetch('/api/admin/set-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUserId: target.id, plan }),
+        // VIP 지정·해제가 본래 용도인 화면이라는 표시.
+        // 이게 없으면 서버가 VIP 대상 변경을 막는다(대시보드 토글이 VIP를 덮어쓰는 사고 방지).
+        body: JSON.stringify({ targetUserId: target.id, plan, fromVipTool: true }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))

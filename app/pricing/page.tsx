@@ -26,14 +26,6 @@ export default function PricingPage() {
       if (cancelled) return
       if (!data.user) { setReady(true); return }
 
-      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
-        .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-      const admin = adminEmails.includes((data.user.email ?? '').toLowerCase())
-      let adminPreviewPro = false
-      if (admin) {
-        try { adminPreviewPro = localStorage.getItem('admin_plan_mode') === 'pro' } catch {}
-      }
-
       const { data: profileRow } = await supabase
         .from('profiles')
         .select('*')
@@ -42,8 +34,8 @@ export default function PricingPage() {
       if (cancelled) return
 
       const profile = profileRow as Profile | null
-      const effectiveAdmin = admin ? adminPreviewPro : false
-      let view = getPlanView(profile, effectiveAdmin)
+      // 판정 근거는 실제 DB뿐이다(관리자 예외 없음) — 다른 화면과 같은 기준.
+      let view = getPlanView(profile)
 
       // 탈퇴→재가입 사용자는 trial_used=false라 'free'로 판정되지만 체험 이력이 남아 있어
       // 체험을 시작할 수 없다. 'free'(=체험 버튼 상황)일 때만 서버에 가능 여부를 대조해 보정.

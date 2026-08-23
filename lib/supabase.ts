@@ -49,8 +49,12 @@ export type Profile = {
 }
 
 // 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)
-export function checkIsPro(profile: Profile | null, isAdmin: boolean): boolean {
-  if (isAdmin) return true // 관리자는 항상 Pro
+//
+// ★ 화면 판정의 유일한 근거는 DB(profiles)다. 관리자 예외도, localStorage 미리보기 플래그도 두지 않는다.
+//   과거엔 isAdmin=true면 무조건 Pro로 보는 단축이 있었는데, 그 탓에 관리자는 헤더가 항상 PRO라
+//   자기 실제 플랜을 화면에서 확인할 수 없었고 페이지마다 표시가 어긋났다.
+//   (서버의 ADMIN_EMAILS 단축은 "표시"가 아니라 "실행 권한"이라 그대로 둔다 — api/channels·digest·preview·breaking)
+export function checkIsPro(profile: Profile | null): boolean {
   if (!profile) return false
 
   // VIP는 무기한 Pro
@@ -67,10 +71,10 @@ export function checkIsPro(profile: Profile | null, isAdmin: boolean): boolean {
 
 export type PlanView = 'free' | 'trialing' | 'pro' | 'trial_expired'
 
-export function getPlanView(profile: Profile | null, isAdmin: boolean): PlanView {
+export function getPlanView(profile: Profile | null): PlanView {
   if (!profile) return 'free'
-  if (isAdmin || profile.plan === 'vip') return 'pro'
-  if (checkIsPro(profile, isAdmin)) {
+  if (profile.plan === 'vip') return 'pro'
+  if (checkIsPro(profile)) {
     return profile.plan_status === 'trialing' ? 'trialing' : 'pro'
   }
   return profile.trial_used ? 'trial_expired' : 'free'

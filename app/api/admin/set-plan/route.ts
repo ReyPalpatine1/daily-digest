@@ -41,14 +41,14 @@ export async function POST(request: Request) {
   }
 
   // === 입력 파싱 ===
-  let body: { targetUserId?: string; plan?: string }
+  let body: { targetUserId?: string; plan?: string; fromVipTool?: boolean }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  const { targetUserId, plan } = body
+  const { targetUserId, plan, fromVipTool } = body
   if (!targetUserId || (plan !== 'vip' && plan !== 'pro' && plan !== 'free')) {
     // 승격: VIP 지정('vip') / Pro 지정('pro') · 강등: 해제('free')
     return NextResponse.json({ error: 'targetUserId와 plan(vip|pro|free)이 필요합니다' }, { status: 400 })
@@ -67,8 +67,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '대상 사용자를 찾을 수 없습니다' }, { status: 404 })
   }
 
+  // VIP는 관리자가 수동으로 부여한 값이라 덮어쓰면 되돌리기 어렵다(vip_granted_by/at이 지워진다).
+  // 대시보드의 Free/Pro 토글은 'pro'/'free'만 보내므로 VIP 계정에서 누르면 VIP가 날아간다 → 막는다.
+  // VIP 관리 화면(/admin/users)은 VIP 지정·해제가 본래 용도이므로 fromVipTool로 의도를 명시해 통과시킨다.
+  if (target.plan === 'vip' && !fromVipTool) {
+    return NextResponse.json(
+      { error: 'VIP 계정은 이 도구로 변경할 수 없습니다' },
+      { status: 400 }
+    )
+  }
+
   // 결제 Pro 사용자는 관리자가 함부로 변경 못 하게 보호.
-  // 단, 관리자 본인 계정(대시보드 Free/Pro 미리보기 토글)은 예외 — 본인이 의도적으로 바꾸는 것.
+  // 단, 관리자 본인 계정(대시보드 Free/Pro 토글)은 예외 — 본인이 의도적으로 바꾸는 것.
   if (target.plan === 'pro' && targetUserId !== user.id) {
     return NextResponse.json(
       { error: '결제한 Pro 사용자는 VIP 지정/해제로 변경할 수 없습니다' },

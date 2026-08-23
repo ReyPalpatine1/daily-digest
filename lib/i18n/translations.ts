@@ -273,7 +273,8 @@ export const translations = {
       free: 'FREE',
       pro: 'PRO',
       admin: 'ADMIN',
-      previewHint: '관리자 전용 미리보기 — 실제 구독 상태가 아닙니다.',
+      previewHint: '관리자 전용 — 실제 플랜이 변경됩니다.',
+      vipLocked: 'VIP 계정은 플랜을 바꿀 수 없습니다.',
     },
     time: {
       justNow: '방금',
@@ -999,7 +1000,8 @@ export const translations = {
       free: 'FREE',
       pro: 'PRO',
       admin: 'ADMIN',
-      previewHint: 'Admin preview only — not your real subscription status.',
+      previewHint: 'Admin only — this changes your real plan.',
+      vipLocked: 'VIP accounts cannot change plans here.',
     },
     time: {
       justNow: 'just now',
@@ -1716,7 +1718,8 @@ export const translations = {
       free: 'FREE',
       pro: 'PRO',
       admin: 'ADMIN',
-      previewHint: '仅管理员预览 — 并非你的实际订阅状态。',
+      previewHint: '仅管理员 — 会真实更改方案。',
+      vipLocked: 'VIP 账户无法在此更改方案。',
     },
     time: {
       justNow: '刚刚',
@@ -2430,7 +2433,8 @@ export const translations = {
       free: 'FREE',
       pro: 'PRO',
       admin: 'ADMIN',
-      previewHint: '管理者プレビューのみ — 実際のサブスク状態ではありません。',
+      previewHint: '管理者専用 — 実際のプランが変更されます。',
+      vipLocked: 'VIPアカウントはプランを変更できません。',
     },
     time: {
       justNow: 'たった今',

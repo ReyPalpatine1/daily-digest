@@ -21,8 +21,6 @@ export default function ProfilePage() {
   const [ready, setReady] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [adminPreviewPro, setAdminPreviewPro] = useState(false)
   const [toastKey, setToastKey] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) }, [])
@@ -45,14 +43,6 @@ export default function ProfilePage() {
       if (cancelled) return
       if (!data.user) { router.push('/'); return }
       setUser(data.user)
-
-      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
-        .split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-      const admin = adminEmails.includes((data.user.email ?? '').toLowerCase())
-      setIsAdmin(admin)
-      if (admin) {
-        try { setAdminPreviewPro(localStorage.getItem('admin_plan_mode') === 'pro') } catch {}
-      }
 
       const { data: profileRow } = await supabase
         .from('profiles')
@@ -111,9 +101,8 @@ export default function ProfilePage() {
 
   const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
 
-  // 플랜 판정 (대시보드와 동일: 관리자는 미리보기 토글 우선)
-  const realIsPro = checkIsPro(profile, isAdmin)
-  const isPro = isAdmin ? adminPreviewPro : realIsPro
+  // 플랜 판정은 실제 DB(profiles) 하나만 본다 — 대시보드·헤더·요금제와 같은 기준.
+  const isPro = checkIsPro(profile)
   const isVip = profile?.plan === 'vip'
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
