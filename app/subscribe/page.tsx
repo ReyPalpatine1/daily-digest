@@ -9,7 +9,7 @@ import type { Profile } from '@/lib/supabase'
 import { checkPurchaseBlock } from '@/lib/purchase-guard'
 import { TOAST_MS } from '@/lib/toast'
 import { AppHeader } from '@/components/AppHeader'
-import { CreditCard, Ban } from 'lucide-react'
+import { Ban } from 'lucide-react'
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import { requestCardRegistration } from '@/lib/toss-billing'
 
@@ -236,9 +236,16 @@ function SubscribeContent() {
 
   // 살 수 없는 방식은 고를 수 없게 하고 이유를 그 자리에서 밝힌다
   // (눌러도 아무 일도 없는 버튼을 남기지 않는다).
-  function payOption(value: PayType, title: string, desc: string, block: ReturnType<typeof checkPurchaseBlock>) {
+  function payOption(
+    value: PayType,
+    title: string,
+    desc: string,
+    block: ReturnType<typeof checkPurchaseBlock>,
+    note?: string | null
+  ) {
     const selected = payType === value && !block
-    const reason = blockReason(block)
+    // 막혀 있으면 이유가 우선이다 — 못 고르는 방식에 "고르면 이렇게 된다"를 덧붙일 이유가 없다.
+    const line = blockReason(block) ?? note
     return (
       <button
         onClick={() => { if (!block) setPayType(value) }}
@@ -261,9 +268,9 @@ function SubscribeContent() {
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: block ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>{title}</div>
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{desc}</div>
-          {reason && (
+          {line && (
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.6 }}>
-              {reason}
+              {line}
             </div>
           )}
         </div>
@@ -326,28 +333,20 @@ function SubscribeContent() {
             {/* 결제 방식 */}
             <div style={{ ...card, marginBottom: 16 }}>
               <div style={sectionTitle}>{subscribe.paymentMethod}</div>
-              {payOption('auto', subscribe.proMonthly, `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`, blockAuto)}
+              {payOption(
+                'auto',
+                subscribe.proMonthly,
+                `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`,
+                blockAuto,
+                // 기간이 남아 있으면 지금 결제되지 않는다 — 이 방식을 고를 때 가장 중요한 정보다.
+                keepsCurrentPeriod ? t('subscribe.autoRenewFromDate', { date: expiresLabel }) : null
+              )}
               {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`, blockOnetime)}
-            </div>
-
-            {/* 결제 수단 (카드) — 입력은 토스 결제창이 직접 받는다. 여기서는 안내만 한다. */}
-            {payType === 'auto' && !blockAuto && (
-              <div style={{ ...card, marginBottom: 16 }}>
-                <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <CreditCard size={16} style={{ color: 'var(--text-secondary)' }} />
-                  {subscribe.creditCard}
-                </div>
-                <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
-                  {subscribe.autoCardOnly} {subscribe.cardNotice}
-                </div>
-                {/* 기간이 남은 사용자에게는 "지금 결제되지 않는다"는 사실이 가장 중요한 정보다. */}
-                {keepsCurrentPeriod && (
-                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.7, marginTop: 8 }}>
-                    {t('subscribe.autoRenewFromDate', { date: expiresLabel })}
-                  </div>
-                )}
+              {/* 어느 방식을 골라도 해당되는 안내라 박스 맨 아래에 한 줄로 둔다. */}
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 10, lineHeight: 1.6 }}>
+                {subscribe.cardNotice}
               </div>
-            )}
+            </div>
           </>
         )}
 
