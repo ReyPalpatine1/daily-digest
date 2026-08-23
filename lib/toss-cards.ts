@@ -43,17 +43,19 @@ export const TOSS_ISSUER_NAMES: Record<string, string> = {
 // 카드 표시명 — 'KB국민카드 **** 7508' 형태.
 //
 // 카드번호 원문은 만들지도 저장하지도 않는다. 토스가 주는 number는 이미 마스킹된 값이고
-// 거기서 "끝에 그대로 드러난 숫자 4자리"만 가져온다.
-// 마스킹을 가로질러 자르지 않는 이유: 마지막 자리까지 가려진 형식이 오면
-// (예: '12345678****123*') BIN 앞자리가 섞여 실제와 다른 뒷자리를 보여주게 된다.
-// 4자리를 확실히 알 수 없으면 카드사명만 남긴다 — 틀린 번호를 보여주느니 안 보여준다.
+// 거기서 마지막 4글자를 원문 그대로 쓴다.
+// 숫자만 추출해 자르면 마스킹 위치에 따라 엉뚱한 번호가 만들어진다
+// (예: '12345678****123*' → 앞자리가 섞여 '8123'이 된다).
+// 그래서 숫자든 '*'든 가리지 않고 끝 4글자를 그대로 가져온다 — 지어낸 값이 아니므로
+// 거짓 표시가 아니고, 카드마다 번호가 보였다 안 보였다 하지도 않는다.
+// 4글자에 못 미치는 번호면 카드사명만 남긴다.
 // 표에 없는 코드는 이름 대신 코드를 그대로 남긴다 — 새 카드사가 생겨도 정보를 잃지 않는다.
 export function buildCardLabel(card?: { issuerCode?: string; number?: string } | null): string | null {
   if (!card) return null
-  const matched = (card.number ?? '').match(/([0-9]{4})$/)
-  const last4 = matched ? matched[1] : ''
+  const number = card.number ?? ''
+  const tail = number.length >= 4 ? number.slice(-4) : ''
   const code = (card.issuerCode ?? '').trim().toUpperCase()
   const issuer = code ? (TOSS_ISSUER_NAMES[code] ?? code) : ''
-  if (!issuer && !last4) return null
-  return [issuer, last4 ? `**** ${last4}` : ''].filter(Boolean).join(' ')
+  if (!issuer && !tail) return null
+  return [issuer, tail ? `**** ${tail}` : ''].filter(Boolean).join(' ')
 }
