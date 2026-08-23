@@ -418,6 +418,33 @@ export function buildPassEndedHtml(locale: EmailLocale = 'ko'): string {
   return shell(et(locale, 'passEnded.subject'), locale, inner, footerBlock(locale))
 }
 
+// 정기 갱신 결제 실패 안내. 카드 확인이 필요하므로 CTA는 구독 페이지가 아니라 프로필(카드 변경)로 보낸다.
+export function buildRenewFailedHtml(locale: EmailLocale = 'ko'): string {
+  const inner = `
+    <div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;">
+      <div style="width:56px;height:56px;background:#F4F4F5;border-radius:50%;display:inline-block;line-height:56px;font-size:26px;margin-bottom:16px;">💳</div>
+      <div style="font-size:20px;font-weight:600;color:#0A0A0A;margin-bottom:8px;">${et(locale, 'renewFailed.heading')}</div>
+      <div style="font-size:13px;color:#71717A;line-height:1.7;margin-bottom:20px;">${et(locale, 'renewFailed.desc')}</div>
+      <a href="${APP_URL}/profile" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;">
+        ${et(locale, 'renewFailed.cta')}
+      </a>
+    </div>`
+  return shell(et(locale, 'renewFailed.subject'), locale, inner, footerBlock(locale))
+}
+
+// 결제 3회 실패로 무료 강등된 뒤의 종료 안내.
+export function buildSubEndedHtml(locale: EmailLocale = 'ko'): string {
+  const inner = `
+    <div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;">
+      <div style="width:56px;height:56px;background:#F4F4F5;border-radius:50%;display:inline-block;line-height:56px;font-size:26px;margin-bottom:16px;">📩</div>
+      <div style="font-size:20px;font-weight:600;color:#0A0A0A;margin-bottom:8px;">${et(locale, 'subEnded.heading')}</div>
+      <div style="font-size:13px;color:#71717A;line-height:1.7;margin-bottom:20px;">${et(locale, 'subEnded.desc')}</div>
+      <a href="${APP_URL}/subscribe?mode=pay" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;">
+        ${et(locale, 'subEnded.cta')}
+      </a>
+    </div>`
+  return shell(et(locale, 'subEnded.subject'), locale, inner, footerBlock(locale))
+}
 // 미리보기 전용 — 시스템 알림 메일 모양
 export function buildErrorPreviewHtml(locale: EmailLocale = 'ko'): string {
   const now = formatTime(new Date().toISOString(), locale)

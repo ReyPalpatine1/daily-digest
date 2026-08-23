@@ -10,6 +10,8 @@ import {
   buildTrialEndedHtml,
   buildPassEndingHtml,
   buildPassEndedHtml,
+  buildRenewFailedHtml,
+  buildSubEndedHtml,
 } from './email-templates'
 
 // Cloudflare Email Sending REST API 발송.
@@ -269,6 +271,33 @@ export async function sendPassEndedEmail(
   })
 }
 
+// 정기 갱신 결제 실패 안내(재시도 예정 + 카드 확인 요청).
+export async function sendRenewFailedEmail(
+  to: string,
+  locale: string | null = 'ko'
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  await sendViaCloudflare({
+    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+    to,
+    subject: et(lc, 'renewFailed.subject'),
+    html: buildRenewFailedHtml(lc),
+  })
+}
+
+// 결제 반복 실패로 무료 강등된 뒤의 구독 종료 안내.
+export async function sendSubEndedEmail(
+  to: string,
+  locale: string | null = 'ko'
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  await sendViaCloudflare({
+    from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+    to,
+    subject: et(lc, 'subEnded.subject'),
+    html: buildSubEndedHtml(lc),
+  })
+}
 export type FailedItem = {
   channel: string
   category: string

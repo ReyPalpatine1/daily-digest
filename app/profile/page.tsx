@@ -35,6 +35,9 @@ export default function ProfilePage() {
   const [isMobile, setIsMobile] = useState(false)
   // 등록된 카드 표시명(예: KB국민카드 **** 7508). 서버가 표시명만 내려준다 — 빌링키는 받지 않는다.
   const [cardLabel, setCardLabel] = useState<string | null>(null)
+  // 자동 갱신 해지 확인 모달 / 중복 클릭 방지
+  const [showCancelRenew, setShowCancelRenew] = useState(false)
+  const [renewBusy, setRenewBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -151,6 +154,33 @@ export default function ProfilePage() {
     }
   }
 
+  // 자동 갱신 해지 / 되돌리기.
+  // 해지해도 즉시 무료로 내려가지 않는다 — 남은 기간은 그대로 쓰고 만료일에 종료된다.
+  async function setAutoRenew(cancel: boolean) {
+    if (renewBusy) return
+    setRenewBusy(true)
+    try {
+      const res = await fetch('/api/billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancel }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.ok) {
+        showToast('adminUsers.actionFailed')
+        return
+      }
+      // 서버가 받아들인 값으로 화면을 맞춘다(재조회 없이 즉시 반영).
+      setProfile(prev => (prev ? { ...prev, cancel_at_period_end: cancel } : prev))
+      setShowCancelRenew(false)
+      showToast(cancel ? 'profile.cancelRenewDone' : 'profile.resumeRenewDone')
+    } catch {
+      showToast('adminUsers.actionFailed')
+    } finally {
+      setRenewBusy(false)
+    }
+  }
+
   // 결제 기능은 아직 미구현 — 결제/구독 관리 액션은 안내만
   function comingSoon() {
     showToast('profile.paymentComingSoon')
@@ -258,6 +288,32 @@ export default function ProfilePage() {
             </span>
           </div>
 
+          {/* 자동 갱신 상태 — plan_status='active'일 때만 의미가 있다.
+              1개월권(onetime)·체험(trialing)은 애초에 갱신되지 않으므로 이 영역을 그리지 않는다. */}
+          {profile?.plan_status === 'active' && (
+            <div style={{
+              marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, flexWrap: 'wrap',
+            }}>
+              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                {profile.cancel_at_period_end
+                  ? t('profile.autoRenewOff', { date: expiresLabel })
+                  : t('profile.autoRenewOn')}
+              </span>
+              {profile.cancel_at_period_end ? (
+                <button style={btnSecondary} disabled={renewBusy} onClick={() => setAutoRenew(false)}>
+                  {t('profile.resumeAutoRenew')}
+                </button>
+              ) : (
+                /* 실수로 해지되지 않도록 확인 단계를 둔다(탈퇴 모달과 같은 패턴). */
+                <button style={btnSecondary} disabled={renewBusy} onClick={() => setShowCancelRenew(true)}>
+                  {t('profile.cancelAutoRenew')}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* 등록된 카드 — 무슨 카드로 결제되는지 보여준다. 카드가 없으면 표시하지 않는다. */}
           {cardLabel && (
             <>
@@ -298,6 +354,59 @@ export default function ProfilePage() {
           </button>
         </div>
       </main>
+
+      {/* === 자동 갱신 해지 확인 모달 (탈퇴 모달과 같은 구조·토큰) === */}
+      {showCancelRenew && (
+        <div
+          onClick={() => { if (!renewBusy) setShowCancelRenew(false) }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 120,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+          }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 400,
+              background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+              borderRadius: 14, padding: 22, boxSizing: 'border-box',
+              boxShadow: 'var(--shadow-lg)',
+            }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 12px' }}>
+              {t('profile.cancelRenewTitle')}
+            </h2>
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: '0 0 18px' }}>
+              {t('profile.cancelRenewBody', { date: expiresLabel })}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowCancelRenew(false)}
+                disabled={renewBusy}
+                style={{
+                  padding: '8px 14px', borderRadius: 8,
+                  border: '0.5px solid var(--border)', background: 'var(--bg-card)',
+                  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
+                  cursor: renewBusy ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => setAutoRenew(true)}
+                disabled={renewBusy}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, border: 'none',
+                  background: 'var(--text-primary)', color: 'var(--bg-card)',
+                  fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                  cursor: renewBusy ? 'default' : 'pointer',
+                  opacity: renewBusy ? 0.5 : 1,
+                }}>
+                {t('profile.cancelRenewConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* === 탈퇴 확인 모달 === */}
       {showDelete && (

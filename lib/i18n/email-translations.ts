@@ -102,6 +102,18 @@ export const emailTranslations = {
       desc: '계정이 무료 플랜으로 전환되었습니다.<br>Pro 기능은 언제든지 구독으로 다시 사용할 수 있습니다.',
       cta: 'Pro 구독하기',
     },
+    renewFailed: {
+      subject: '결제에 실패했습니다',
+      heading: '결제에 실패했습니다',
+      desc: '등록하신 카드로 결제가 이루어지지 않았습니다.<br>카드 상태를 확인해 주세요. 하루 뒤 다시 시도하며, 3회 실패하면 무료 플랜으로 전환됩니다.',
+      cta: '카드 확인하기',
+    },
+    subEnded: {
+      subject: 'Pro 구독이 종료되었습니다',
+      heading: 'Pro 구독이 종료되었습니다',
+      desc: '결제가 여러 번 실패해 계정이 무료 플랜으로 전환되었습니다.<br>카드를 다시 등록하면 언제든지 이어서 이용할 수 있습니다.',
+      cta: 'Pro 다시 구독하기',
+    },
     channels: {
       email: '이메일',
       telegram: '텔레그램',
@@ -198,6 +210,18 @@ export const emailTranslations = {
       heading: 'Your Pro access has ended',
       desc: 'Your account is now on the free plan.<br>You can subscribe anytime to keep using Pro features.',
       cta: 'Subscribe to Pro',
+    },
+    renewFailed: {
+      subject: 'Your payment failed',
+      heading: 'Your payment failed',
+      desc: 'We could not charge your registered card.<br>Please check your card. We will try again tomorrow, and after three failed attempts your account moves to the free plan.',
+      cta: 'Check your card',
+    },
+    subEnded: {
+      subject: 'Your Pro subscription has ended',
+      heading: 'Your Pro subscription has ended',
+      desc: 'After repeated payment failures, your account has moved to the free plan.<br>Register a card again to pick up where you left off.',
+      cta: 'Subscribe to Pro again',
     },
     channels: {
       email: 'Email',
@@ -296,6 +320,18 @@ export const emailTranslations = {
       desc: '您的账户已转为免费方案。<br>随时订阅即可继续使用 Pro 功能。',
       cta: '订阅 Pro',
     },
+    renewFailed: {
+      subject: '支付失败',
+      heading: '支付失败',
+      desc: '未能从您登记的卡片扣款。<br>请检查卡片状态。我们将在一天后重试，若三次失败将转为免费方案。',
+      cta: '检查卡片',
+    },
+    subEnded: {
+      subject: 'Pro 订阅已结束',
+      heading: 'Pro 订阅已结束',
+      desc: '由于多次支付失败，您的账户已转为免费方案。<br>重新登记卡片即可随时继续使用。',
+      cta: '重新订阅 Pro',
+    },
     channels: {
       email: '邮件',
       telegram: 'Telegram',
@@ -392,6 +428,18 @@ export const emailTranslations = {
       heading: 'Proの利用期間が終了しました',
       desc: 'アカウントは無料プランに切り替わりました。<br>Pro機能はいつでも購読で再開できます。',
       cta: 'Proを購読する',
+    },
+    renewFailed: {
+      subject: 'お支払いに失敗しました',
+      heading: 'お支払いに失敗しました',
+      desc: 'ご登録のカードから決済できませんでした。<br>カードの状態をご確認ください。翌日に再試行し、3回失敗すると無料プランに切り替わります。',
+      cta: 'カードを確認する',
+    },
+    subEnded: {
+      subject: 'Pro購読が終了しました',
+      heading: 'Pro購読が終了しました',
+      desc: 'お支払いが繰り返し失敗したため、アカウントは無料プランに切り替わりました。<br>カードを登録し直せばいつでも再開できます。',
+      cta: 'Proを再購読する',
     },
     channels: {
       email: 'メール',

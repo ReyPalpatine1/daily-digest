@@ -75,6 +75,11 @@ export async function restoreDeliveryToEmail(userId: string): Promise<void> {
 // 체험 알림 플래그 4개를 반드시 null로 되돌린다(lib/trial-notify.ts 상단 주석의 요구).
 // 리셋하지 않으면 유료 전환 뒤 만료 안내가 다시 나가지 않거나 지난 팝업이 다시 뜬다.
 // trial_used는 건드리지 않는다 — 재체험 방지 기록이다.
+//
+// 갱신 실패 상태(renew_*)도 함께 지운다. 결제가 성공한 순간 이전 실패 이력은 의미가 없고,
+// 남겨 두면 강등됐던 사용자가 재구독한 뒤 첫 실패에서 곧바로 다시 강등된다(카운트가 이어짐).
+// cancel_at_period_end는 auto일 때만 false로 되돌린다 —
+// 해지 예약 상태에서 1개월권을 사면 자동 갱신이 조용히 되살아나면 안 되기 때문이다.
 export async function applyPaidPlan(userId: string, kind: 'auto' | 'onetime'): Promise<string> {
   const now = nowUtc()
   let base = now
@@ -103,6 +108,10 @@ export async function applyPaidPlan(userId: string, kind: 'auto' | 'onetime'): P
       trial_ended_notified_at: null,
       trial_ending_popup_seen_at: null,
       trial_ended_popup_seen_at: null,
+      renew_fail_count: 0,
+      renew_failed_at: null,
+      renew_notified_at: null,
+      ...(kind === 'auto' ? { cancel_at_period_end: false } : {}),
     })
     .eq('id', userId)
   if (error) throw new Error(`플랜 반영 실패: ${error.message}`)

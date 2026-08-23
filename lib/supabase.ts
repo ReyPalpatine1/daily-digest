@@ -40,6 +40,12 @@ export type Profile = {
   // 미리보기(가입 직후 1회) 사용 시각 / 첫 정기 발송 시각. 둘 다 없을 때만 미리보기 노출.
   preview_used_at: string | null
   first_digest_at: string | null
+  // 자동 갱신 해지 예약. true면 만료일에 재결제하지 않고 그대로 종료된다(남은 기간은 이용 가능).
+  cancel_at_period_end: boolean
+  // 정기 갱신 실패 상태(재시도·강등 판정용). 결제가 성공하면 전부 초기화된다.
+  renew_failed_at: string | null
+  renew_fail_count: number
+  renew_notified_at: string | null
 }
 
 // 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)

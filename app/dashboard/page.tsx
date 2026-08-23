@@ -348,6 +348,11 @@ export default function Dashboard() {
             // DB 기본값과 동일하게 null (insert에는 넣지 않는다)
             preview_used_at: null,
             first_digest_at: null,
+            // 갱신/해지 상태도 DB 기본값과 동일하게 맞춘다(신규 가입자는 결제 이력이 없다)
+            cancel_at_period_end: false,
+            renew_failed_at: null,
+            renew_fail_count: 0,
+            renew_notified_at: null,
           }
           setProfile(loadedProfile)
           // 기본 설정 자동 생성
