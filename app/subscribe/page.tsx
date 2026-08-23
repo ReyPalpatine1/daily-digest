@@ -336,18 +336,18 @@ function SubscribeContent() {
           <>
             {/* 결제 방식 */}
             <div style={{ ...card, marginBottom: 16 }}>
-              <div style={sectionTitle}>{subscribe.paymentMethod}</div>
+              <div style={{ ...sectionTitle, marginBottom: 4 }}>{subscribe.paymentMethod}</div>
+              {/* 제목에 붙는 머리말 — 카드 입력칸이 없는 이유를 결제 방식보다 먼저 밝힌다. */}
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6, marginBottom: 12 }}>
+                {subscribe.cardNotice}
+              </div>
               {payOption(
                 'auto',
                 subscribe.proMonthly,
                 `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`,
                 blockAuto,
-                [
-                  // 기간이 남아 있으면 지금 결제되지 않는다 — 이 방식을 고를 때 가장 중요한 정보라 위에 둔다.
-                  keepsCurrentPeriod ? t('subscribe.autoRenewFromDate', { date: expiresLabel }) : null,
-                  // 카드 입력칸이 없는 이유를 밝히는 줄. 카드 등록에만 해당해 여기에 붙인다.
-                  subscribe.cardNotice,
-                ]
+                // 기간이 남아 있으면 지금 결제되지 않는다 — 이 방식을 고를 때 가장 중요한 정보다.
+                [keepsCurrentPeriod ? t('subscribe.autoRenewFromDate', { date: expiresLabel }) : null]
               )}
               {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`, blockOnetime)}
             </div>
