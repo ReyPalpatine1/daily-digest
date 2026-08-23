@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
 import { AppHeader } from '@/components/AppHeader'
-import { CheckCircle2, XCircle, CreditCard } from 'lucide-react'
+import { CheckCircle2, XCircle } from 'lucide-react'
+import { Spinner } from '@/components/Spinner'
 
 // 1개월권(단건 결제) 결제창의 리다이렉트 착지점.
 // 성공: ?paymentKey=&orderId=&amount= → /api/billing/confirm 이 승인한다.
@@ -100,6 +101,10 @@ function PaymentResultContent() {
   const descStyle: React.CSSProperties = {
     fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.7, marginTop: 8,
   }
+  // 대기 안내 — 승인 도중 창을 닫으면 결제 상태가 어긋날 수 있어 눈에 띄되 과하지 않게.
+  const waitNoticeStyle: React.CSSProperties = {
+    fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 6,
+  }
 
   const title =
     status === 'success' ? paymentResult.successTitle
@@ -121,9 +126,14 @@ function PaymentResultContent() {
 
       <main style={{ maxWidth: 460, margin: '0 auto', padding: '32px 20px 64px' }}>
         {status === 'loading' ? (
+          /* 대기 표시는 진입 즉시 보여준다 — usePending의 200ms 지연을 쓰지 않는다.
+             그 지연은 "금방 끝날 수도 있는" 버튼의 깜빡임을 막는 장치인데,
+             이 화면은 토스 승인 → DB 기록 → 플랜 반영으로 왕복이 두 번 이상이라
+             1~2초가 확실히 걸린다. 늦게 띄우면 그 사이가 "멈춘 화면"으로 보인다. */
           <div style={card}>
-            <CreditCard size={28} style={{ color: 'var(--text-tertiary)' }} />
-            <div style={descStyle}>{paymentResult.confirming}</div>
+            <Spinner color="var(--success)" />
+            <h1 style={titleStyle}>{paymentResult.confirming}</h1>
+            <div style={waitNoticeStyle}>{billingResult.waitNotice}</div>
           </div>
         ) : (
           <>

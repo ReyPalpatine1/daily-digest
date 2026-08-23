@@ -600,7 +600,8 @@ export const translations = {
       trialUsedNotice: '이미 Pro 체험을 사용하셨습니다.',
     },
     billingResult: {
-      registering: '카드를 등록하는 중입니다…',
+      registering: '카드를 등록하고 있습니다.',
+      waitNotice: '잠시만 기다려 주세요. 창을 닫지 마세요.',
       successTitle: '카드가 등록되었습니다.',
       successDesc: '등록된 카드로 다음 단계에서 구독 결제가 진행됩니다.',
       failTitle: '카드 등록에 실패했습니다.',
@@ -616,7 +617,7 @@ export const translations = {
       backToSubscribe: '구독 화면으로 돌아가기',
     },
     paymentResult: {
-      confirming: '결제를 확인하는 중입니다…',
+      confirming: '결제를 확인하고 있습니다.',
       successTitle: '결제가 완료되었습니다.',
       successDesc: '{date}까지 Pro를 이용할 수 있습니다.',
       failTitle: '결제에 실패했습니다.',
@@ -1325,7 +1326,8 @@ export const translations = {
       trialUsedNotice: 'You have already used your Pro trial.',
     },
     billingResult: {
-      registering: 'Registering your card…',
+      registering: 'Registering your card.',
+      waitNotice: 'Please wait a moment. Do not close this window.',
       successTitle: 'Your card has been registered.',
       successDesc: 'Your subscription will be charged to this card in the next step.',
       failTitle: 'Card registration failed.',
@@ -1341,7 +1343,7 @@ export const translations = {
       backToSubscribe: 'Back to the subscription page',
     },
     paymentResult: {
-      confirming: 'Confirming your payment…',
+      confirming: 'Confirming your payment.',
       successTitle: 'Payment complete.',
       successDesc: 'You can use Pro until {date}.',
       failTitle: 'Payment failed.',
@@ -2046,7 +2048,8 @@ export const translations = {
       trialUsedNotice: '您已使用过 Pro 试用。',
     },
     billingResult: {
-      registering: '正在登记卡片…',
+      registering: '正在登记卡片。',
+      waitNotice: '请稍候，不要关闭此窗口。',
       successTitle: '卡片已登记。',
       successDesc: '下一步将使用已登记的卡片进行订阅扣款。',
       failTitle: '卡片登记失败。',
@@ -2062,7 +2065,7 @@ export const translations = {
       backToSubscribe: '返回订阅页面',
     },
     paymentResult: {
-      confirming: '正在确认支付…',
+      confirming: '正在确认支付。',
       successTitle: '支付已完成。',
       successDesc: '您可以使用 Pro 至 {date}。',
       failTitle: '支付失败。',
@@ -2767,7 +2770,8 @@ export const translations = {
       trialUsedNotice: 'すでにProトライアルを利用済みです。',
     },
     billingResult: {
-      registering: 'カードを登録しています…',
+      registering: 'カードを登録しています。',
+      waitNotice: 'しばらくお待ちください。ウィンドウを閉じないでください。',
       successTitle: 'カードが登録されました。',
       successDesc: '次のステップで登録したカードから購読料金が請求されます。',
       failTitle: 'カードの登録に失敗しました。',
@@ -2783,7 +2787,7 @@ export const translations = {
       backToSubscribe: '購読画面に戻る',
     },
     paymentResult: {
-      confirming: 'お支払いを確認しています…',
+      confirming: 'お支払いを確認しています。',
       successTitle: 'お支払いが完了しました。',
       successDesc: '{date}までProをご利用いただけます。',
       failTitle: 'お支払いに失敗しました。',

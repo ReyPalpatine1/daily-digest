@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
 import { AppHeader } from '@/components/AppHeader'
-import { CheckCircle2, XCircle, CreditCard } from 'lucide-react'
+import { CheckCircle2, XCircle } from 'lucide-react'
+import { Spinner } from '@/components/Spinner'
 
 // 토스 카드 등록창의 리다이렉트 착지점.
 // 성공: ?customerKey=&authKey= → /api/billing/authorize 로 넘겨 빌링키를 발급받는다.
@@ -128,6 +129,10 @@ function BillingResultContent() {
   const descStyle: React.CSSProperties = {
     fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.7, marginTop: 8,
   }
+  // 대기 안내 — 승인 도중 창을 닫으면 결제 상태가 어긋날 수 있어 눈에 띄되 과하지 않게.
+  const waitNoticeStyle: React.CSSProperties = {
+    fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 6,
+  }
 
   const isDone = status === 'paid' || status === 'alreadyActive' || status === 'cardChanged'
 
@@ -156,13 +161,18 @@ function BillingResultContent() {
 
       <main style={{ maxWidth: 460, margin: '0 auto', padding: '32px 20px 64px' }}>
         {status === 'loading' || status === 'charging' ? (
+          /* 대기 표시는 진입 즉시 보여준다 — usePending의 200ms 지연을 쓰지 않는다.
+             그 지연은 "금방 끝날 수도 있는" 버튼의 깜빡임을 막는 장치인데,
+             이 화면은 토스 승인 → DB 기록 → 플랜 반영으로 왕복이 두 번 이상이라
+             1~2초가 확실히 걸린다. 늦게 띄우면 그 사이가 "멈춘 화면"으로 보인다. */
           <div style={card}>
-            <CreditCard size={28} style={{ color: 'var(--text-tertiary)' }} />
+            <Spinner color="var(--success)" />
             {/* 카드 등록이 끝난 뒤 결제를 기다리는 동안 무엇이 진행 중인지 밝힌다. */}
-            {status === 'charging' && <h1 style={titleStyle}>{billingResult.successTitle}</h1>}
-            <div style={descStyle}>
-              {status === 'charging' ? billingResult.successDesc : billingResult.registering}
-            </div>
+            <h1 style={titleStyle}>
+              {status === 'charging' ? billingResult.successTitle : billingResult.registering}
+            </h1>
+            {status === 'charging' && <div style={descStyle}>{billingResult.successDesc}</div>}
+            <div style={waitNoticeStyle}>{billingResult.waitNotice}</div>
           </div>
         ) : (
           <>
