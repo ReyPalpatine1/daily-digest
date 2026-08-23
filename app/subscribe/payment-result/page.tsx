@@ -24,6 +24,8 @@ function PaymentResultContent() {
   const [status, setStatus] = useState<Status>('loading')
   const [failMessage, setFailMessage] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
+  // 헤더는 진입 시점(결제 전) 프로필을 들고 있다 — 승인 뒤 이 값을 올려 다시 읽게 한다.
+  const [planRefreshKey, setPlanRefreshKey] = useState(0)
   // 개발 모드의 이펙트 2회 실행으로 승인이 두 번 요청되지 않게 한다.
   const startedRef = useRef(false)
 
@@ -57,6 +59,7 @@ function PaymentResultContent() {
         if (res.ok && data?.ok) {
           setExpiresAt(typeof data.planExpiresAt === 'string' ? data.planExpiresAt : null)
           setStatus('success')
+          setPlanRefreshKey(k => k + 1)
           return
         }
         setFailMessage(typeof data?.message === 'string' ? data.message : null)
@@ -114,7 +117,7 @@ function PaymentResultContent() {
       color: 'var(--text-primary)',
       fontFamily: 'var(--font-sans)',
     }}>
-      <AppHeader showBack />
+      <AppHeader showBack planRefreshKey={planRefreshKey} />
 
       <main style={{ maxWidth: 460, margin: '0 auto', padding: '32px 20px 64px' }}>
         {status === 'loading' ? (

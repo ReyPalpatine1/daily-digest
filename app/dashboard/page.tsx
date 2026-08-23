@@ -273,6 +273,9 @@ export default function Dashboard() {
     trial_ended_popup_seen_at: string | null
   } | null>(null)
 
+  // 헤더는 자체 프로필을 들고 있어 플랜이 바뀐 것을 모른다 — 토글 직후 이 값을 올려 다시 읽게 한다.
+  const [planRefreshKey, setPlanRefreshKey] = useState(0)
+
   // isPro는 항상 실제 profile.plan 기준(관리자도 동일). 관리자 Free/Pro 토글이
   // 실제 DB plan을 바꾸므로 별도 미리보기 플래그(localStorage)를 두지 않는다.
   const isPro = checkIsPro(profile)
@@ -1051,6 +1054,8 @@ export default function Dashboard() {
       // (안 넘기면 Free→Pro 직후 열람기록이 7일치만 조회된다).
       const freshProfile = await reloadProfile(user.id)
       await loadData(user.id, checkIsPro(freshProfile))
+      // 헤더는 자체 프로필을 들고 있으므로 다시 읽으라고 알린다(뱃지 즉시 반영).
+      setPlanRefreshKey(k => k + 1)
     } catch (e) {
       console.error('[Admin] set-plan 호출 오류:', e)
     }
@@ -1259,6 +1264,7 @@ export default function Dashboard() {
         breakingUnread={breakingUnread}
         onOpenSidebar={() => setSidebarOpen(true)}
         adminPlanMode={isPro ? 'pro' : 'free'}
+        planRefreshKey={planRefreshKey}
         onAdminPlanModeChange={(mode) => planSwitch.run(() => switchPlanMode(mode))}
         onHelpClick={() => setShowHelp(true)}
       />

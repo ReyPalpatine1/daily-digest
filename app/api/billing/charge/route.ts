@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
 import { makeOrderId } from '@/lib/billing'
+import { checkPurchaseBlock } from '@/lib/purchase-guard'
 import { chargeWithBillingKey } from '@/lib/billing-charge'
 
 // 자동 갱신(빌링키) 결제 — 등록된 카드로 즉시 1개월분을 청구한다.
@@ -35,10 +36,10 @@ export async function POST() {
   if (profile?.plan === 'vip') {
     return NextResponse.json({ error: 'vip' }, { status: 409 })
   }
-  const notExpired =
-    !!profile?.plan_expires_at && new Date(profile.plan_expires_at) > new Date()
-  if (profile?.plan_status === 'active' && notExpired) {
-    return NextResponse.json({ error: 'already_active' }, { status: 409 })
+  // 화면과 같은 규칙으로 막는다 — 화면에서만 막으면 이 API를 직접 불러 우회할 수 있다.
+  const block = checkPurchaseBlock(profile, 'auto')
+  if (block) {
+    return NextResponse.json({ error: block === 'active_subscription' ? 'already_active' : block }, { status: 409 })
   }
 
   const orderId = makeOrderId(user.id, 'auto')

@@ -96,6 +96,9 @@ export async function runRenewals(): Promise<void> {
     // 강등은 됐는데 안내 메일이 아직 못 나간 사용자를 따로 훑는다.
     // 강등되면 위 대상 쿼리에서 빠지므로, 이 정리 루프가 없으면 메일 발송 실패가 영구 미발송이 된다.
     await sendPendingEndedNotices(now)
+
+    // 만료됐지만 갱신 대상이 아닌 계정(1개월권·체험 등)을 정리한다.
+    await sweepExpiredNonRenewing(now)
   } catch (e) {
     console.error('[billing-renew] 실행 실패:', e)
   }
@@ -161,6 +164,38 @@ async function renewOne(target: RenewTarget, now: Date): Promise<void> {
       .eq('id', target.id)
     if (flagError) {
       console.error(`[billing-renew] 안내 플래그 기록 실패(중복 발송 가능) user=${target.id}:`, flagError)
+    }
+  }
+}
+
+// 만료됐는데 갱신 대상이 아닌 Pro 계정(1개월권·체험·해지 예약 등)을 무료로 내린다.
+//
+// 이들은 지금까지 API를 한 번 태워야(syncUserPlan) 강등됐다. 접속하지 않는 계정은
+// plan='pro'인 채로 남아 관리자 통계의 Pro 수가 부풀려 보였다.
+// VIP는 만료 개념이 없으므로 plan='pro' 조건에서 자연히 빠진다.
+// ※ 체험·1개월권 종료 안내 메일은 cron에서 먼저 도는 runTrialNotifications가 보낸다.
+//    여기서는 안내를 보내지 않고 상태만 맞춘다.
+async function sweepExpiredNonRenewing(now: Date): Promise<void> {
+  const { data: expired, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('plan', 'pro')
+    .neq('plan_status', 'active')
+    .not('plan_expires_at', 'is', null)
+    .lt('plan_expires_at', now.toISOString())
+
+  if (error) {
+    console.error('[billing-renew] 만료 정리 대상 조회 실패:', error)
+    return
+  }
+
+  for (const p of (expired ?? []) as { id: string }[]) {
+    try {
+      // 강등 경로는 기존 것을 그대로 쓴다(채널 정리·발송 수단 복구 포함).
+      await syncUserPlan(p.id)
+      console.log(`[billing-renew] 만료 정리 → 무료 강등: ${p.id}`)
+    } catch (e) {
+      console.error(`[billing-renew] 만료 정리 실패 user=${p.id}:`, e)
     }
   }
 }

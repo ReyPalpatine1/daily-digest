@@ -36,6 +36,9 @@ export default function ProfilePage() {
   // 자동 갱신 해지 확인 모달 / 중복 클릭 방지
   const [showCancelRenew, setShowCancelRenew] = useState(false)
   const [renewBusy, setRenewBusy] = useState(false)
+  // 카드 삭제 확인 모달 / 중복 클릭 방지
+  const [showDeleteCard, setShowDeleteCard] = useState(false)
+  const [cardBusy, setCardBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -140,6 +143,34 @@ export default function ProfilePage() {
         console.error('[profile] 카드 변경 실패:', code ?? e)
         showToast('adminUsers.actionFailed')
       }
+    }
+  }
+
+  // 카드 삭제 — 자동 갱신을 중단한다. 남은 기간은 그대로 유지된다(이미 결제한 몫).
+  // 서버가 plan_status를 'onetime'으로 내리므로 화면도 1개월권 사용자와 같은 모습이 된다.
+  async function deleteCard() {
+    if (cardBusy) return
+    setCardBusy(true)
+    try {
+      const res = await fetch('/api/billing/card', { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.ok) {
+        showToast('adminUsers.actionFailed')
+        return
+      }
+      setCardLabel(null)
+      // 서버가 바꾼 상태를 화면에도 반영한다(자동 갱신 안내·해지 버튼이 사라진다).
+      setProfile(prev =>
+        prev && prev.plan_status === 'active'
+          ? { ...prev, plan_status: 'onetime', cancel_at_period_end: false }
+          : prev
+      )
+      setShowDeleteCard(false)
+      showToast('profile.deleteCardDone')
+    } catch {
+      showToast('adminUsers.actionFailed')
+    } finally {
+      setCardBusy(false)
     }
   }
 
@@ -317,9 +348,14 @@ export default function ProfilePage() {
                   {t('profile.registeredCard')}: {cardLabel}
                 </span>
               </div>
-              <button style={btnSecondary} onClick={changeCard}>
-                {t('profile.changeCard')}
-              </button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button style={btnSecondary} onClick={changeCard}>
+                  {t('profile.changeCard')}
+                </button>
+                <button style={btnSecondary} disabled={cardBusy} onClick={() => setShowDeleteCard(true)}>
+                  {t('profile.deleteCard')}
+                </button>
+              </div>
             </div>
             {/* 재등록은 계정당 1장 upsert라 기존 카드를 교체한다 — 그 사실을 미리 알린다. */}
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
@@ -343,6 +379,59 @@ export default function ProfilePage() {
           </button>
         </div>
       </main>
+
+      {/* === 카드 삭제 확인 모달 === */}
+      {showDeleteCard && (
+        <div
+          onClick={() => { if (!cardBusy) setShowDeleteCard(false) }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 120,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+          }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 400,
+              background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+              borderRadius: 14, padding: 22, boxSizing: 'border-box',
+              boxShadow: 'var(--shadow-lg)',
+            }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 12px' }}>
+              {t('profile.deleteCardTitle')}
+            </h2>
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: '0 0 18px' }}>
+              {t('profile.deleteCardBody', { date: expiresLabel })}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteCard(false)}
+                disabled={cardBusy}
+                style={{
+                  padding: '8px 14px', borderRadius: 8,
+                  border: '0.5px solid var(--border)', background: 'var(--bg-card)',
+                  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
+                  cursor: cardBusy ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={deleteCard}
+                disabled={cardBusy}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, border: 'none',
+                  background: 'var(--text-primary)', color: 'var(--bg-card)',
+                  fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                  cursor: cardBusy ? 'default' : 'pointer',
+                  opacity: cardBusy ? 0.5 : 1,
+                }}>
+                {t('profile.deleteCardConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* === 자동 갱신 해지 확인 모달 (탈퇴 모달과 같은 구조·토큰) === */}
       {showCancelRenew && (

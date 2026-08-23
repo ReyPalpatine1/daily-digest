@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
 import { applyPaidPlan } from '@/lib/plan-sync'
 import { TOSS_API, tossAuthHeader, type TossPaymentResponse } from '@/lib/billing'
+import { checkPurchaseBlock } from '@/lib/purchase-guard'
 
 // 1개월권(단건 결제) 승인 — 결제창에서 돌아온 paymentKey를 서버가 승인 처리한다.
 //
@@ -60,6 +61,24 @@ export async function POST(req: Request) {
       .eq('id', user.id)
       .single()
     return NextResponse.json({ ok: true, planExpiresAt: profile?.plan_expires_at ?? null })
+  }
+
+  // 구매 제한 — 주문 발급 이후 상태가 바뀌었을 수 있으므로 승인 직전에 다시 본다.
+  // ★ 위 멱등 처리(이미 done) 뒤에 둔다: 순서를 바꾸면 결제 성공 후 새로고침이 여기서 막힌다.
+  const { data: current } = await serviceClient
+    .from('profiles')
+    .select('plan, plan_status, plan_expires_at')
+    .eq('id', user.id)
+    .single()
+
+  const block = current?.plan === 'vip' ? 'vip' : checkPurchaseBlock(current, 'onetime')
+  if (block) {
+    console.warn('[billing/confirm] 구매 제한으로 승인 거부:', user.id, block)
+    await serviceClient
+      .from('payments')
+      .update({ status: 'canceled', fail_code: block })
+      .eq('order_id', orderId)
+    return NextResponse.json({ error: block }, { status: 409 })
   }
 
   // 금액 위변조 검증 — 저장된 금액과 다르면 승인하지 않는다.

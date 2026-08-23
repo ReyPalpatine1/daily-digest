@@ -23,6 +23,7 @@ export function AppHeader({
   onOpenSidebar,
   adminPlanMode: adminPlanModeProp,
   onAdminPlanModeChange,
+  planRefreshKey,
 }: {
   showBack?: boolean
   onHelpClick?: () => void
@@ -35,6 +36,9 @@ export function AppHeader({
   onOpenSidebar?: () => void
   adminPlanMode?: 'free' | 'pro'
   onAdminPlanModeChange?: (mode: 'free' | 'pro') => void
+  // 값이 바뀌면 프로필을 다시 읽는다 — 결제 승인 직후·관리자 토글 직후처럼
+  // 헤더 밖에서 플랜이 바뀐 경우에 뱃지를 즉시 맞추기 위한 신호다.
+  planRefreshKey?: number
 }) {
   const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
@@ -104,6 +108,23 @@ export function AppHeader({
     })
     return () => { cancelled = true }
   }, [])
+
+  // 플랜이 바뀐 뒤 헤더 뱃지를 즉시 맞춘다.
+  // 결제 승인·관리자 토글은 헤더 바깥에서 일어나므로, 이 신호가 없으면 새로고침 전까지
+  // "결제 완료" 화면에서 뱃지만 FREE로 남는다.
+  useEffect(() => {
+    if (!planRefreshKey || !user?.id) return
+    let cancelled = false
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (!cancelled) setProfile(data as Profile | null)
+      })
+    return () => { cancelled = true }
+  }, [planRefreshKey, user?.id])
 
   // 테마 초기 동기화 (layout.tsx bootstrap script 가 이미 html.dataset.theme 설정)
   useEffect(() => {
@@ -442,7 +463,7 @@ export function AppHeader({
           )}
           {/* 대시보드 전용: 관리자 Free/Pro 토글 (데스크톱). 실제 DB plan을 바꾼다 */}
           {showTabs && !isMobile && isLoggedIn && isAdmin && !isVipAccount && (
-            <div title={t('plans.previewHint')}
+            <div
               style={{
                 display: 'inline-flex',
                 background: 'var(--bg-subtle)',

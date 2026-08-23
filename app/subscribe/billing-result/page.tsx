@@ -33,6 +33,9 @@ function BillingResultContent() {
   const [status, setStatus] = useState<Status>('loading')
   const [failMessage, setFailMessage] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
+  // 헤더는 진입 시점(결제 전) 프로필을 들고 있다 — 승인 뒤 이 값을 올려 다시 읽게 한다.
+  // 그러지 않으면 "결제가 완료되었습니다" 옆에서 뱃지만 FREE로 남는다.
+  const [planRefreshKey, setPlanRefreshKey] = useState(0)
   // 개발 모드의 이펙트 2회 실행으로 authKey가 두 번 소비되지 않게 한다.
   const startedRef = useRef(false)
 
@@ -79,6 +82,7 @@ function BillingResultContent() {
       if (chargeRes.ok && charge?.ok) {
         setExpiresAt(typeof charge.planExpiresAt === 'string' ? charge.planExpiresAt : null)
         setStatus('paid')
+        setPlanRefreshKey(k => k + 1)
         return
       }
       // 이미 이용 중이면 중복 청구를 막은 것이므로 오류가 아니다.
@@ -148,7 +152,7 @@ function BillingResultContent() {
       color: 'var(--text-primary)',
       fontFamily: 'var(--font-sans)',
     }}>
-      <AppHeader showBack />
+      <AppHeader showBack planRefreshKey={planRefreshKey} />
 
       <main style={{ maxWidth: 460, margin: '0 auto', padding: '32px 20px 64px' }}>
         {status === 'loading' || status === 'charging' ? (

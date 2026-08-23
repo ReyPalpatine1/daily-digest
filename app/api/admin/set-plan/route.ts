@@ -107,6 +107,9 @@ export async function POST(request: Request) {
           vip_granted_at: null,
           plan_expires_at: null,
           plan_changed_at: changedAt,
+          // 결제로 올린 Pro가 아니므로 결제 상태를 붙이지 않는다.
+          // 'active'면 갱신 대상이 되고 'onetime'이면 만료 안내가 나가는데, 둘 다 사실이 아니다.
+          plan_status: 'none',
         }
       : {
           plan: 'free',
@@ -114,6 +117,13 @@ export async function POST(request: Request) {
           vip_granted_at: null,
           plan_expires_at: null,
           plan_changed_at: changedAt,
+          // 결제 흔적을 함께 정리한다. 빠뜨리면 plan='free'인데 plan_status='active'인
+          // 계정이 남아 갱신 로직이 어떻게 다룰지 애매해진다.
+          plan_status: 'none',
+          cancel_at_period_end: false,
+          renew_fail_count: 0,
+          renew_failed_at: null,
+          renew_notified_at: null,
         }
 
   const { error: updateError } = await serviceClient

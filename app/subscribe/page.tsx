@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { translations } from '@/lib/i18n/translations'
 import { supabase } from '@/lib/supabase'
+import type { Profile } from '@/lib/supabase'
+import { checkPurchaseBlock } from '@/lib/purchase-guard'
 import { TOAST_MS } from '@/lib/toast'
 import { AppHeader } from '@/components/AppHeader'
 import { CreditCard, Lock, Ban } from 'lucide-react'
@@ -25,6 +27,8 @@ function SubscribeContent() {
   const [ready, setReady] = useState(false)
   // 토스 customerKey로 그대로 쓰는 값 — 추측 불가·고유해야 하므로 Supabase UUID를 쓴다(이메일 금지).
   const [userId, setUserId] = useState<string | null>(null)
+  // 구매 제한 판정용(현재 플랜·만료일). 서버도 같은 규칙으로 다시 검사한다.
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [payType, setPayType] = useState<PayType>('auto')
   const [agreeTerms, setAgreeTerms] = useState(false)
   const [agreeAutoPay, setAgreeAutoPay] = useState(false)
@@ -37,10 +41,18 @@ function SubscribeContent() {
 
   useEffect(() => {
     let cancelled = false
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (cancelled) return
       if (!data.user) { router.push('/'); return }
       setUserId(data.user.id)
+
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single()
+      if (cancelled) return
+      setProfile(profileRow as Profile | null)
       setReady(true)
     })
     return () => { cancelled = true }
@@ -83,7 +95,29 @@ function SubscribeContent() {
     }, TOAST_MS)
   }
 
-  const canSubmit = mode === 'trial' ? agreeTerms : agreeTerms && (payType !== 'auto' || agreeAutoPay)
+  // 구매 제한 — 화면에서 막고, 서버(/api/billing/charge·order·confirm)도 같은 함수로 다시 막는다.
+  // 체험 화면에는 결제가 없으므로 적용하지 않는다.
+  const blockAuto = mode === 'pay' ? checkPurchaseBlock(profile, 'auto') : null
+  const blockOnetime = mode === 'pay' ? checkPurchaseBlock(profile, 'onetime') : null
+  const blockedNow = payType === 'auto' ? blockAuto : blockOnetime
+  const expiresLabel = profile?.plan_expires_at
+    ? new Date(profile.plan_expires_at).toLocaleDateString(dateLocale)
+    : ''
+
+  // 기본 선택(자동 갱신)이 막혀 있고 1개월권은 열려 있으면 열린 쪽으로 옮겨 준다.
+  useEffect(() => {
+    if (blockAuto && !blockOnetime) setPayType('onetime')
+  }, [blockAuto, blockOnetime])
+
+  function blockReason(block: ReturnType<typeof checkPurchaseBlock>): string | null {
+    if (block === 'active_subscription') return subscribe.blockedActive
+    if (block === 'enough_remaining') return t('subscribe.blockedEnough', { date: expiresLabel })
+    return null
+  }
+
+  const canSubmit = mode === 'trial'
+    ? agreeTerms
+    : !blockedNow && agreeTerms && (payType !== 'auto' || agreeAutoPay)
 
   async function startTrial() {
     setSubmitting(true)
@@ -166,6 +200,7 @@ function SubscribeContent() {
   }
 
   function handleSubmit() {
+    if (blockedNow) return
     if (!canSubmit) { showToast('subscribe.needAgree'); return }
     if (mode === 'trial') { startTrial(); return }
     if (payType === 'auto') { registerCard(); return }
@@ -191,27 +226,38 @@ function SubscribeContent() {
     fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
   }
 
-  function payOption(value: PayType, title: string, desc: string) {
-    const selected = payType === value
+  // 살 수 없는 방식은 고를 수 없게 하고 이유를 그 자리에서 밝힌다
+  // (눌러도 아무 일도 없는 버튼을 남기지 않는다).
+  function payOption(value: PayType, title: string, desc: string, block: ReturnType<typeof checkPurchaseBlock>) {
+    const selected = payType === value && !block
+    const reason = blockReason(block)
     return (
       <button
-        onClick={() => setPayType(value)}
+        onClick={() => { if (!block) setPayType(value) }}
+        disabled={!!block}
         style={{
           display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%',
           textAlign: 'left', padding: '12px 14px', borderRadius: 10,
           border: selected ? '1.5px solid var(--accent)' : '0.5px solid var(--border)',
-          background: 'var(--bg-card)', cursor: 'pointer', fontFamily: 'inherit',
-          marginBottom: 8,
+          background: block ? 'var(--bg-subtle)' : 'var(--bg-card)',
+          cursor: block ? 'default' : 'pointer', fontFamily: 'inherit',
+          marginBottom: 8, opacity: block ? 0.75 : 1,
         }}>
         <input
           type="radio"
           checked={selected}
-          onChange={() => setPayType(value)}
-          style={{ width: 15, height: 15, marginTop: 2, cursor: 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
+          disabled={!!block}
+          onChange={() => { if (!block) setPayType(value) }}
+          style={{ width: 15, height: 15, marginTop: 2, cursor: block ? 'default' : 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
         />
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: block ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>{title}</div>
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{desc}</div>
+          {reason && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.6 }}>
+              {reason}
+            </div>
+          )}
         </div>
       </button>
     )
@@ -272,12 +318,12 @@ function SubscribeContent() {
             {/* 결제 방식 */}
             <div style={{ ...card, marginBottom: 16 }}>
               <div style={sectionTitle}>{subscribe.paymentMethod}</div>
-              {payOption('auto', subscribe.proMonthly, `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`)}
-              {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`)}
+              {payOption('auto', subscribe.proMonthly, `${won(PRICE_MONTHLY)} · ${pricing.perMonth}`, blockAuto)}
+              {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`, blockOnetime)}
             </div>
 
             {/* 결제 수단 (카드) — 입력은 토스 결제창이 직접 받는다. 여기서는 안내만 한다. */}
-            {payType === 'auto' && (
+            {payType === 'auto' && !blockAuto && (
               <div style={{ ...card, marginBottom: 16 }}>
                 <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <CreditCard size={16} style={{ color: 'var(--text-secondary)' }} />
