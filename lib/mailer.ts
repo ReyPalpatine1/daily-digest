@@ -555,6 +555,54 @@ export async function sendAdminShareReportEmail(report: {
   }
 }
 
+// 관리자 결제 정합성 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정.
+// 돈이 오간 뒤 우리 쪽 상태가 어긋난 경우라, 요약 실패 알림과 섞이지 않게 제목을 분리한다.
+export async function sendAdminBillingIssueEmail(
+  headline: string,
+  lines: string[]
+): Promise<void> {
+  const recipients = resolveAdminRecipients()
+  if (recipients.length === 0) {
+    console.log('⚠️ ADMIN_EMAILS/ADMIN_EMAIL 미설정 — 결제 이상 알림 메일 발송 건너뜀')
+    return
+  }
+
+  // APP_URL은 기존 email-templates 방식과 동일하게 함수 내부에서 읽는다(Cloudflare 호환).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.com').replace(/\/+$/, '')
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const mail = {
+    from: `"Daily Video Digest 결제 알림" <${process.env.MAIL_FROM}>`,
+    subject: `[결제] ${headline}`,
+    html: `
+      <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <div style="background:#fff7f7;border:1px solid #ff4757;border-radius:12px;padding:24px">
+          <h1 style="font-size:20px;color:#b00000;margin:0 0 16px">${escapeHtml(headline)}</h1>
+          <div style="font-size:14px;color:#333;line-height:1.7;margin-bottom:20px">
+            ${lines.map(line => `<p style="margin:0 0 6px">${escapeHtml(line)}</p>`).join('')}
+          </div>
+          <p style="font-size:13px;color:#666;line-height:1.7;margin:0 0 20px">
+            결제는 이미 승인된 상태일 수 있습니다. 자동 복구하지 않으므로 결제 내역과 플랜을 직접 대조해 주세요.
+          </p>
+          <div>
+            <a href="${appUrl}/admin/errors" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600">관리자 오류 페이지에서 확인</a>
+          </div>
+        </div>
+      </div>
+    `,
+  }
+
+  // Cloudflare API는 단일 수신자 기준 — 수신자별 개별 발송, 하나 실패가 나머지를 막지 않게.
+  for (const to of recipients) {
+    try {
+      await sendViaCloudflare({ ...mail, to })
+    } catch (e) {
+      console.error(`관리자 결제 이상 알림 메일 발송 실패 (${to}):`, e)
+    }
+  }
+}
+
 // 관리자 신규 오류 집계 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
 export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
   const recipients = resolveAdminRecipients()

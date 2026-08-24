@@ -66,6 +66,11 @@ export function AppHeader({
   const effectiveAdminPlanMode = adminPlanModeProp ?? (isPro ? 'pro' : 'free')
   // VIP는 관리자가 수동 부여한 값이라 이 토글로 덮어쓰면 복구가 어렵다 → 아예 노출하지 않는다.
   const isVipAccount = profile?.plan === 'vip'
+  // 결제가 살아 있는 계정(자동 갱신 중이거나 결제한 이용 기간이 남음)은 서버(/api/admin/set-plan)가
+  // 409로 막는다. 판정 기준을 서버와 똑같이 두고, 여기서도 토글을 내려 "눌러도 안 되는 버튼"을 없앤다.
+  const isBillingLocked =
+    profile?.plan_status === 'active' ||
+    (!!profile?.plan_expires_at && new Date(profile.plan_expires_at) > new Date())
 
   // 로그인 상태 분기. isLoggedIn=계정/플랜 UI 노출, isLoggedOut(=null)=로그인 버튼 노출.
   // 로딩 중(undefined)엔 둘 다 false → 계정 영역을 비워둔다(PRO 깜빡임·오표시 방지).
@@ -461,8 +466,20 @@ export function AppHeader({
               {t('plans.vipLocked')}
             </span>
           )}
+          {/* 결제가 살아 있는 계정에서도 토글을 내린다 — 누르면 남은 기간과 결제 상태가 지워지는데,
+              billing_keys·payments는 남아 "돈은 냈는데 Free"가 된다. 왜 없는지 한 줄로 알린다. */}
+          {showTabs && !isMobile && isLoggedIn && isAdmin && !isVipAccount && isBillingLocked && (
+            <span
+              title={t('plans.billingLockedHint')}
+              style={{
+                fontSize: 11, color: 'var(--text-tertiary)',
+                border: '0.5px dashed var(--border)', borderRadius: 7, padding: '4px 10px',
+              }}>
+              {t('plans.billingLocked')}
+            </span>
+          )}
           {/* 대시보드 전용: 관리자 Free/Pro 토글 (데스크톱). 실제 DB plan을 바꾼다 */}
-          {showTabs && !isMobile && isLoggedIn && isAdmin && !isVipAccount && (
+          {showTabs && !isMobile && isLoggedIn && isAdmin && !isVipAccount && !isBillingLocked && (
             <div
               style={{
                 display: 'inline-flex',

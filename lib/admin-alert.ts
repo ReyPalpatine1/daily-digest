@@ -3,8 +3,9 @@
 // 알림 실패가 주 흐름을 막지 않도록 모든 경로 try-catch.
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버에서만 import.
 import { createClient } from '@supabase/supabase-js'
-import { sendAdminBulkErrorEmail, sendAdminFeedbackEmail, sendAdminNewErrorsEmail, sendAdminShareReportEmail, type FailedItem, type DigestTrigger } from './mailer'
+import { sendAdminBillingIssueEmail, sendAdminBulkErrorEmail, sendAdminFeedbackEmail, sendAdminNewErrorsEmail, sendAdminShareReportEmail, type FailedItem, type DigestTrigger } from './mailer'
 import { sendTelegramMessage } from './telegram'
+import { logErrorEvent } from './error-log'
 import { nowUtc } from './time'
 
 // Cloudflare Workers 호환: process.env는 요청 처리 시점에 채워지므로 lazy 생성.
@@ -302,5 +303,76 @@ export async function sendAdminNewErrorsAlert(fallbackSinceIso: string): Promise
     }
   } catch (e) {
     console.error('[admin-alert] 신규 오류 알림 처리 예외:', e)
+  }
+}
+
+// 결제 정합성 이상의 종류.
+//   plan_sync_failed : 토스 승인은 났는데 applyPaidPlan이 실패해 플랜이 안 켜졌다(즉시 감지).
+//   plan_not_applied : 결제(status='done')는 있는데 플랜이 그만큼 반영돼 있지 않다(사후 대조).
+export type BillingAlertReason = 'plan_sync_failed' | 'plan_not_applied'
+
+export type BillingAlert = {
+  reason: BillingAlertReason
+  userId: string
+  orderId: string
+  headline: string // 사람이 읽는 한 줄 제목
+  lines: string[]  // 상세 — user_id·order_id를 반드시 포함시킬 것
+}
+
+// 관리자 결제 이상 알림 — 설정에 따라 이메일/텔레그램(중복 가능) 발송.
+// 어떤 실패도 throw하지 않는다 (갱신 주 흐름 보호).
+//
+// ★ 워터마크: 같은 건(order_id + reason)은 한 번만 알린다.
+//   error_log에 적재를 먼저 시도하고, dedupe로 걸러지면(=이미 알린 건) 발송하지 않는다.
+//   15분마다 도는 cron에서 같은 결제를 매번 알리면 알림이 무용지물이 되기 때문이다.
+//   적재 자체가 실패한 경우에도 발송하지 않는다 — 워터마크 없이 보내면 다음 주기부터 도배된다.
+export async function sendAdminBillingAlert(alert: BillingAlert): Promise<void> {
+  try {
+    const isFirstTime = await logErrorEvent({
+      source: 'billing',
+      videoId: alert.orderId,   // 멱등성 키이자 중복 알림 방지 워터마크
+      videoTitle: alert.headline,
+      channelName: alert.userId, // 지정하면 videos/channels 보정 조회를 건너뛴다
+      failReason: alert.reason,
+      failDetail: alert.lines.join('\n'),
+      dedupe: true,
+    })
+    if (!isFirstTime) {
+      console.log(`[admin-alert] 결제 이상 알림 생략(이미 알렸거나 적재 실패): ${alert.orderId} ${alert.reason}`)
+      return
+    }
+
+    const alertSettings = await getAdminAlertSettings()
+    if (!alertSettings.notify_email && !alertSettings.notify_telegram) {
+      console.log('[admin-alert] 이메일/텔레그램 알림 모두 꺼짐 → 결제 이상 알림 발송 생략 (error_log 적재만)')
+      return
+    }
+
+    if (alertSettings.notify_email) {
+      try {
+        await sendAdminBillingIssueEmail(alert.headline, alert.lines)
+      } catch (e) {
+        console.error('[admin-alert] 결제 이상 이메일 알림 실패:', e)
+      }
+    }
+
+    if (alertSettings.notify_telegram) {
+      try {
+        const chatId = await findAdminTelegramChatId()
+        if (!chatId) {
+          console.log('[admin-alert] 관리자 telegram_chat_id 미연결 → 결제 이상 텔레그램 알림 skip')
+          return
+        }
+        const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+        const lines: string[] = [escapeTg(`💳 ${alert.headline}`)]
+        for (const line of alert.lines) lines.push(escapeTg(line))
+        lines.push(appUrl ? `관리자 오류 페이지에서 확인: ${appUrl}/admin/errors` : '관리자 오류 페이지에서 확인')
+        await sendTelegramMessage(chatId, lines.join('\n'))
+      } catch (e) {
+        console.error('[admin-alert] 결제 이상 텔레그램 알림 실패:', e)
+      }
+    }
+  } catch (e) {
+    console.error('[admin-alert] 결제 이상 알림 처리 예외:', e)
   }
 }

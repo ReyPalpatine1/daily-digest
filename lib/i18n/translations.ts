@@ -274,6 +274,8 @@ export const translations = {
       pro: 'PRO',
       admin: 'ADMIN',
       vipLocked: 'VIP 계정은 플랜을 바꿀 수 없습니다.',
+      billingLocked: '결제 중 — 변경 불가',
+      billingLockedHint: '결제 중인 계정은 이 도구로 변경할 수 없습니다. 자동 갱신을 해지하거나 이용 기간이 끝난 뒤에 사용해 주세요.',
     },
     time: {
       justNow: '방금',
@@ -1005,6 +1007,8 @@ export const translations = {
       pro: 'PRO',
       admin: 'ADMIN',
       vipLocked: 'VIP accounts cannot change plans here.',
+      billingLocked: 'Billing active — locked',
+      billingLockedHint: 'Accounts with active billing cannot be changed here. Cancel auto-renewal or wait until the paid period ends.',
     },
     time: {
       justNow: 'just now',
@@ -1727,6 +1731,8 @@ export const translations = {
       pro: 'PRO',
       admin: 'ADMIN',
       vipLocked: 'VIP 账户无法在此更改方案。',
+      billingLocked: '扣款中 — 无法更改',
+      billingLockedHint: '正在扣款的账户无法用此工具更改。请先取消自动续费，或等待使用期结束后再操作。',
     },
     time: {
       justNow: '刚刚',
@@ -2446,6 +2452,8 @@ export const translations = {
       pro: 'PRO',
       admin: 'ADMIN',
       vipLocked: 'VIPアカウントはプランを変更できません。',
+      billingLocked: '決済中 — 変更不可',
+      billingLockedHint: '決済中のアカウントはこのツールで変更できません。自動更新を解約するか、利用期間の終了後にご利用ください。',
     },
     time: {
       justNow: 'たった今',

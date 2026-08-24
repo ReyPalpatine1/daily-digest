@@ -59,7 +59,7 @@ export async function POST(request: Request) {
   // === 대상 사용자 현재 플랜 확인 ===
   const { data: target, error: targetError } = await serviceClient
     .from('profiles')
-    .select('id, email, plan')
+    .select('id, email, plan, plan_status, plan_expires_at')
     .eq('id', targetUserId)
     .single()
 
@@ -77,8 +77,32 @@ export async function POST(request: Request) {
     )
   }
 
-  // 결제 Pro 사용자는 관리자가 함부로 변경 못 하게 보호.
-  // 단, 관리자 본인 계정(대시보드 Free/Pro 토글)은 예외 — 본인이 의도적으로 바꾸는 것.
+  // ★ 결제가 살아 있는 계정은 본인 계정이라도 막는다 (관리자 예외 없음).
+  //
+  // 예전에는 아래 "결제 Pro 보호"가 본인 계정만 예외로 뚫려 있었다. 그런데 이 라우트를 부르는
+  // 대시보드 헤더의 Free/Pro 토글은 정확히 본인 계정만 대상으로 한다 — 가드가 열린 유일한 대상이
+  // 버튼이 겨냥하는 유일한 대상이었던 셈이라, 클릭 한 번에 plan_expires_at(남은 기간)과 결제 상태
+  // 일체가 경고 없이 사라졌다. billing_keys·payments는 그대로 남으므로 "돈은 냈는데 Free"가 된다.
+  //
+  // 판정은 plan='pro'라는 부정확한 대용물 대신 결제 상태 자체로 한다:
+  //   · plan_status='active'     : 자동 갱신 중(갱신 대기·실패 중 포함)
+  //   · plan_expires_at이 미래   : 이미 결제된 이용 기간이 남아 있음(1개월권·체험 포함)
+  // 관리자 지정 Pro는 plan_status='none' + plan_expires_at=null이라 여기 걸리지 않는다
+  // → 개발용 Free/Pro 토글은 종전대로 동작한다.
+  const hasPaidPeriod =
+    !!target.plan_expires_at && new Date(target.plan_expires_at) > new Date()
+  if (target.plan_status === 'active' || hasPaidPeriod) {
+    return NextResponse.json(
+      {
+        error:
+          '결제 중인 계정은 이 도구로 변경할 수 없습니다. 먼저 자동 갱신을 해지하거나 이용 기간이 끝난 뒤에 사용하세요',
+      },
+      { status: 409 }
+    )
+  }
+
+  // 결제 Pro 사용자는 관리자가 함부로 변경 못 하게 보호(위 결제 상태 가드를 통과한 계정에 대한 2차 방어).
+  // 본인 계정은 개발용 토글의 대상이므로 여기서는 통과시킨다 — 결제 보호는 위에서 이미 끝났다.
   if (target.plan === 'pro' && targetUserId !== user.id) {
     return NextResponse.json(
       { error: '결제한 Pro 사용자는 VIP 지정/해제로 변경할 수 없습니다' },

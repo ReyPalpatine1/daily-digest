@@ -18,7 +18,11 @@ function getSupabase(): ServiceClient {
   return _supabase
 }
 
-export type ErrorSource = 'summary' | 'digest' | 'breaking' | 'collect' | 'preview'
+// 'billing'은 결제 정합성 이상(결제는 됐는데 플랜이 반영되지 않음)을 적재할 때 쓴다.
+// 이 경우 영상 관련 컬럼은 결제 식별자를 담는다 — video_id=order_id(멱등성 키이자 중복 알림
+// 방지 워터마크), channel_name=user_id. 관리자 오류 화면은 두 값을 텍스트로만 표시하므로
+// 새 테이블·마이그레이션 없이 기존 적재·조회 경로를 그대로 재사용할 수 있다.
+export type ErrorSource = 'summary' | 'digest' | 'breaking' | 'collect' | 'preview' | 'billing'
 
 export type ErrorLogEntry = {
   source: ErrorSource
@@ -32,7 +36,11 @@ export type ErrorLogEntry = {
 }
 
 // 오류 1건 적재. 실패해도 throw하지 않는다 (호출부 흐름 보호).
-export async function logErrorEvent(entry: ErrorLogEntry): Promise<void> {
+//
+// 반환값: 이번 호출로 실제 적재됐으면 true, 중복(dedupe)이라 건너뛰었거나 실패했으면 false.
+// 기존 호출부는 반환값을 쓰지 않으므로 동작이 달라지지 않는다. 결제 알림(admin-alert)이
+// "같은 건을 두 번 알리지 않기" 위한 워터마크로 이 값을 쓴다.
+export async function logErrorEvent(entry: ErrorLogEntry): Promise<boolean> {
   try {
     const supabase = getSupabase()
 
@@ -44,7 +52,7 @@ export async function logErrorEvent(entry: ErrorLogEntry): Promise<void> {
         .eq('video_id', entry.videoId)
         .eq('fail_reason', entry.failReason)
         .limit(1)
-      if (existing?.length) return
+      if (existing?.length) return false
     }
 
     // 채널명 보정: 미지정이면 videos.channel_id → channels.alias 조회 (best-effort)
@@ -77,9 +85,14 @@ export async function logErrorEvent(entry: ErrorLogEntry): Promise<void> {
       fail_reason: entry.failReason ?? null,
       fail_detail: entry.failDetail ? entry.failDetail.slice(0, 1000) : null,
     })
-    if (error) console.error(`[error-log] 적재 실패: ${error.message}`)
+    if (error) {
+      console.error(`[error-log] 적재 실패: ${error.message}`)
+      return false
+    }
+    return true
   } catch (e) {
     console.error('[error-log] 적재 예외:', e)
+    return false
   }
 }
 

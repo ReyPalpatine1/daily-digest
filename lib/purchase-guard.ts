@@ -2,11 +2,12 @@
 // (env·DB·토스를 건드리지 않으므로 클라이언트에서도 그대로 import한다.
 //  화면에서만 막으면 API 직접 호출로 우회되므로 서버 라우트도 반드시 이 함수를 통과시킬 것.)
 //
-//   현재 상태                   | 자동 갱신 | 1개월권
-//   무료·만료                   | 허용      | 허용
-//   자동 갱신 중(active)        | 막음      | 막음
-//   1개월권·잔여 31일 미만      | 허용      | 허용
-//   1개월권·잔여 31일 이상      | 허용      | 막음
+//   현재 상태                      | 자동 갱신 | 1개월권
+//   무료·만료                      | 허용      | 허용
+//   자동 갱신 중(active)           | 막음      | 막음
+//   자동 갱신 중(active)·만료일 경과 | 막음      | 막음
+//   1개월권·잔여 31일 미만         | 허용      | 허용
+//   1개월권·잔여 31일 이상         | 허용      | 막음
 //
 // 31일 상한의 근거: 구글 플레이 선불 요금제가 "소비되지 않은 충전을 한 번에 하나만" 허용하는 것과 같다.
 // 무한 누적을 허용하면 환불 분쟁(1년치를 결제하고 두 달 쓴 시점에 환불 요청)과
@@ -42,9 +43,14 @@ export function checkPurchaseBlock(
 
   const remaining = remainingDays(profile.plan_expires_at, now)
 
-  // 자동 갱신 중(기간이 남아 있을 때) — 두 방식 모두 막는다.
+  // 자동 갱신 중 — 두 방식 모두 막는다. 만료일 경과 여부는 보지 않는다.
   // ※ "해지하고 사라"고 안내하지 않는다. 해지해도 남은 기간은 유지되므로 지금 살 이유가 없다.
-  if (profile.plan_status === 'active' && remaining > 0) return 'active_subscription'
+  // ★ 잔여 기간(remaining > 0)을 조건에 넣지 않는 이유:
+  //   plan_status='active'인데 만료일이 지난 계정은 "갱신 대기·갱신 실패 중"인 상태다.
+  //   이때 사용자가 카드를 다시 등록하면 /api/billing/charge가 즉시 청구하는데,
+  //   같은 주기에 cron(runRenewals)도 재결제를 시도해 이중 청구가 난다.
+  //   자동 갱신 중인 계정의 결제는 어차피 cron이 처리하므로 여기서는 무조건 막는다.
+  if (profile.plan_status === 'active') return 'active_subscription'
 
   // 1개월권은 잔여가 충분하면 더 받지 않는다. 자동 갱신 전환은 허용한다.
   if (kind === 'onetime' && profile.plan_status === 'onetime' && remaining >= ONETIME_MAX_REMAINING_DAYS) {
