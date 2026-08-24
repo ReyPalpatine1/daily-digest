@@ -238,7 +238,19 @@ async function renewOne(target: RenewTarget, now: Date): Promise<void> {
 // VIP는 만료 개념이 없으므로 plan='pro' 조건에서 자연히 빠진다.
 // ※ 체험·1개월권 종료 안내 메일은 cron에서 먼저 도는 runTrialNotifications가 보낸다.
 //    여기서는 안내를 보내지 않고 상태만 맞춘다.
+//
+// 대상은 두 갈래다. PostgREST의 or()로 한 번에 긁을 수도 있지만, 갈래마다 뒤처리가 달라
+// (해지 예약은 예약 플래그도 되돌려야 한다) 조회를 나눈다. neq와 NULL이 or() 안에서 어떻게
+// 평가되는지에 기대지 않게 되는 것도 이점이다.
+//   (가) plan_status != 'active'                     — 1개월권·체험 등, 애초에 갱신되지 않는 계정
+//   (나) plan_status = 'active' + 해지 예약(cancel_at_period_end=true)
 async function sweepExpiredNonRenewing(now: Date): Promise<void> {
+  await sweepExpiredNonActive(now)
+  await sweepExpiredCanceled(now)
+}
+
+// (가) 갱신 상태가 아닌 만료 Pro — 기존 동작 그대로.
+async function sweepExpiredNonActive(now: Date): Promise<void> {
   const { data: expired, error } = await supabase
     .from('profiles')
     .select('id')
@@ -259,6 +271,56 @@ async function sweepExpiredNonRenewing(now: Date): Promise<void> {
       console.log(`[billing-renew] 만료 정리 → 무료 강등: ${p.id}`)
     } catch (e) {
       console.error(`[billing-renew] 만료 정리 실패 user=${p.id}:`, e)
+    }
+  }
+}
+
+// (나) 해지를 예약하고 만료된 자동 갱신 계정.
+//
+// 왜 필요한가
+//   runRenewals는 cancel_at_period_end=true를 갱신 대상에서 빼고, 위 (가)는 active를 뺀다.
+//   그래서 "해지 예약 + 만료" 계정이 양쪽 어디에도 걸리지 않고 plan_status='active'로 남았다.
+//   plan_status='active'는 추가 구매를 막는 조건이라(lib/purchase-guard.ts), 마음을 바꿔
+//   다시 구독하려는 사용자가 409로 막혔다. 해지했다가 재구독하는 것은 흔한 흐름이다.
+//
+// ★ cancel_at_period_end=false인 active 계정은 절대 포함하지 않는다.
+//   그들은 runRenewals의 갱신 대상이고 결제 실패로 재시도 중일 수 있다.
+//   여기서 강등하면 정상 갱신 흐름과 충돌한다.
+async function sweepExpiredCanceled(now: Date): Promise<void> {
+  const { data: expired, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('plan', 'pro')
+    .eq('plan_status', 'active')
+    .eq('cancel_at_period_end', true)
+    .not('plan_expires_at', 'is', null)
+    .lt('plan_expires_at', now.toISOString())
+
+  if (error) {
+    console.error('[billing-renew] 해지 예약 만료 정리 대상 조회 실패:', error)
+    return
+  }
+
+  for (const p of (expired ?? []) as { id: string }[]) {
+    try {
+      // 강등은 기존 경로를 그대로 쓴다(채널 정리·발송 수단 복구 포함).
+      await syncUserPlan(p.id)
+
+      // 해지 예약이 소비됐으므로 플래그를 되돌린다.
+      // ★ 순서를 바꾸면 안 된다 — 먼저 false로 만들고 강등이 실패하면 그 계정은
+      //   'active' + 만료 + 예약 없음이 되어 runRenewals의 재결제 대상이 된다.
+      //   반대로 이 갱신만 실패하면 플래그가 true로 남는데, 재구독 시
+      //   applyPaidPlan·activateAutoRenew가 false로 되돌리므로 해가 없다.
+      const { error: flagError } = await supabase
+        .from('profiles')
+        .update({ cancel_at_period_end: false })
+        .eq('id', p.id)
+      if (flagError) {
+        console.error(`[billing-renew] 해지 예약 플래그 정리 실패 user=${p.id}:`, flagError)
+      }
+      console.log(`[billing-renew] 해지 예약 만료 → 무료 강등: ${p.id}`)
+    } catch (e) {
+      console.error(`[billing-renew] 해지 예약 만료 정리 실패 user=${p.id}:`, e)
     }
   }
 }
