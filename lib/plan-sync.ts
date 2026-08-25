@@ -149,10 +149,25 @@ export async function activateAutoRenew(userId: string): Promise<void> {
 
 // 만료 체크 + 동기화 (cron/digest에서 호출).
 // Pro인데 plan_expires_at 경과 시 free로 강등하고 채널 정리.
-export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vip'> {
+//
+// ★ 갱신 재시도 대기 중인 계정은 여기서 강등하지 않는다.
+//   이 함수는 발송 경로(/api/digest, /api/breaking, /api/preview)에서도 불리고,
+//   그중 breaking은 15분 cron마다 대상이 된다. 거기서 "pro + 만료"만 보고 내려 버리면
+//   카드 한도가 잠깐 초과된 사용자가 재시도 한 번 없이 15분 만에 잘린다
+//   (runRenewals의 3회·24시간 dunning 정책이 통째로 무의미해진다).
+//   게다가 한 번 내려가면 plan_status='none'이 되어 runRenewals의 대상 쿼리에 다시 걸리지 않아
+//   2·3회째 시도도 영영 일어나지 않고 renew_fail_count가 그대로 얼어붙는다.
+//   그래서 "runRenewals가 책임지는 계정"은 그대로 두고, 3회 실패 시 renewOne이
+//   downgradeAwaitingRenewal로 직접 내린다.
+//   나머지(onetime·trialing·none·해지 예약)는 종전대로 여기서 내린다 —
+//   해지 예약 만료 계정은 sweepExpiredCanceled가 이 함수를 그대로 호출한다.
+export async function syncUserPlan(
+  userId: string,
+  opts: { downgradeAwaitingRenewal?: boolean } = {}
+): Promise<'free' | 'pro' | 'vip'> {
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan, plan_expires_at')
+    .select('plan, plan_expires_at, plan_status, cancel_at_period_end')
     .eq('id', userId)
     .single()
 
@@ -160,6 +175,22 @@ export async function syncUserPlan(userId: string): Promise<'free' | 'pro' | 'vi
 
   if (profile.plan === 'pro' && profile.plan_expires_at) {
     const isExpired = new Date(profile.plan_expires_at) < nowUtc()
+
+    // runRenewals의 갱신 대상 쿼리(lib/billing-renew.ts)와 정확히 같은 조건으로 맞춘다.
+    // 보호 범위가 책임 범위보다 넓으면 아무도 내리지 않는 계정이 만료된 채 Pro로 남는다.
+    // (cancel_at_period_end는 NOT NULL DEFAULT false — sql/renewal_columns.sql)
+    const awaitingRenewal =
+      profile.plan_status === 'active' && profile.cancel_at_period_end === false
+
+    if (isExpired && awaitingRenewal && !opts.downgradeAwaitingRenewal) {
+      // 지금까지 이 경로는 로그가 없어 "왜 강등됐는지"를 사후에 추적할 수 없었다.
+      console.log(
+        `⏸️ 갱신 대기 중이라 만료 강등 보류: ${userId} ` +
+          `(expires=${profile.plan_expires_at}, plan_status=active, 해지예약=false) → runRenewals가 처리`
+      )
+      return 'pro' // 위 조건에서 plan='pro'가 보장된다
+    }
+
     if (isExpired) {
       await supabase
         .from('profiles')

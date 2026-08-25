@@ -114,19 +114,42 @@ export async function runRenewals(): Promise<void> {
 async function renewOne(target: RenewTarget, now: Date): Promise<void> {
   // 재시도 간격 — 마지막 시도로부터 24시간이 지나지 않았으면 건너뛴다.
   // 이게 없으면 실패한 사용자를 15분마다 다시 긁게 된다.
+  //
+  // 로그를 남기는 이유: 여기서 조용히 return하면 "갱신이 시도되지 않았다"는 사실만 남고
+  // 이유가 아무 데도 기록되지 않는다. 실제로 강등 사고를 조사할 때 이 구간과
+  // 아래 재청구 보류 가드를 로그로 구분할 수 없어 원인 확정이 막혔다.
   if (target.renew_failed_at) {
     const since = now.getTime() - new Date(target.renew_failed_at).getTime()
-    if (since < RETRY_INTERVAL_MS) return
+    if (since < RETRY_INTERVAL_MS) {
+      const waitMinutes = Math.ceil((RETRY_INTERVAL_MS - since) / (60 * 1000))
+      console.log(
+        `[billing-renew] 재시도 간격 대기 중 skip: user=${target.id} ` +
+          `last_failed=${target.renew_failed_at} fail_count=${target.renew_fail_count ?? 0} ` +
+          `남은대기=${waitMinutes}분`
+      )
+      return
+    }
   }
 
-  // 우리 쪽에서 마감되지 않은 최근 결제가 남아 있으면 다시 긁지 않는다.
+  // 최근 24시간 안에 pending 또는 done 결제가 있으면 다시 긁지 않는다.
   //
-  // 왜 필요한가: 아래 plan_sync_failed 분기는 renew_failed_at을 남기지 않는다(이미 승인된 결제를
-  // 실패로 세지 않기 위해서다). 그러면 위의 24시간 재시도 간격이 걸리지 않아 15분마다 재청구되어
-  // 이중 결제가 난다 — 그 구멍을 여기서 막는다. order_id는 매번 새로 만들어지므로
-  // payments.order_id의 unique 제약만으로는 막히지 않는다.
+  // 'pending' — 아래 plan_sync_failed 분기는 renew_failed_at을 남기지 않는다(이미 승인된 결제를
+  //   실패로 세지 않기 위해서다). 그러면 위의 24시간 재시도 간격이 걸리지 않아 15분마다 재청구되어
+  //   이중 결제가 난다 — 그 구멍을 여기서 막는다. order_id는 매번 새로 만들어지므로
+  //   payments.order_id의 unique 제약만으로는 막히지 않는다.
   //
-  // 정상 갱신은 성공 즉시 만료일이 30일 뒤로 밀려 대상 쿼리에서 빠지므로 이 가드에 걸리지 않는다.
+  // 'done' — 이미 승인·반영이 끝난 결제도 포함한다. "마감되지 않은 결제"만 본다는 뜻이 아니다.
+  //   runRenewals는 루프 시작 전에 대상 스냅샷을 한 번 읽고(profiles 조회) 사용자별로 순회하는데,
+  //   cron 실행이 겹치면 다른 실행이 그 사이에 결제를 마쳐 payments가 곧바로 'done'이 된다.
+  //   이때 이쪽 스냅샷은 여전히 "만료된 active"라서 pending만 보면 같은 사람을 또 긁는다.
+  //   done을 포함해도 정상 갱신은 지연되지 않는다 —
+  //     · 자동 갱신이 성공하면 만료일이 30일 뒤로 밀려 애초에 대상 쿼리에서 빠지고,
+  //     · 1개월권 결제는 plan_status가 'onetime'이 되어 역시 대상이 아니며,
+  //     · 사용자가 직접 결제하는 두 경로(/api/billing/order·charge)는 plan_status='active'를
+  //       checkPurchaseBlock이 막으므로(lib/purchase-guard.ts) 갱신 대상이 done을 새로 만들 일이 없다.
+  //   즉 대상이 24시간 내 done을 갖는 상황 자체가 사실상 겹친 실행뿐이고, 그때는 막는 것이 맞다.
+  //   갱신이 하루 늦는 것보다 이중 청구가 훨씬 무겁다는 기준을 여기서도 따른다.
+  //
   // 승인 실패('failed')는 대상이 아니므로 기존 24시간 재시도 흐름도 그대로다.
   const { data: unsettled, error: unsettledError } = await supabase
     .from('payments')
@@ -205,7 +228,12 @@ async function renewOne(target: RenewTarget, now: Date): Promise<void> {
   if (failCount >= MAX_FAIL_COUNT) {
     // 강등은 기존 경로를 그대로 쓴다 — syncUserPlan이 free 전환 + 채널 정리 +
     // 발송 수단 복구를 한 곳에서 처리한다(대상은 이미 만료 상태라 조건을 만족한다).
-    await syncUserPlan(target.id)
+    //
+    // ★ downgradeAwaitingRenewal — syncUserPlan은 "갱신 대기 중(active + 해지 예약 없음)"인
+    //   계정을 강등하지 않는다(발송 라우트가 dunning 중인 사용자를 잘라내던 것을 막기 위해서다).
+    //   3회 실패를 판정한 이 자리가 바로 그 예외를 풀 유일한 지점이다. 넘기지 않으면
+    //   실패가 아무리 쌓여도 계정이 영원히 Pro로 남는다.
+    await syncUserPlan(target.id, { downgradeAwaitingRenewal: true })
     console.log(`[billing-renew] 3회 실패 → 무료 강등: ${target.id}`)
     // 안내는 아래 정리 루프가 보낸다(발송 실패 시 다음 주기에 재시도되도록).
     return
