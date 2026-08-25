@@ -78,6 +78,8 @@ export async function restoreDeliveryToEmail(userId: string): Promise<void> {
 //
 // 갱신 실패 상태(renew_*)도 함께 지운다. 결제가 성공한 순간 이전 실패 이력은 의미가 없고,
 // 남겨 두면 강등됐던 사용자가 재구독한 뒤 첫 실패에서 곧바로 다시 강등된다(카운트가 이어짐).
+// 종료 안내 워터마크(sub_ended_notified_at)도 같이 지운다. 안 지우면 이번 구독이 또 종료될 때
+// 지난 사이클의 워터마크가 남아 있어 종료 안내가 다시 나가지 않는다.
 // cancel_at_period_end는 auto일 때만 false로 되돌린다 —
 // 해지 예약 상태에서 1개월권을 사면 자동 갱신이 조용히 되살아나면 안 되기 때문이다.
 export async function applyPaidPlan(userId: string, kind: 'auto' | 'onetime'): Promise<string> {
@@ -111,6 +113,7 @@ export async function applyPaidPlan(userId: string, kind: 'auto' | 'onetime'): P
       renew_fail_count: 0,
       renew_failed_at: null,
       renew_notified_at: null,
+      sub_ended_notified_at: null,
       ...(kind === 'auto' ? { cancel_at_period_end: false } : {}),
     })
     .eq('id', userId)
@@ -138,9 +141,11 @@ export async function activateAutoRenew(userId: string): Promise<void> {
       // 해지 예약 중이었다면 되살린다(다시 자동 갱신을 켠 것이므로).
       cancel_at_period_end: false,
       // 지난 갱신 실패 이력은 새 카드와 무관하다.
+      // 종료 안내 워터마크까지 지워야 다음 사이클에 안내가 정상 발송된다.
       renew_fail_count: 0,
       renew_failed_at: null,
       renew_notified_at: null,
+      sub_ended_notified_at: null,
     })
     .eq('id', userId)
   if (error) throw new Error(`자동 갱신 전환 실패: ${error.message}`)

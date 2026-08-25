@@ -180,7 +180,12 @@ async function renewOne(target: RenewTarget, now: Date): Promise<void> {
   if (result.ok) {
     const { error } = await supabase
       .from('profiles')
-      .update({ renew_fail_count: 0, renew_failed_at: null, renew_notified_at: null })
+      .update({
+        renew_fail_count: 0,
+        renew_failed_at: null,
+        renew_notified_at: null,
+        sub_ended_notified_at: null,
+      })
       .eq('id', target.id)
     if (error) console.error(`[billing-renew] 성공 상태 기록 실패 user=${target.id}:`, error)
     console.log(`[billing-renew] 갱신 성공: ${target.id} → ${result.planExpiresAt}`)
@@ -354,14 +359,22 @@ async function sweepExpiredCanceled(now: Date): Promise<void> {
 }
 
 // 강등됐지만 종료 안내를 아직 못 보낸 사용자에게 발송한다.
-// renew_notified_at을 워터마크로 써서 한 번만 나간다.
+// sub_ended_notified_at을 워터마크로 써서 한 번만 나간다.
+//
+// ★ 워터마크가 renew_notified_at과 별개인 이유
+//   예전엔 이 조건이 renew_notified_at is null이었다. 그런데 그 컬럼은 1차 실패 안내가
+//   이미 채우고 있어서, 안내를 받은 계정은 종료 안내 대상에 영영 들어오지 못했다.
+//   남는 대상은 "수신 주소가 없어 1차를 건너뛴 계정"뿐이었고 그들에겐 보낼 주소가 없었다.
+//   결과적으로 아무에게도 종료 안내가 가지 않았다. 한 컬럼에 두 의미를 담은 것이 원인이므로
+//   강등 직전에 renew_notified_at을 되돌리는 식으로 때우지 않고 컬럼을 분리했다
+//   (sql/add_sub_ended_notified.sql).
 async function sendPendingEndedNotices(now: Date): Promise<void> {
   const { data: pending, error } = await supabase
     .from('profiles')
     .select('id, email')
     .eq('plan_status', 'none')
     .gte('renew_fail_count', MAX_FAIL_COUNT)
-    .is('renew_notified_at', null)
+    .is('sub_ended_notified_at', null)
 
   if (error) {
     console.error('[billing-renew] 종료 안내 대상 조회 실패:', error)
@@ -376,9 +389,10 @@ async function sendPendingEndedNotices(now: Date): Promise<void> {
         continue
       }
       await sendSubEndedEmail(to, locale)
+      // 발송이 예외 없이 끝난 경우에만 워터마크를 남긴다 — 실패하면 다음 주기에 재시도된다.
       const { error: flagError } = await supabase
         .from('profiles')
-        .update({ renew_notified_at: now.toISOString() })
+        .update({ sub_ended_notified_at: now.toISOString() })
         .eq('id', p.id)
       if (flagError) {
         console.error(`[billing-renew] 종료 안내 플래그 기록 실패(중복 발송 가능) user=${p.id}:`, flagError)

@@ -46,6 +46,9 @@ export type Profile = {
   renew_failed_at: string | null
   renew_fail_count: number
   renew_notified_at: string | null
+  // 3회 실패 강등 후 종료 안내를 보낸 시각. renew_notified_at(1차 실패 안내)과 용도가 다르다
+  // — 한 컬럼을 같이 쓰던 시절엔 1차 안내를 받은 계정에 종료 안내가 영영 나가지 않았다.
+  sub_ended_notified_at: string | null
 }
 
 // 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)
@@ -63,7 +66,16 @@ export function checkIsPro(profile: Profile | null): boolean {
   // Pro 결제: 만료일 확인
   if (profile.plan === 'pro') {
     if (!profile.plan_expires_at) return true // 만료일 없으면 유효
-    return new Date(profile.plan_expires_at) > new Date() // 만료 안 됐으면 유효
+    if (new Date(profile.plan_expires_at) > new Date()) return true // 만료 안 됐으면 유효
+
+    // ★ 갱신 재시도 대기(dunning) — 만료됐어도 서버는 아직 Pro로 대우한다.
+    //   runRenewals가 24시간 간격으로 3회까지 재결제를 시도하는 동안(최대 3일) 서버는
+    //   이 계정을 강등하지 않는데(lib/plan-sync.ts의 awaitingRenewal), 화면이 만료일만 보면
+    //   그 사이 뱃지가 FREE로 떨어져 사용자는 "갑자기 무료가 됐다"고 인식한다.
+    //   3회 실패로 실제 강등되면 plan='free'가 되므로 이 분기 자체가 사라진다.
+    //   ※ 조건은 lib/plan-sync.ts의 awaitingRenewal과 반드시 같아야 한다.
+    //     갈리는 순간 화면과 서버 판정이 다시 어긋난다.
+    return profile.plan_status === 'active' && profile.cancel_at_period_end === false
   }
 
   return false // free

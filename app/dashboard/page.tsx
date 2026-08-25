@@ -355,6 +355,7 @@ export default function Dashboard() {
             renew_failed_at: null,
             renew_fail_count: 0,
             renew_notified_at: null,
+            sub_ended_notified_at: null,
           }
           setProfile(loadedProfile)
           // 기본 설정 자동 생성

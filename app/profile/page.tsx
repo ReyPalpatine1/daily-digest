@@ -107,6 +107,16 @@ export default function ProfilePage() {
   // 플랜 판정은 실제 DB(profiles) 하나만 본다 — 대시보드·헤더·요금제와 같은 기준.
   const isPro = checkIsPro(profile)
   const isVip = profile?.plan === 'vip'
+
+  // 갱신 재시도 대기(dunning) 중인지. 서버의 갱신 대기 조건(lib/plan-sync.ts의 awaitingRenewal,
+  // checkIsPro와 동일)에 "실패 이력이 있다"만 더한 것이다.
+  // 이 구간에는 만료일이 지나도 뱃지가 PRO로 유지되므로, 이 표시가 없으면 결제가 실패해
+  // 재시도 중이라는 사실이 화면 어디에도 드러나지 않는다.
+  // renew_fail_count는 위 프로필 조회(select('*'))로 이미 내려온다 — 빌링키는 어느 응답에도 없다.
+  const renewRetrying =
+    (profile?.renew_fail_count ?? 0) > 0 &&
+    profile?.plan_status === 'active' &&
+    profile?.cancel_at_period_end === false
   const plan: 'FREE' | 'PRO' = isPro ? 'PRO' : 'FREE'
 
   // 대시보드 인사말과 같은 이름 소스
@@ -320,6 +330,26 @@ export default function ProfilePage() {
                   {t('profile.cancelAutoRenew')}
                 </button>
               )}
+            </div>
+          )}
+
+          {/* 결제 재시도 중 안내 — 만료됐지만 아직 강등되지 않은 구간(최대 3일)에만 뜬다.
+              카드 문제를 바로 고칠 수 있게 카드 변경을 같은 줄에 둔다. */}
+          {renewRetrying && (
+            <div style={{
+              marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, flexWrap: 'wrap',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <AlertTriangle size={15} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+                <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  {t('profile.renewRetrying')}
+                </span>
+              </div>
+              <button style={btnSecondary} onClick={changeCard}>
+                {t('profile.changeCard')}
+              </button>
             </div>
           )}
 

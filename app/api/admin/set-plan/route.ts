@@ -148,6 +148,7 @@ export async function POST(request: Request) {
           renew_fail_count: 0,
           renew_failed_at: null,
           renew_notified_at: null,
+          sub_ended_notified_at: null,
         }
 
   const { error: updateError } = await serviceClient
