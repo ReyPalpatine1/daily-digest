@@ -10,12 +10,22 @@ import {
   buildBreakingHtml,
   buildWelcomeHtml,
   buildErrorPreviewHtml,
+  buildTrialEndingHtml,
+  buildTrialEndedHtml,
+  buildPassEndingHtml,
+  buildPassEndedHtml,
+  buildRenewFailedHtml,
+  buildSubEndedHtml,
   dummyDigestItems,
   dummyBreakingItem,
   type EmailLocale,
 } from '@/lib/email-templates'
+import { nowUtc, dateKey } from '@/lib/time'
 
-type EmailType = 'digest' | 'breaking' | 'error' | 'welcome'
+type EmailType =
+  | 'digest' | 'breaking' | 'error' | 'welcome'
+  | 'trialEnding' | 'trialEnded' | 'passEnding' | 'passEnded'
+  | 'renewFailed' | 'subEnded'
 
 export default function EmailPreviewPage() {
   const router = useRouter()
@@ -49,17 +59,47 @@ export default function EmailPreviewPage() {
     return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />
   }
 
-  const html =
-    type === 'digest' ? buildDigestHtml(dummyDigestItems(emailLocale, plan === 'pro' ? 'pro' : 'free'), 'Daily Video Digest', emailLocale, adminEmail, plan === 'pro')
-      : type === 'breaking' ? buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Video Digest', emailLocale, adminEmail)
-        : type === 'welcome' ? buildWelcomeHtml(emailLocale)
-          : buildErrorPreviewHtml(emailLocale)
+  // 종료 예고 메일의 더미 종료일 — 실제 발송(lib/trial-notify.ts)과 같은 KST 'YYYY-MM-DD' 포맷.
+  // 날짜를 문자열로 박아두면 시간이 지나며 과거 날짜가 되므로 현재 시각 기준으로 계산한다.
+  const dummyEndDate = dateKey(new Date(nowUtc().getTime() + 3 * 24 * 60 * 60 * 1000))
 
+  const html = ((): string => {
+    switch (type) {
+      case 'digest':
+        return buildDigestHtml(dummyDigestItems(emailLocale, plan === 'pro' ? 'pro' : 'free'), 'Daily Video Digest', emailLocale, adminEmail, plan === 'pro')
+      case 'breaking':
+        return buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Video Digest', emailLocale, adminEmail)
+      case 'welcome':
+        return buildWelcomeHtml(emailLocale)
+      case 'trialEnding':
+        return buildTrialEndingHtml(emailLocale, dummyEndDate)
+      case 'trialEnded':
+        return buildTrialEndedHtml(emailLocale)
+      case 'passEnding':
+        return buildPassEndingHtml(emailLocale, dummyEndDate)
+      case 'passEnded':
+        return buildPassEndedHtml(emailLocale)
+      case 'renewFailed':
+        return buildRenewFailedHtml(emailLocale)
+      case 'subEnded':
+        return buildSubEndedHtml(emailLocale)
+      case 'error':
+        return buildErrorPreviewHtml(emailLocale)
+    }
+  })()
+
+  // 라벨: 뒤 6종은 뜻이 맞는 i18n 키가 없어(기존 키는 필드명·안내문 용도) 관리자 전용 화면 기준 한국어 고정.
   const types: { key: EmailType; label: string }[] = [
     { key: 'digest', label: t('nav.history') },
     { key: 'breaking', label: t('history.breakingBadge') },
     { key: 'error', label: t('admin.cronError') },
     { key: 'welcome', label: 'Welcome' },
+    { key: 'trialEnding', label: '체험 종료 예정' },
+    { key: 'trialEnded', label: '체험 종료' },
+    { key: 'passEnding', label: '1개월권 만료 예정' },
+    { key: 'passEnded', label: '1개월권 만료' },
+    { key: 'renewFailed', label: '갱신 결제 실패' },
+    { key: 'subEnded', label: '구독 종료' },
   ]
 
   const segBtn = (active: boolean): React.CSSProperties => ({
@@ -84,7 +124,11 @@ export default function EmailPreviewPage() {
               </button>
             ))}
           </div>
-          <div style={{ display: 'inline-flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
+          {/* 메일 종류 10종 — 좁은 화면에서 한 줄에 안 들어가면 줄바꿈된다(버튼 스타일은 그대로). */}
+          <div style={{
+            display: 'inline-flex', flexWrap: 'wrap', rowGap: 3, maxWidth: '100%',
+            background: 'var(--bg-subtle)', borderRadius: 8, padding: 3,
+          }}>
             {types.map(ty => (
               <button key={ty.key} onClick={() => setType(ty.key)} style={segBtn(type === ty.key)}>
                 {ty.label}
