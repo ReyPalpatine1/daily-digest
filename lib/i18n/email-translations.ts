@@ -111,7 +111,7 @@ export const emailTranslations = {
     subEnded: {
       subject: 'Pro 구독이 종료되었습니다',
       heading: 'Pro 구독이 종료되었습니다',
-      desc: '결제가 여러 번 실패해 계정이 무료 플랜으로 전환되었습니다.<br>카드를 다시 등록하면 언제든지 이어서 이용할 수 있습니다.',
+      desc: '결제 실패로 계정이 무료 플랜으로 전환되었습니다.',
       cta: 'Pro 다시 구독하기',
     },
     channels: {
@@ -220,7 +220,7 @@ export const emailTranslations = {
     subEnded: {
       subject: 'Your Pro subscription has ended',
       heading: 'Your Pro subscription has ended',
-      desc: 'After repeated payment failures, your account has moved to the free plan.<br>Register a card again to pick up where you left off.',
+      desc: 'Your account has moved to the free plan after a payment failure.',
       cta: 'Subscribe to Pro again',
     },
     channels: {
@@ -329,7 +329,7 @@ export const emailTranslations = {
     subEnded: {
       subject: 'Pro 订阅已结束',
       heading: 'Pro 订阅已结束',
-      desc: '由于多次支付失败，您的账户已转为免费方案。<br>重新登记卡片即可随时继续使用。',
+      desc: '由于支付失败，您的账户已转为免费方案。',
       cta: '重新订阅 Pro',
     },
     channels: {
@@ -438,7 +438,7 @@ export const emailTranslations = {
     subEnded: {
       subject: 'Pro購読が終了しました',
       heading: 'Pro購読が終了しました',
-      desc: 'お支払いが繰り返し失敗したため、アカウントは無料プランに切り替わりました。<br>カードを登録し直せばいつでも再開できます。',
+      desc: 'お支払いが失敗したため、アカウントは無料プランに切り替わりました。',
       cta: 'Proを再購読する',
     },
     channels: {
