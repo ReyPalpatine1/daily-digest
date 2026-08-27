@@ -11,7 +11,7 @@ import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import HelpPopup from '@/components/HelpPopup'
-import { AlertTriangle, CreditCard } from 'lucide-react'
+import { AlertTriangle, CreditCard, ExternalLink } from 'lucide-react'
 import { requestCardRegistration } from '@/lib/toss-billing'
 
 export default function ProfilePage() {
@@ -33,6 +33,10 @@ export default function ProfilePage() {
   const [isMobile, setIsMobile] = useState(false)
   // 등록된 카드 표시명(예: KB국민카드 **** 7508). 서버가 표시명만 내려준다 — 빌링키는 받지 않는다.
   const [cardLabel, setCardLabel] = useState<string | null>(null)
+  // 결제 내역(최근 20건). 서버가 done·failed만 내려준다 — 미완료(pending)·청구 없는 취소분은 제외.
+  const [payments, setPayments] = useState<
+    { createdAt: string; amount: number; kind: string; status: string; receiptUrl: string | null }[]
+  >([])
   // 자동 갱신 해지 확인 모달 / 중복 클릭 방지
   const [showCancelRenew, setShowCancelRenew] = useState(false)
   const [renewBusy, setRenewBusy] = useState(false)
@@ -85,6 +89,22 @@ export default function ProfilePage() {
     return () => { cancelled = true }
   }, [])
 
+  // 결제 내역 조회. 이력이 0건인 사용자가 다수라 스켈레톤을 두지 않는다 —
+  // 결과가 오면 카드가 나타나고, 없으면 애초에 그리지 않는다(위 카드 조회와 같은 방식).
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/billing/payments')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled) return
+        setPayments(Array.isArray(data?.payments) ? data.payments : [])
+      })
+      .catch(() => {
+        // 조회 실패는 조용히 넘긴다 — 결제 내역 카드가 안 보일 뿐 다른 기능에는 영향이 없다.
+      })
+    return () => { cancelled = true }
+  }, [])
+
   // HelpPopup 반응형 분기용 (대시보드와 동일 브레이크포인트)
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768)
@@ -103,10 +123,19 @@ export default function ProfilePage() {
   }
 
   const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
+  const won = (n: number) => `₩${n.toLocaleString(dateLocale)}`
 
   // 플랜 판정은 실제 DB(profiles) 하나만 본다 — 대시보드·헤더·요금제와 같은 기준.
   const isPro = checkIsPro(profile)
   const isVip = profile?.plan === 'vip'
+
+  // 기간이 남은 1개월권 사용자에게만 '기간 연장하기'를 연다.
+  // getPlanView는 쓰지 않는다 — onetime과 관리자 토글 Pro(plan_status='none')를 구분하지 못한다.
+  // active(이미 갱신 중)·trialing(전용 버튼이 따로 있다)·VIP는 대상이 아니다.
+  // 잔여 기간과 무관하게 항상 노출한다: 잔여 31일 이상이면 1개월권만 막히고 자동 갱신 전환은
+  // 허용되는 정상 경로라(lib/purchase-guard.ts) 버튼을 숨기면 그 경로까지 사라진다.
+  // 막힘 사유는 /subscribe가 이미 안내한다.
+  const canExtend = !isVip && profile?.plan_status === 'onetime' && isPro
 
   // 갱신 재시도 대기(dunning) 중인지. 서버의 갱신 대기 조건(lib/plan-sync.ts의 awaitingRenewal,
   // checkIsPro와 동일)에 "실패 이력이 있다"만 더한 것이다.
@@ -296,7 +325,14 @@ export default function ProfilePage() {
               <span style={{ ...sectionTitle, marginBottom: 0, marginRight: 8 }}>{t('profile.planSection')}</span>
               <UserPlanBadge plan={plan} size="md" />
             </div>
-            {plan === 'FREE' && <UpgradeButton />}
+            {plan === 'FREE'
+              ? <UpgradeButton />
+              : canExtend && (
+                  <UpgradeButton
+                    label={t('profile.extendPeriod')}
+                    onClick={() => router.push('/subscribe?mode=pay')}
+                  />
+                )}
           </div>
           {/* 아랫줄: 멘트 */}
           <div style={{ marginTop: 10 }}>
@@ -383,6 +419,60 @@ export default function ProfilePage() {
             </>
           )}
         </div>
+
+        {/* ============ 결제 내역 ============ */}
+        {/* 이력이 0건이면 카드 자체를 그리지 않는다 — 없던 카드가 사라지는 것처럼 보이지 않게. */}
+        {payments.length > 0 && (
+          <div style={{ ...card$, marginTop: 14 }}>
+            <div style={sectionTitle}>{t('profile.paymentsSection')}</div>
+            {payments.map((p, i) => (
+              <div
+                key={`${p.createdAt}-${i}`}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: 12, flexWrap: 'wrap', padding: '9px 0',
+                  borderBottom: i === payments.length - 1 ? 'none' : '0.5px solid var(--border-light)',
+                }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                    {new Date(p.createdAt).toLocaleDateString(dateLocale)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    {p.kind === 'auto' ? t('profile.paymentKindAuto') : t('profile.paymentKindOnetime')}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {/* 실패 건은 청구되지 않았다 — 금액을 성공 건처럼 진하게 두지 않는다. */}
+                  <span style={{
+                    fontSize: 13,
+                    color: p.status === 'failed' ? 'var(--text-muted)' : 'var(--text-primary)',
+                  }}>
+                    {won(p.amount)}
+                  </span>
+                  {p.status === 'failed' && (
+                    <span style={{ fontSize: 11.5, color: 'var(--warning)' }}>
+                      {t('profile.paymentFailedLabel')}
+                    </span>
+                  )}
+                  {/* receipt_url은 null일 수 있다 — 없으면 링크 자체를 그리지 않는다. */}
+                  {p.receiptUrl && (
+                    <a
+                      href={p.receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        fontSize: 11.5, color: 'var(--text-tertiary)', textDecoration: 'none',
+                      }}>
+                      <ExternalLink size={12} />
+                      {t('profile.receipt')}
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ============ 위험 영역: 회원 탈퇴 ============ */}
         <div style={{ marginTop: 28, textAlign: 'center' }}>

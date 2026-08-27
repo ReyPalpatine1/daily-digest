@@ -17,6 +17,9 @@ export default function PricingPage() {
   const { t, locale } = useTranslation()
   const [planView, setPlanView] = useState<PlanView>('free')
   const [trialExpiresAt, setTrialExpiresAt] = useState<string | null>(null)
+  // 기간 연장 노출 판정용 — getPlanView는 onetime과 관리자 토글 Pro(plan_status='none')를 구분하지 못한다.
+  const [planStatus, setPlanStatus] = useState<string | null>(null)
+  const [isVip, setIsVip] = useState(false)
   const [ready, setReady] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
@@ -52,6 +55,8 @@ export default function PricingPage() {
 
       setPlanView(view)
       setTrialExpiresAt(profile?.plan_expires_at ?? null)
+      setPlanStatus(profile?.plan_status ?? null)
+      setIsVip(profile?.plan === 'vip')
       setReady(true)
     })
     return () => { cancelled = true }
@@ -61,6 +66,7 @@ export default function PricingPage() {
   const pricing = (((translations as Record<string, any>)[locale]?.pricing) ?? translations.en.pricing) as typeof translations.ko.pricing
 
   // 체험 중 캡션에 표기할 종료일(월/일). 종료일을 못 얻으면 빈 문자열 → trialActive 폴백.
+  // ★ 이름과 달리 plan_expires_at을 그대로 담고 있어, 체험 종료일뿐 아니라 유료(1개월권) 만료일로도 쓰인다.
   const trialEndLabel = trialExpiresAt
     ? new Date(trialExpiresAt).toLocaleDateString(locale === 'ko' ? 'ko-KR' : locale === 'ja' ? 'ja-JP' : locale === 'zh' ? 'zh-CN' : 'en-US', { month: 'numeric', day: 'numeric' })
     : ''
@@ -110,12 +116,29 @@ export default function PricingPage() {
         <div style={captionSlot} />
       </>
     )
-    if (planView === 'pro') return (
-      <>
-        <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
-        <div style={captionSlot} />
-      </>
-    )
+    if (planView === 'pro') {
+      // 기간이 남은 1개월권만 대상. active(이미 갱신 중)·관리자 토글 Pro·VIP는 제외한다.
+      // 잔여 기간으로 숨기지 않는다 — 잔여 31일 이상이어도 자동 갱신 전환은 허용되는 경로이고,
+      // 막힘 사유는 /subscribe가 안내한다.
+      if (!isVip && planStatus === 'onetime') return (
+        <>
+          <UpgradeButton
+            label={pricing.extendPeriod}
+            onClick={() => router.push('/subscribe?mode=pay')}
+            style={{ ...primaryBtn }}
+          />
+          <div style={captionSlot}>
+            {trialEndLabel ? t('pricing.proUntil', { date: trialEndLabel }) : ''}
+          </div>
+        </>
+      )
+      return (
+        <>
+          <button style={disabledBtn} disabled>{pricing.currentInUse}</button>
+          <div style={captionSlot} />
+        </>
+      )
+    }
     if (planView === 'trialing') return (
       <>
         <UpgradeButton label={pricing.subscribePro} onClick={() => router.push('/subscribe?mode=pay')} style={{ ...primaryBtn }} />
