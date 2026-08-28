@@ -328,10 +328,14 @@ export default function ProfilePage() {
             {plan === 'FREE'
               ? <UpgradeButton />
               : canExtend && (
-                  <UpgradeButton
-                    label={t('profile.extendPeriod')}
-                    onClick={() => router.push('/subscribe?mode=pay')}
-                  />
+                  /* 잠금 유도가 아니라 이미 Pro인 사용자의 관리 조작이므로
+                     UpgradeButton(강조 CTA)이 아니라 같은 카드의 btnSecondary를 쓴다.
+                     해지·카드 변경·카드 삭제와 같은 급으로 보이는 것이 맞다. */
+                  <button
+                    style={btnSecondary}
+                    onClick={() => router.push('/subscribe?mode=pay')}>
+                    {t('profile.extendPeriod')}
+                  </button>
                 )}
           </div>
           {/* 아랫줄: 멘트 */}
