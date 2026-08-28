@@ -14,7 +14,7 @@ const ADMIN_BAR_FG = '#FAFAFA'
 const ADMIN_BAR_MUTED = '#71717A'
 const ADMIN_BAR_SUBTLE = '#1F1F1F'
 
-export type AdminNavKey = 'dashboard' | 'users' | 'errors' | 'reports' | 'feedback' | 'content' | 'system' | 'email'
+export type AdminNavKey = 'dashboard' | 'users' | 'payments' | 'errors' | 'reports' | 'feedback' | 'content' | 'system' | 'email'
 
 export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread, reportsNew }: { activeKey: AdminNavKey; feedbackNewCount?: number; errorsUnread?: number; reportsNew?: number }) {
   const router = useRouter()
@@ -68,6 +68,7 @@ export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread, reports
     { key: 'system', label: t('admin.menuSystem'), href: '/admin/system' },
     { key: 'errors', label: t('admin.menuErrors'), href: '/admin/errors' },
     { key: 'users', label: t('admin.menuUsers'), href: '/admin/users' },
+    { key: 'payments', label: t('admin.menuPayments'), href: '/admin/payments' },
     { key: 'reports', label: t('admin.menuReports'), href: '/admin/reports' },
     { key: 'feedback', label: t('admin.menuFeedback'), href: '/admin/feedback' },
     { key: 'content', label: t('admin.menuContent'), href: '/admin/content' },
