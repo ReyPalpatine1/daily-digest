@@ -1,25 +1,33 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 // 관리자 결제 조회 (payments 최신순 + before 커서 페이지네이션)
 //
 // 사용자용 app/api/billing/payments/route.ts와 달리 pending·canceled까지 전부 내려준다.
 // 환불 문의 대응 자리라 "결제창을 닫아 쌓인 주문(pending)"인지 "승인 전에 막힌 주문(canceled)"인지
-// 구분되어야 하기 때문이다. 이 라우트는 조회 전용이다 — 플랜 변경·환불·상태 수정을 하지 않는다.
+// 구분되어야 하기 때문이다. 이 라우트는 조회 전용이다 — 플랜 변경은 recover/route.ts가 한다.
 
 const PAGE_SIZE = 50
+const DAY_MS = 24 * 60 * 60 * 1000
+// 결제 1건의 유효 기간. applyPaidPlan의 PERIOD_DAYS와 같은 값이며, 여기서는
+// "아직 살아 있는 결제인가"를 판정하는 데만 쓴다(플랜 계산은 하지 않는다).
+const PERIOD_DAYS = 30
 
 // 결제 후 발송 건수 조회 상한. 페이지 50건이 모두 done이어도 사용자당 40건까지는 덮인다.
 const SENT_LOG_LIMIT = 2000
-// 요약(30일) 집계에서 훑을 done 결제 상한.
-const SUMMARY_SCAN_LIMIT = 5000
+// 금액 합산을 위해 훑을 done 결제 상한.
+const AMOUNT_SCAN_LIMIT = 10000
+// 복구 후보(최근 30일 done)를 훑을 상한. 목록 필터와 mismatch 집계가 함께 쓴다.
+const RECOVERY_SCAN_LIMIT = 1000
 // PostgREST .in() 은 id를 URL에 싣는다 — uuid 150개면 약 5.5KB로, 헤더 한도 안에 들어간다.
 const IN_CHUNK = 150
 
-const STATUSES = ['all', 'done', 'failed', 'pending', 'canceled'] as const
+const STATUSES = ['all', 'done', 'failed', 'pending', 'canceled', 'recovery'] as const
 type StatusFilter = (typeof STATUSES)[number]
+const PERIODS = ['all', '30', '90', '365'] as const
+type PeriodFilter = (typeof PERIODS)[number]
 
 type PaymentRow = {
   id: string
@@ -31,6 +39,64 @@ type PaymentRow = {
   receipt_url: string | null
   fail_code: string | null
   created_at: string
+  recovered_at: string | null
+  recovered_by: string | null
+}
+
+type ProfileInfo = {
+  email: string | null
+  plan: string | null
+  planStatus: string | null
+  planExpiresAt: string | null
+}
+
+const PAYMENT_COLUMNS =
+  'id, user_id, order_id, amount, kind, status, receipt_url, fail_code, created_at, recovered_at, recovered_by'
+
+// 프로필을 청크로 나눠 조회한다 — id가 많으면 .in()의 URL이 헤더 한도를 넘는다.
+async function loadProfiles(
+  serviceClient: SupabaseClient,
+  userIds: string[],
+): Promise<Map<string, ProfileInfo>> {
+  const map = new Map<string, ProfileInfo>()
+  for (let i = 0; i < userIds.length; i += IN_CHUNK) {
+    const chunk = userIds.slice(i, i + IN_CHUNK)
+    const { data, error } = await serviceClient
+      .from('profiles')
+      .select('id, email, plan, plan_status, plan_expires_at')
+      .in('id', chunk)
+    if (error) {
+      console.error('[admin/payments] 프로필 조회 실패:', error.message)
+      continue
+    }
+    for (const row of data ?? []) {
+      map.set(row.id as string, {
+        email: (row.email as string | null) ?? null,
+        plan: (row.plan as string | null) ?? null,
+        planStatus: (row.plan_status as string | null) ?? null,
+        planExpiresAt: (row.plan_expires_at as string | null) ?? null,
+      })
+    }
+  }
+  return map
+}
+
+// "결제는 성공했는데 Pro가 안 켜진" 건인지 판정한다.
+// 화면 표시와 mismatch 집계가 같은 함수를 쓰고, 복구 API도 서버에서 같은 조건을 다시 확인한다.
+function isNeedsRecovery(row: PaymentRow, profile: ProfileInfo | undefined, nowMs: number): boolean {
+  if (row.status !== 'done') return false
+  if (row.recovered_at) return false
+  const paidMs = Date.parse(row.created_at)
+  if (Number.isNaN(paidMs)) return false
+  // 이미 30일이 지난 결제는 free인 것이 정상이다.
+  if (paidMs + PERIOD_DAYS * DAY_MS <= nowMs) return false
+  // 프로필이 없으면(탈퇴) 되돌릴 대상이 없다. 관리자 지정 Pro·VIP는 만료일이 원래 없어 제외된다.
+  if (!profile || profile.plan !== 'free') return false
+  // 결제가 반영됐다면 만료일이 결제일보다 미래로 밀려 있어야 한다.
+  if (!profile.planExpiresAt) return true
+  const expiresMs = Date.parse(profile.planExpiresAt)
+  if (Number.isNaN(expiresMs)) return true
+  return expiresMs < paidMs
 }
 
 export async function GET(request: Request) {
@@ -73,25 +139,24 @@ export async function GET(request: Request) {
   const before = searchParams.get('before')            // ISO — "더 보기" 커서
   const statusParam = (searchParams.get('status') ?? 'all') as StatusFilter
   const status: StatusFilter = STATUSES.includes(statusParam) ? statusParam : 'all'
+  const periodParam = (searchParams.get('period') ?? 'all') as PeriodFilter
+  const period: PeriodFilter = PERIODS.includes(periodParam) ? periodParam : 'all'
   const rawQuery = (searchParams.get('q') ?? '').trim()
 
-  let query = serviceClient
-    .from('payments')
-    .select('id, user_id, order_id, amount, kind, status, receipt_url, fail_code, created_at')
-    .order('created_at', { ascending: false })
-    .limit(PAGE_SIZE + 1) // hasMore 판별용 +1
-  if (status !== 'all') query = query.eq('status', status)
-  if (before) query = query.lt('created_at', before)
+  const nowMs = Date.now()
+  const periodStart = period === 'all' ? null : new Date(nowMs - Number(period) * DAY_MS).toISOString()
+  const recoveryWindowStart = new Date(nowMs - PERIOD_DAYS * DAY_MS).toISOString()
 
+  // === 검색 조건 ===
+  // PostgREST의 .or() 구문은 쉼표·괄호가 값에 섞이면 조건 자체가 깨진다 → 쓸 문자만 남긴다.
+  let searchFilter: { mode: 'none' } | { mode: 'orderId'; value: string } | { mode: 'or'; expr: string } = { mode: 'none' }
   if (rawQuery) {
-    // PostgREST의 .or() 구문은 쉼표·괄호가 값에 섞이면 조건 자체가 깨진다 → 쓸 문자만 남긴다.
     const q = rawQuery.replace(/[^a-zA-Z0-9@._-]/g, '')
     if (!q) {
       // 남는 문자가 없으면 이메일(ilike)로도 주문번호(eq)로도 매칭될 수 없다.
       // 여기서 조건을 걸지 않으면 전체 목록이 나와 검색 결과로 오인되므로, 매칭 0건이 되게 둔다.
-      query = query.eq('order_id', rawQuery)
+      searchFilter = { mode: 'orderId', value: rawQuery }
     } else {
-      // 이메일 부분일치로 사용자를 먼저 찾고, 주문번호 정확일치와 OR로 묶는다.
       const { data: matchedProfiles, error: profileSearchError } = await serviceClient
         .from('profiles')
         .select('id')
@@ -101,42 +166,63 @@ export async function GET(request: Request) {
         console.error('[admin/payments] 사용자 검색 실패:', profileSearchError.message)
       }
       const ids = (matchedProfiles ?? []).map(row => row.id as string)
-      query = ids.length
-        ? query.or(`order_id.eq.${q},user_id.in.(${ids.join(',')})`)
-        : query.eq('order_id', q)
+      searchFilter = ids.length
+        ? { mode: 'or', expr: `order_id.eq.${q},user_id.in.(${ids.join(',')})` }
+        : { mode: 'orderId', value: q }
     }
   }
 
-  const { data, error } = await query
-  if (error) {
-    console.error('[admin/payments] 조회 실패:', error.message)
-    return NextResponse.json({ error: '조회 실패' }, { status: 500 })
-  }
+  let page: PaymentRow[] = []
+  let hasMore = false
+  let profileMap: Map<string, ProfileInfo>
 
-  const rows = (data ?? []) as PaymentRow[]
-  const hasMore = rows.length > PAGE_SIZE
-  const page = rows.slice(0, PAGE_SIZE)
+  if (status === 'recovery') {
+    // 복구 필요 판정은 JS에서 이뤄지므로(프로필과 대조해야 한다) DB 커서로는 자를 수 없다.
+    // 판정 자체가 30일 창을 포함하므로 period는 무시하고 그 범위만 훑는다.
+    let scanQuery = serviceClient
+      .from('payments')
+      .select(PAYMENT_COLUMNS)
+      .eq('status', 'done')
+      .is('recovered_at', null)
+      .gte('created_at', recoveryWindowStart)
+      .order('created_at', { ascending: false })
+      .limit(RECOVERY_SCAN_LIMIT)
+    if (searchFilter.mode === 'or') scanQuery = scanQuery.or(searchFilter.expr)
+    else if (searchFilter.mode === 'orderId') scanQuery = scanQuery.eq('order_id', searchFilter.value)
 
-  // === 사용자 정보 — 결제 행의 user_id를 모아 한 번에 조회(페이지당 최대 50명) ===
-  type ProfileInfo = { email: string | null; plan: string | null; planStatus: string | null; planExpiresAt: string | null }
-  const profileMap = new Map<string, ProfileInfo>()
-  const userIds = [...new Set(page.map(row => row.user_id))]
-  if (userIds.length > 0) {
-    const { data: profiles, error: profilesError } = await serviceClient
-      .from('profiles')
-      .select('id, email, plan, plan_status, plan_expires_at')
-      .in('id', userIds)
-    if (profilesError) {
-      console.error('[admin/payments] 프로필 조회 실패:', profilesError.message)
+    const { data, error } = await scanQuery
+    if (error) {
+      console.error('[admin/payments] 복구 후보 조회 실패:', error.message)
+      return NextResponse.json({ error: '조회 실패' }, { status: 500 })
     }
-    for (const row of profiles ?? []) {
-      profileMap.set(row.id as string, {
-        email: (row.email as string | null) ?? null,
-        plan: (row.plan as string | null) ?? null,
-        planStatus: (row.plan_status as string | null) ?? null,
-        planExpiresAt: (row.plan_expires_at as string | null) ?? null,
-      })
+    const candidates = (data ?? []) as PaymentRow[]
+    profileMap = await loadProfiles(serviceClient, [...new Set(candidates.map(row => row.user_id))])
+
+    let filtered = candidates.filter(row => isNeedsRecovery(row, profileMap.get(row.user_id), nowMs))
+    if (before) filtered = filtered.filter(row => row.created_at < before)
+    hasMore = filtered.length > PAGE_SIZE
+    page = filtered.slice(0, PAGE_SIZE)
+  } else {
+    let query = serviceClient
+      .from('payments')
+      .select(PAYMENT_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE + 1) // hasMore 판별용 +1
+    if (periodStart) query = query.gte('created_at', periodStart)
+    if (status !== 'all') query = query.eq('status', status)
+    if (before) query = query.lt('created_at', before)
+    if (searchFilter.mode === 'or') query = query.or(searchFilter.expr)
+    else if (searchFilter.mode === 'orderId') query = query.eq('order_id', searchFilter.value)
+
+    const { data, error } = await query
+    if (error) {
+      console.error('[admin/payments] 조회 실패:', error.message)
+      return NextResponse.json({ error: '조회 실패' }, { status: 500 })
     }
+    const rows = (data ?? []) as PaymentRow[]
+    hasMore = rows.length > PAGE_SIZE
+    page = rows.slice(0, PAGE_SIZE)
+    profileMap = await loadProfiles(serviceClient, [...new Set(page.map(row => row.user_id))])
   }
 
   // === 결제 후 발송 건수 ===
@@ -199,54 +285,51 @@ export async function GET(request: Request) {
       planStatus: profile?.planStatus ?? null,
       planExpiresAt: profile?.planExpiresAt ?? null,
       sentAfter: sentAfterMap.has(row.id) ? sentAfterMap.get(row.id)! : null,
+      needsRecovery: isNeedsRecovery(row, profile, nowMs),
+      recoveredAt: row.recovered_at ?? null,
+      recoveredBy: row.recovered_by ?? null,
     }
   })
 
-  // === 요약(최근 30일) — 검색·필터와 무관한 별도 집계 ===
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const [doneResult, failedResult] = await Promise.all([
-    serviceClient
-      .from('payments')
-      .select('user_id, amount')
-      .eq('status', 'done')
-      .gte('created_at', since)
-      .limit(SUMMARY_SCAN_LIMIT),
-    serviceClient
-      .from('payments')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'failed')
-      .gte('created_at', since),
+  // === 집계 — 목록과 별개로 계산 ===
+  const countQuery = serviceClient.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'done')
+  const amountQuery = serviceClient.from('payments').select('amount').eq('status', 'done').limit(AMOUNT_SCAN_LIMIT)
+  const failedQuery = serviceClient.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'failed')
+  const [countResult, amountResult, failedResult] = await Promise.all([
+    periodStart ? countQuery.gte('created_at', periodStart) : countQuery,
+    periodStart ? amountQuery.gte('created_at', periodStart) : amountQuery,
+    periodStart ? failedQuery.gte('created_at', periodStart) : failedQuery,
   ])
-  if (doneResult.error) console.error('[admin/payments] 요약(성공) 집계 실패:', doneResult.error.message)
-  if (failedResult.error) console.error('[admin/payments] 요약(실패) 집계 실패:', failedResult.error.message)
+  if (countResult.error) console.error('[admin/payments] 집계(건수) 실패:', countResult.error.message)
+  if (amountResult.error) console.error('[admin/payments] 집계(금액) 실패:', amountResult.error.message)
+  if (failedResult.error) console.error('[admin/payments] 집계(실패) 실패:', failedResult.error.message)
 
-  const doneIn30 = (doneResult.data ?? []) as { user_id: string; amount: number }[]
-  const summaryCount = doneIn30.length
-  const summaryAmount = doneIn30.reduce((sum, row) => sum + (row.amount ?? 0), 0)
+  const summaryAmount = ((amountResult.data ?? []) as { amount: number }[])
+    .reduce((sum, row) => sum + (row.amount ?? 0), 0)
 
-  // 결제됐는데 지금 free인 계정 수. reconcilePaidPlans가 알림만 보내고 자동 복구는 하지 않으므로
-  // 확인 지점이 필요하다. 30일 창인 이유 = 그보다 오래되면 만료로 free인 것이 정상이다.
-  const paidUserIds = [...new Set(doneIn30.map(row => row.user_id))]
-  let summaryMismatch = 0
-  for (let i = 0; i < paidUserIds.length; i += IN_CHUNK) {
-    const chunk = paidUserIds.slice(i, i + IN_CHUNK)
-    const { count, error: mismatchError } = await serviceClient
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .in('id', chunk)
-      .eq('plan', 'free')
-    if (mismatchError) {
-      console.error('[admin/payments] 요약(불일치) 집계 실패:', mismatchError.message)
-      continue
-    }
-    summaryMismatch += count ?? 0
-  }
+  // mismatch만 period의 영향을 받지 않는다. "지금 처리해야 할 건"을 세는 값이라
+  // 기간을 좁히면 처리할 건을 놓친다. 검색어도 적용하지 않는다.
+  const { data: recoveryScan, error: recoveryScanError } = await serviceClient
+    .from('payments')
+    .select(PAYMENT_COLUMNS)
+    .eq('status', 'done')
+    .is('recovered_at', null)
+    .gte('created_at', recoveryWindowStart)
+    .order('created_at', { ascending: false })
+    .limit(RECOVERY_SCAN_LIMIT)
+  if (recoveryScanError) console.error('[admin/payments] 집계(복구 필요) 실패:', recoveryScanError.message)
+
+  const recoveryCandidates = (recoveryScan ?? []) as PaymentRow[]
+  const recoveryProfiles = await loadProfiles(serviceClient, [...new Set(recoveryCandidates.map(row => row.user_id))])
+  const summaryMismatch = recoveryCandidates
+    .filter(row => isNeedsRecovery(row, recoveryProfiles.get(row.user_id), nowMs))
+    .length
 
   return NextResponse.json({
     payments,
     hasMore,
     summary: {
-      count: summaryCount,
+      count: countResult.count ?? 0,
       amount: summaryAmount,
       failed: failedResult.count ?? 0,
       mismatch: summaryMismatch,

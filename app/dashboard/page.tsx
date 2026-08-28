@@ -16,7 +16,7 @@ import TrialPopup from '@/components/TrialPopup'
 import { AppHeader } from '@/components/AppHeader'
 import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
-import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X } from 'lucide-react'
+import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X, Search } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
@@ -1807,7 +1807,7 @@ export default function Dashboard() {
                           color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 13,
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         }}
-                      >🔍</button>
+                      ><Search size={14} /></button>
                     )}
                   </div>
                 </div>
@@ -2541,7 +2541,13 @@ export default function Dashboard() {
                   </button>
                   <button
                     className={`cat-chip${historyFilter === 'breaking' ? ' active' : ''}`}
-                    onClick={() => setHistoryFilter('breaking')}>
+                    onClick={() => setHistoryFilter('breaking')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    {/* 열람기록 목록의 속보 뱃지와 같은 점 — 이모지를 뺀 자리의 시각 단서 */}
+                    <span style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: 'currentColor', flexShrink: 0,
+                    }} />
                     {t('history.breakingOnly')}
                   </button>
                 </div>
@@ -2553,13 +2559,17 @@ export default function Dashboard() {
                   gap: 8,
                 }}>
                   <div style={{ position: 'relative' }}>
+                    <Search size={14} style={{
+                      position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                      color: 'var(--text-muted)', pointerEvents: 'none',
+                    }} />
                     <input
                       value={historySearch}
                       onChange={e => setHistorySearch(e.target.value)}
                       onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                       onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                       placeholder={t('history.searchPlaceholder')}
-                      style={{ ...inputStyle, paddingRight: 32 }}
+                      style={{ ...inputStyle, paddingLeft: 30, paddingRight: 32 }}
                     />
                     {historySearch && (
                       <span onClick={() => setHistorySearch('')}

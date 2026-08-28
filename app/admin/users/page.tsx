@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { PlanBadge, getPlanBadge } from '@/components/PlanBadge'
 import { AdminHeader } from '@/components/AdminHeader'
+import { Search } from 'lucide-react'
 
 type AdminUser = {
   id: string
@@ -345,16 +346,22 @@ export default function AdminUsersPage() {
 
         {/* 검색 + 필터 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={t('adminUsers.searchPlaceholder')}
-            style={{
-              flex: 1, minWidth: 200,
-              background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-              borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)',
-              fontSize: 13, fontFamily: 'inherit', outline: 'none',
+          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <Search size={14} style={{
+              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+              color: 'var(--text-muted)', pointerEvents: 'none',
             }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={t('adminUsers.searchPlaceholder')}
+              style={{
+                width: '100%',
+                background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                borderRadius: 8, padding: '8px 12px', paddingLeft: 30, color: 'var(--text-primary)',
+                fontSize: 13, fontFamily: 'inherit', outline: 'none',
+              }} />
+          </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {filterChip('all', t('adminUsers.filterAll'))}
             {filterChip('free', t('adminUsers.filterFree'))}
