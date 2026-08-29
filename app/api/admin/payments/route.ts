@@ -50,6 +50,33 @@ type ProfileInfo = {
   planExpiresAt: string | null
 }
 
+// 카드(빌링키)가 등록된 user_id 집합. loadProfiles와 같은 이유로 청크로 나눈다.
+// 복구 시 실제 적용 종류를 화면이 미리 계산하는 데 쓴다 — recover/route.ts가
+// 카드 없는 auto 결제를 onetime으로 낮추기 때문에, 이 값이 없으면 확인창이
+// 서버와 다른 종류를 안내하게 된다.
+async function loadCardUserIds(
+  serviceClient: SupabaseClient,
+  userIds: string[],
+): Promise<Set<string>> {
+  const set = new Set<string>()
+  for (let i = 0; i < userIds.length; i += IN_CHUNK) {
+    const chunk = userIds.slice(i, i + IN_CHUNK)
+    const { data, error } = await serviceClient
+      .from('billing_keys')
+      .select('user_id')
+      .in('user_id', chunk)
+    if (error) {
+      // 실패해도 조회는 계속한다. 빠진 사용자는 hasCard=false로 남는데,
+      // 그쪽이 안전하다 — 확인창이 1개월권이라 말하고 서버가 자동 갱신을
+      // 적용하는 것보다, 그 반대가 덜 위험하다.
+      console.error('[admin/payments] 빌링키 조회 실패:', error.message)
+      continue
+    }
+    for (const row of data ?? []) set.add(row.user_id as string)
+  }
+  return set
+}
+
 const PAYMENT_COLUMNS =
   'id, user_id, order_id, amount, kind, status, receipt_url, fail_code, created_at, recovered_at, recovered_by'
 
@@ -225,6 +252,9 @@ export async function GET(request: Request) {
     profileMap = await loadProfiles(serviceClient, [...new Set(page.map(row => row.user_id))])
   }
 
+  // 카드 유무 — 목록 분기(recovery 포함) 두 갈래가 합류한 뒤라 한 번만 조회하면 된다.
+  const cardUserIds = await loadCardUserIds(serviceClient, [...new Set(page.map(row => row.user_id))])
+
   // === 결제 후 발송 건수 ===
   // 환불 정책이 "결제 7일 내 + 다이제스트 미발송이면 전액"이라 이 숫자가 환불 가부를 가른다.
   // done이 아닌 결제는 애초에 청구가 없어 대상이 아니므로 null로 둔다.
@@ -286,6 +316,7 @@ export async function GET(request: Request) {
       planExpiresAt: profile?.planExpiresAt ?? null,
       sentAfter: sentAfterMap.has(row.id) ? sentAfterMap.get(row.id)! : null,
       needsRecovery: isNeedsRecovery(row, profile, nowMs),
+      hasCard: cardUserIds.has(row.user_id),
       recoveredAt: row.recovered_at ?? null,
       recoveredBy: row.recovered_by ?? null,
     }

@@ -32,6 +32,8 @@ type PaymentRow = {
   // done 결제에만 값이 있다. 결제 시각 이후 다이제스트 발송 건수 — 환불 가부의 판단 근거.
   sentAfter: number | null
   needsRecovery: boolean
+  // 등록된 카드(빌링키) 유무. 복구 시 실제 적용될 종류를 미리 계산하는 데만 쓴다.
+  hasCard: boolean
   recoveredAt: string | null
   recoveredBy: string | null
 }
@@ -160,10 +162,18 @@ export default function AdminPaymentsPage() {
   // (결제 취소 API 미연동) 반드시 사람의 확인을 거친다.
   async function recover(row: PaymentRow) {
     if (recoveringId) return
-    const kindLabel = row.kind === 'auto' ? t('adminPayments.kindAuto') : t('adminPayments.kindOnetime')
+    // 실제 적용 종류는 결제의 kind가 아니라 카드 유무까지 봐야 정해진다 —
+    // 서버 recover 라우트와 같은 규칙(카드 없는 auto는 onetime으로 낮춰 적용).
+    // 한쪽만 바뀌면 확인창이 사실과 어긋나므로 두 곳을 함께 고칠 것.
+    const willDowngrade = row.kind === 'auto' && !row.hasCard
+    const appliedKind = willDowngrade ? 'onetime' : row.kind
+    const kindLabel = appliedKind === 'auto'
+      ? t('adminPayments.kindAuto')
+      : t('adminPayments.kindOnetime')
     const message =
-      `${t('adminPayments.confirmRecover', { email: row.email ?? row.orderId, kind: kindLabel })}\n\n` +
-      t('adminPayments.confirmRefundWarn')
+      `${t('adminPayments.confirmRecover', { email: row.email ?? row.orderId, kind: kindLabel })}\n` +
+      (willDowngrade ? `${t('adminPayments.confirmDowngradeNote')}\n` : '') +
+      `\n${t('adminPayments.confirmRefundWarn')}`
     if (!window.confirm(message)) return
 
     setRecoveringId(row.id)
@@ -452,16 +462,24 @@ export default function AdminPaymentsPage() {
                     </td>
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                       {row.needsRecovery ? (
-                        <button
-                          onClick={() => recover(row)}
-                          disabled={recoveringId !== null}
-                          style={{
-                            ...moreBtnStyle,
-                            color: 'var(--warning)',
-                            cursor: recoveringId !== null ? 'default' : 'pointer',
-                          }}>
-                          {t('adminPayments.recoverBtn')}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => recover(row)}
+                            disabled={recoveringId !== null}
+                            style={{
+                              ...moreBtnStyle,
+                              color: 'var(--warning)',
+                              cursor: recoveringId !== null ? 'default' : 'pointer',
+                            }}>
+                            {t('adminPayments.recoverBtn')}
+                          </button>
+                          {/* 누르기 전에 미리 보이도록 — 확인창과 같은 판정 */}
+                          {row.kind === 'auto' && !row.hasCard && (
+                            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 3 }}>
+                              {t('adminPayments.willDowngradeHint')}
+                            </div>
+                          )}
+                        </>
                       ) : row.recoveredAt ? (
                         <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                           {t('adminPayments.recoveredDone', { date: formatKstDate(row.recoveredAt) })}
