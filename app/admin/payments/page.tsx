@@ -34,6 +34,10 @@ type PaymentRow = {
   needsRecovery: boolean
   // 등록된 카드(빌링키) 유무. 복구 시 실제 적용될 종류를 미리 계산하는 데만 쓴다.
   hasCard: boolean
+  // 계정 상태(플랜·만료일)를 이 행에 표시해도 되는지. 계정 상태는 계정당 하나뿐이라
+  // 그 사람의 가장 최근 결제 행에만 표시한다 — 과거 결제 행에 붙이면 그 결제가
+  // 그 날짜까지 유효했던 것처럼 읽힌다.
+  isLatestForUser: boolean
   recoveredAt: string | null
   recoveredBy: string | null
 }
@@ -60,7 +64,6 @@ export default function AdminPaymentsPage() {
 
   // 복구 진행 중인 결제 id. 같은 버튼을 두 번 누르지 못하게 막는다.
   const [recoveringId, setRecoveringId] = useState<string | null>(null)
-  const [recoverMessage, setRecoverMessage] = useState<string | null>(null)
   const [recoverError, setRecoverError] = useState<string | null>(null)
   // 목록을 다시 불러오기 위한 트리거.
   const [reloadKey, setReloadKey] = useState(0)
@@ -158,27 +161,29 @@ export default function AdminPaymentsPage() {
     })
   const formatAmount = (amount: number) => `₩${amount.toLocaleString(dateLocale)}`
 
+  // 복구 버튼·확인창이 함께 쓰는 라벨 — 누르면 실제로 적용될 종류를 그대로 말한다.
+  // 카드 없는 auto가 onetime으로 낮춰 적용되는 것은 서버 recover 라우트와 같은 규칙이다.
+  // 한쪽만 바뀌면 화면이 사실과 어긋나므로 두 곳을 함께 고칠 것.
+  const recoverBtnLabel = (row: PaymentRow) => {
+    const willDowngrade = row.kind === 'auto' && !row.hasCard
+    return willDowngrade || row.kind !== 'auto'
+      ? t('adminPayments.recoverBtnOnetime')
+      : t('adminPayments.recoverBtnAuto')
+  }
+
   // 복구 실행 — 환불로 내린 계정과 사고로 안 켜진 계정을 시스템이 구분할 수 없으므로
   // (결제 취소 API 미연동) 반드시 사람의 확인을 거친다.
   async function recover(row: PaymentRow) {
     if (recoveringId) return
-    // 실제 적용 종류는 결제의 kind가 아니라 카드 유무까지 봐야 정해진다 —
-    // 서버 recover 라우트와 같은 규칙(카드 없는 auto는 onetime으로 낮춰 적용).
-    // 한쪽만 바뀌면 확인창이 사실과 어긋나므로 두 곳을 함께 고칠 것.
-    const willDowngrade = row.kind === 'auto' && !row.hasCard
-    const appliedKind = willDowngrade ? 'onetime' : row.kind
-    const kindLabel = appliedKind === 'auto'
-      ? t('adminPayments.kindAuto')
-      : t('adminPayments.kindOnetime')
+    // 만료일은 서버 applyPaidPlan과 같은 계산(오늘 + 30일)이다. 화면에서 별도 규칙을 만들지 않는다.
+    const expiresPreview = formatKstDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
     const message =
-      `${t('adminPayments.confirmRecover', { email: row.email ?? row.orderId, kind: kindLabel })}\n` +
-      (willDowngrade ? `${t('adminPayments.confirmDowngradeNote')}\n` : '') +
-      `\n${t('adminPayments.confirmRefundWarn')}`
+      `${row.email ?? row.orderId}\n` +
+      `${recoverBtnLabel(row)} · ${t('adminPayments.confirmExpires', { date: expiresPreview })}`
     if (!window.confirm(message)) return
 
     setRecoveringId(row.id)
     setRecoverError(null)
-    setRecoverMessage(null)
     try {
       const res = await fetch('/api/admin/payments/recover', {
         method: 'POST',
@@ -186,7 +191,7 @@ export default function AdminPaymentsPage() {
         body: JSON.stringify({ paymentId: row.id }),
       })
       const data = await res.json().catch(() => ({})) as {
-        ok?: boolean; error?: string; expiresAt?: string; downgradedToOnetime?: boolean
+        ok?: boolean; error?: string
       }
       if (!res.ok || !data.ok) {
         const errorKey =
@@ -198,12 +203,8 @@ export default function AdminPaymentsPage() {
         setRecoverError(t(errorKey))
         return
       }
-      const date = data.expiresAt ? formatKstDate(data.expiresAt) : ''
-      setRecoverMessage(t(
-        data.downgradedToOnetime ? 'adminPayments.recoverDoneOnetime' : 'adminPayments.recoverDone',
-        { date },
-      ))
       // 복구 결과가 목록·요약에 반영되도록 다시 불러온다.
+      // 성공 안내는 따로 두지 않는다 — 그 행이 "복구됨 · 날짜"로 바뀌어 결과가 눈앞에서 확인된다.
       setReloadKey(key => key + 1)
     } catch (e) {
       console.error('[admin/payments] 복구 실패:', e)
@@ -212,13 +213,6 @@ export default function AdminPaymentsPage() {
       setRecoveringId(null)
     }
   }
-
-  // 성공 안내는 4초 뒤 사라진다.
-  useEffect(() => {
-    if (!recoverMessage) return
-    const timer = setTimeout(() => setRecoverMessage(null), 4000)
-    return () => clearTimeout(timer)
-  }, [recoverMessage])
 
   const ADMIN_BAR_BG = '#0A0A0A'
   const cardStyle: React.CSSProperties = {
@@ -378,11 +372,6 @@ export default function AdminPaymentsPage() {
           </div>
         </div>
 
-        {recoverMessage && (
-          <div style={{ fontSize: 12, color: 'var(--text-primary)', marginBottom: 10 }}>
-            {recoverMessage}
-          </div>
-        )}
         {recoverError && (
           <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 10 }}>
             {recoverError}
@@ -401,16 +390,15 @@ export default function AdminPaymentsPage() {
               {t('adminPayments.empty')}
             </div>
           ) : (
-            <table style={{ width: '100%', minWidth: 1120, borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', minWidth: 1020, borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
                   <th style={thStyle}>{t('adminPayments.colTime')}</th>
                   <th style={thStyle}>{t('adminPayments.colUser')}</th>
-                  <th style={thStyle}>{t('adminPayments.colKind')}</th>
+                  <th style={thStyle}>{t('adminPayments.colPaymentOutcome')}</th>
                   <th style={thStyle}>{t('adminPayments.colAmount')}</th>
                   <th style={thStyle}>{t('adminPayments.colStatus')}</th>
                   <th style={thStyle}>{t('adminPayments.colSentAfter')}</th>
-                  <th style={thStyle}>{t('adminPayments.colPlanNow')}</th>
                   <th style={thStyle}>{t('adminPayments.colRecover')}</th>
                   <th style={thStyle}>{t('adminPayments.colOrderId')}</th>
                   <th style={thStyle}>{t('adminPayments.colReceipt')}</th>
@@ -425,8 +413,31 @@ export default function AdminPaymentsPage() {
                     <td style={{ ...tdStyle, maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {row.email ?? noData}
                     </td>
+                    {/* 결제 후 상태 — 윗줄은 이 결제가 어떻게 끝났는지, 아랫줄은 계정의 현재 상태. */}
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                      {row.kind === 'auto' ? t('adminPayments.kindAuto') : t('adminPayments.kindOnetime')}
+                      <div>
+                        {row.kind === 'auto' ? t('adminPayments.kindAuto') : t('adminPayments.kindOnetime')}
+                        {/* 화살표는 "결제와 결과가 어긋난 경우"에만 쓴다. 만료·해지·결제 실패는
+                            정상 동작이라 붙이지 않는다 — 붙이면 화살표가 신호이기를 그만둔다. */}
+                        {row.needsRecovery ? (
+                          <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                            {` → ${t('adminPayments.outcomeFailed')}`}
+                          </span>
+                        ) : row.kind === 'auto' && row.recoveredAt && row.planStatus === 'onetime' ? (
+                          <span style={{ color: 'var(--text-tertiary)' }}>
+                            {` → ${t('adminPayments.kindOnetime')}`}
+                          </span>
+                        ) : null}
+                      </div>
+                      {/* 계정 상태는 계정당 하나뿐이라 그 사람의 가장 최근 결제 행에만 붙인다. */}
+                      {row.isLatestForUser && row.plan && (
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 3 }}>
+                          {row.plan.toUpperCase()}
+                          {row.plan !== 'free' && row.planExpiresAt
+                            ? ` · ${formatKstDate(row.planExpiresAt)}`
+                            : ''}
+                        </div>
+                      )}
                     </td>
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                       {formatAmount(row.amount)}
@@ -448,38 +459,18 @@ export default function AdminPaymentsPage() {
                       )}
                     </td>
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                      {row.plan ? (
-                        <>
-                          <div>{row.plan.toUpperCase()}</div>
-                          {(row.planStatus || row.planExpiresAt) && (
-                            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 3 }}>
-                              {row.planStatus ?? ''}
-                              {row.planExpiresAt ? `${row.planStatus ? ' · ' : ''}${formatKstDate(row.planExpiresAt)}` : ''}
-                            </div>
-                          )}
-                        </>
-                      ) : noData}
-                    </td>
-                    <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                       {row.needsRecovery ? (
-                        <>
-                          <button
-                            onClick={() => recover(row)}
-                            disabled={recoveringId !== null}
-                            style={{
-                              ...moreBtnStyle,
-                              color: 'var(--warning)',
-                              cursor: recoveringId !== null ? 'default' : 'pointer',
-                            }}>
-                            {t('adminPayments.recoverBtn')}
-                          </button>
-                          {/* 누르기 전에 미리 보이도록 — 확인창과 같은 판정 */}
-                          {row.kind === 'auto' && !row.hasCard && (
-                            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 3 }}>
-                              {t('adminPayments.willDowngradeHint')}
-                            </div>
-                          )}
-                        </>
+                        <button
+                          onClick={() => recover(row)}
+                          disabled={recoveringId !== null}
+                          style={{
+                            ...moreBtnStyle,
+                            color: 'var(--warning)',
+                            cursor: recoveringId !== null ? 'default' : 'pointer',
+                          }}>
+                          {/* 버튼이 곧 결과 안내다 — 눌렀을 때 실제로 적용될 종류를 라벨에 쓴다. */}
+                          {recoverBtnLabel(row)}
+                        </button>
                       ) : row.recoveredAt ? (
                         <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                           {t('adminPayments.recoveredDone', { date: formatKstDate(row.recoveredAt) })}

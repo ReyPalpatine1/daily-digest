@@ -21,6 +21,8 @@ const SENT_LOG_LIMIT = 2000
 const AMOUNT_SCAN_LIMIT = 10000
 // 복구 후보(최근 30일 done)를 훑을 상한. 목록 필터와 mismatch 집계가 함께 쓴다.
 const RECOVERY_SCAN_LIMIT = 1000
+// "그 사용자의 최근 결제" 판정을 위해 훑을 상한.
+const LATEST_SCAN_LIMIT = 2000
 // PostgREST .in() 은 id를 URL에 싣는다 — uuid 150개면 약 5.5KB로, 헤더 한도 안에 들어간다.
 const IN_CHUNK = 150
 
@@ -75,6 +77,46 @@ async function loadCardUserIds(
     for (const row of data ?? []) set.add(row.user_id as string)
   }
   return set
+}
+
+// 사용자별 "가장 최근 결제"의 id 집합.
+//
+// 계정 상태(플랜·만료일)는 계정당 하나뿐이라 같은 사람의 결제 행마다 같은 값이 찍힌다.
+// 7월 결제 행에 10월 만료일이 보이면 "그 결제가 10월까지 유효하다"로 읽히지만, 그 날짜는
+// 이후 결제가 두 번 더 돌아 밀린 결과이지 7월 결제와는 무관하다. 그래서 계정 상태는
+// 이 집합에 든 행 — 그 사람의 가장 최근 결제 — 에만 보여준다.
+//
+// ★ 상태·기간·검색 필터를 걸지 않는다. 화면에 안 보이는 더 최근 결제가 있다면
+//   지금 보이는 행은 최근 결제가 아니고, 그 사실이야말로 알아야 할 것이기 때문이다.
+async function loadLatestPaymentIds(
+  serviceClient: SupabaseClient,
+  userIds: string[],
+): Promise<Set<string>> {
+  const latestByUser = new Map<string, { id: string; createdAt: string }>()
+  for (let i = 0; i < userIds.length; i += IN_CHUNK) {
+    const chunk = userIds.slice(i, i + IN_CHUNK)
+    const { data, error } = await serviceClient
+      .from('payments')
+      .select('id, user_id, created_at')
+      .in('user_id', chunk)
+      .order('created_at', { ascending: false })
+      .limit(LATEST_SCAN_LIMIT)
+    if (error) {
+      // 실패한 청크의 사용자는 아랫줄이 안 보일 뿐이다. 없는 정보를 지어내는 것보다 낫다.
+      console.error('[admin/payments] 최근 결제 조회 실패:', error.message)
+      continue
+    }
+    for (const row of data ?? []) {
+      const userId = row.user_id as string
+      const createdAt = row.created_at as string
+      const current = latestByUser.get(userId)
+      // 정렬은 걸었지만 상한에 걸려 잘릴 수 있으므로 값으로도 비교한다.
+      if (!current || createdAt > current.createdAt) {
+        latestByUser.set(userId, { id: row.id as string, createdAt })
+      }
+    }
+  }
+  return new Set([...latestByUser.values()].map(entry => entry.id))
 }
 
 const PAYMENT_COLUMNS =
@@ -252,8 +294,12 @@ export async function GET(request: Request) {
     profileMap = await loadProfiles(serviceClient, [...new Set(page.map(row => row.user_id))])
   }
 
-  // 카드 유무 — 목록 분기(recovery 포함) 두 갈래가 합류한 뒤라 한 번만 조회하면 된다.
-  const cardUserIds = await loadCardUserIds(serviceClient, [...new Set(page.map(row => row.user_id))])
+  // 카드 유무·최근 결제 — 목록 분기(recovery 포함) 두 갈래가 합류한 뒤라 한 번만 조회하면 된다.
+  const pageUserIds = [...new Set(page.map(row => row.user_id))]
+  const [cardUserIds, latestPaymentIds] = await Promise.all([
+    loadCardUserIds(serviceClient, pageUserIds),
+    loadLatestPaymentIds(serviceClient, pageUserIds),
+  ])
 
   // === 결제 후 발송 건수 ===
   // 환불 정책이 "결제 7일 내 + 다이제스트 미발송이면 전액"이라 이 숫자가 환불 가부를 가른다.
@@ -317,6 +363,8 @@ export async function GET(request: Request) {
       sentAfter: sentAfterMap.has(row.id) ? sentAfterMap.get(row.id)! : null,
       needsRecovery: isNeedsRecovery(row, profile, nowMs),
       hasCard: cardUserIds.has(row.user_id),
+      // 계정 상태를 이 행에 표시해도 되는지 — 그 사람의 가장 최근 결제에만 true.
+      isLatestForUser: latestPaymentIds.has(row.id),
       recoveredAt: row.recovered_at ?? null,
       recoveredBy: row.recovered_by ?? null,
     }
