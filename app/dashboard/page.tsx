@@ -2542,7 +2542,7 @@ export default function Dashboard() {
                   <button
                     className={`cat-chip${historyFilter === 'breaking' ? ' active' : ''}`}
                     onClick={() => setHistoryFilter('breaking')}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--danger)' }}>
                     {/* 열람기록 목록의 속보 뱃지와 같은 점 — 이모지를 뺀 자리의 시각 단서 */}
                     <span style={{
                       width: 6, height: 6, borderRadius: '50%',

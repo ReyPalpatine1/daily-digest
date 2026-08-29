@@ -8,6 +8,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import HelpPopup from '@/components/HelpPopup'
+import { Sun, Moon, Settings } from 'lucide-react'
 
 // 공통 상단바 — 대시보드 헤더와 동일한 모양/동작을 하위 페이지(profile/pricing)에서 재사용.
 // 대시보드 전용 네비(채널/발송설정/열람기록)는 포함하지 않는다 (A안: 하위 페이지엔 네비 없음).
@@ -211,7 +212,7 @@ export function AppHeader({
   const gearBtn: React.CSSProperties = {
     width: 32, height: 32, borderRadius: 8,
     background: 'transparent', border: '1px solid var(--border)',
-    color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 14,
+    color: 'var(--text-secondary)', cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   }
   const dropdownStyle: React.CSSProperties = {
@@ -536,8 +537,8 @@ export function AppHeader({
             title={theme === 'dark' ? t('settings.toLight') : t('settings.toDark')}
             onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            style={{ ...toolbarIconBtn, fontSize: 14 }}>
-            {theme === 'dark' ? '☀️' : '🌙'}
+            style={{ ...toolbarIconBtn, color: 'var(--text-secondary)' }}>
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
           {/* 모바일 대시보드: 햄버거(사이드바). 그 외: 설정 기어(드롭다운) */}
           {showTabs && isMobile ? (
@@ -551,7 +552,7 @@ export function AppHeader({
             <button ref={settingsBtnRef} onClick={() => setSettingsOpen(o => !o)}
               aria-label={t('common.settings')}
               style={gearBtn}>
-              ⚙
+              <Settings size={15} />
             </button>
           )}
         </div>
