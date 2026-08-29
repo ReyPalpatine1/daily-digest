@@ -1789,14 +1789,34 @@ export default function Dashboard() {
                   </div>
                   <div style={{ flexShrink: 0 }}>
                     {showChannelSearch ? (
-                      <input
-                        autoFocus
-                        value={channelSearch}
-                        onChange={e => setChannelSearch(e.target.value)}
-                        onBlur={() => { if (!channelSearch) setShowChannelSearch(false) }}
-                        placeholder={t('channels.channelSearch')}
-                        style={{ ...inputStyle, width: 160, padding: '6px 10px', fontSize: 12 }}
-                      />
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          autoFocus
+                          value={channelSearch}
+                          onChange={e => setChannelSearch(e.target.value)}
+                          onBlur={() => { if (!channelSearch) setShowChannelSearch(false) }}
+                          placeholder={t('channels.channelSearch')}
+                          style={{ ...inputStyle, width: 160, padding: '6px 10px', paddingRight: 28, fontSize: 12 }}
+                        />
+                        {/* onMouseDown에서 기본 동작을 막아 입력창이 포커스를 잃지 않게 한다 —
+                            이 입력창은 onBlur에서 값이 비면 접히므로, 그냥 두면 지우는 순간
+                            접혀서 다시 검색할 수 없다. */}
+                        {channelSearch && (
+                          <span
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => setChannelSearch('')}
+                            style={{
+                              position: 'absolute', right: 10, top: '50%',
+                              transform: 'translateY(-50%)',
+                              display: 'inline-flex', cursor: 'pointer',
+                              color: 'var(--text-muted)',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
+                            <X size={13} />
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <button
                         onClick={() => setShowChannelSearch(true)}
@@ -2576,12 +2596,12 @@ export default function Dashboard() {
                         style={{
                           position: 'absolute', right: 10, top: '50%',
                           transform: 'translateY(-50%)',
-                          cursor: 'pointer', fontSize: 13,
+                          display: 'inline-flex', cursor: 'pointer',
                           color: 'var(--text-muted)',
                         }}
                         onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
                         onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
-                        ✕
+                        <X size={14} />
                       </span>
                     )}
                   </div>

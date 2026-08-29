@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { AdminHeader } from '@/components/AdminHeader'
-import { ExternalLink, Search } from 'lucide-react'
+import { ExternalLink, Search, X } from 'lucide-react'
 
 // 관리자 결제 탭 — 환불 문의 대응 시 SQL 없이 화면에서 판단하고,
 // "결제는 됐는데 Pro가 안 켜진" 계정을 복구한다.
@@ -67,6 +67,10 @@ export default function AdminPaymentsPage() {
   const [recoverError, setRecoverError] = useState<string | null>(null)
   // 목록을 다시 불러오기 위한 트리거.
   const [reloadKey, setReloadKey] = useState(0)
+  // 필터·검색을 바꿔 다시 불러오는 중. 최초 진입(loading)과는 다르다 —
+  // 그쪽은 전체 화면 로딩 문구가 따로 있다.
+  const [refreshing, setRefreshing] = useState(false)
+  const firstLoadDone = useRef(false)
 
   const fetchPage = useCallback(async (before?: string) => {
     const params = new URLSearchParams()
@@ -110,6 +114,8 @@ export default function AdminPaymentsPage() {
     let cancelled = false
     async function load() {
       setLoadFailed(false)
+      // 최초 진입은 전체 화면 로딩 문구가 대신하므로 흐리게 처리하지 않는다.
+      if (firstLoadDone.current) setRefreshing(true)
       try {
         const data = await fetchPage()
         if (cancelled) return
@@ -123,7 +129,11 @@ export default function AdminPaymentsPage() {
         setHasMore(false)
         setLoadFailed(true)
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setRefreshing(false)
+          firstLoadDone.current = true
+        }
       }
     }
     load()
@@ -307,6 +317,13 @@ export default function AdminPaymentsPage() {
     return <span style={{ ...badgeStyle, color: 'var(--text-muted)' }}>{status}</span>
   }
 
+  // 재조회 중 표시 — 표를 비우고 "불러오는 중"을 띄우면 화면이 깜빡이며 스크롤이 튄다.
+  // 필터는 연달아 누르는 동작이라 이전 결과가 자리를 지키는 편이 안정적이다.
+  const refreshingStyle: React.CSSProperties = {
+    transition: 'opacity 0.15s',
+    ...(refreshing ? { opacity: 0.45, pointerEvents: 'none' as const } : null),
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'var(--font-sans)' }}>
       <AdminHeader activeKey="payments" />
@@ -320,7 +337,7 @@ export default function AdminPaymentsPage() {
         </div>
 
         {/* 요약 */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: hasMismatch ? 8 : 16 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: hasMismatch ? 8 : 16, ...refreshingStyle }}>
           {summaryCard(t('adminPayments.summaryCount'), String(summary?.count ?? 0))}
           {summaryCard(t('adminPayments.summaryAmount'), formatAmount(summary?.amount ?? 0))}
           {summaryCard(t('adminPayments.summaryFailed'), String(summary?.failed ?? 0))}
@@ -338,31 +355,43 @@ export default function AdminPaymentsPage() {
           </div>
         )}
 
-        {/* 기간 · 상태 · 검색 */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-          {chip(periodFilter === 'all', t('adminPayments.periodAll'), () => setPeriodFilter('all'), 'p-all')}
-          {chip(periodFilter === '30', t('adminPayments.period30'), () => setPeriodFilter('30'), 'p-30')}
-          {chip(periodFilter === '90', t('adminPayments.period90'), () => setPeriodFilter('90'), 'p-90')}
-          {chip(periodFilter === '365', t('adminPayments.period365'), () => setPeriodFilter('365'), 'p-365')}
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-            <Search size={14} style={{
-              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-              color: 'var(--text-muted)', pointerEvents: 'none',
+        {/* 검색 — 이메일·주문번호는 길어서 한 줄을 통째로 쓴다. */}
+        <div style={{ position: 'relative', width: '100%', marginBottom: 8 }}>
+          <Search size={14} style={{
+            position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+            color: 'var(--text-muted)', pointerEvents: 'none',
+          }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={t('adminPayments.searchPlaceholder')}
+            style={{
+              width: '100%',
+              background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+              borderRadius: 8, padding: '8px 12px', paddingLeft: 30, paddingRight: 32,
+              color: 'var(--text-primary)',
+              fontSize: 13, fontFamily: 'inherit', outline: 'none',
             }} />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={t('adminPayments.searchPlaceholder')}
+          {/* 지우기만 한다 — 재조회는 디바운스가 알아서 한다. */}
+          {search && (
+            <span onClick={() => setSearch('')}
               style={{
-                width: '100%',
-                background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-                borderRadius: 8, padding: '8px 12px', paddingLeft: 30, color: 'var(--text-primary)',
-                fontSize: 13, fontFamily: 'inherit', outline: 'none',
-              }} />
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                position: 'absolute', right: 10, top: '50%',
+                transform: 'translateY(-50%)',
+                display: 'inline-flex', cursor: 'pointer',
+                color: 'var(--text-muted)',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
+              <X size={14} />
+            </span>
+          )}
+        </div>
+
+        {/* 상태 · 기간 — 상태는 자주 오가므로 버튼으로 두고,
+            기간은 한 번 정하면 잘 안 바꾸는 값이라 접는다. */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
             {chip(statusFilter === 'all', t('adminPayments.filterAll'), () => setStatusFilter('all'), 's-all')}
             {chip(statusFilter === 'done', t('adminPayments.filterDone'), () => setStatusFilter('done'), 's-done')}
             {chip(statusFilter === 'failed', t('adminPayments.filterFailed'), () => setStatusFilter('failed'), 's-failed')}
@@ -370,6 +399,21 @@ export default function AdminPaymentsPage() {
             {chip(statusFilter === 'canceled', t('adminPayments.filterCanceled'), () => setStatusFilter('canceled'), 's-canceled')}
             {chip(statusFilter === 'recovery', t('adminPayments.filterRecovery'), () => setStatusFilter('recovery'), 's-recovery')}
           </div>
+          <select
+            value={periodFilter}
+            onChange={e => setPeriodFilter(e.target.value as PeriodFilter)}
+            style={{
+              flexShrink: 0,
+              background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+              borderRadius: 7, padding: '5px 10px', fontSize: 12,
+              color: 'var(--text-secondary)', fontFamily: 'inherit',
+              cursor: 'pointer', outline: 'none',
+            }}>
+            <option value="all">{t('adminPayments.periodAll')}</option>
+            <option value="30">{t('adminPayments.period30')}</option>
+            <option value="90">{t('adminPayments.period90')}</option>
+            <option value="365">{t('adminPayments.period365')}</option>
+          </select>
         </div>
 
         {recoverError && (
@@ -384,7 +428,7 @@ export default function AdminPaymentsPage() {
         )}
 
         {/* 결제 목록 */}
-        <div style={{ ...cardStyle, padding: 0, overflowX: 'auto' }}>
+        <div style={{ ...cardStyle, padding: 0, overflowX: 'auto', ...refreshingStyle }}>
           {rows.length === 0 ? (
             <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
               {t('adminPayments.empty')}
@@ -420,13 +464,19 @@ export default function AdminPaymentsPage() {
                         {/* 화살표는 "결제와 결과가 어긋난 경우"에만 쓴다. 만료·해지·결제 실패는
                             정상 동작이라 붙이지 않는다 — 붙이면 화살표가 신호이기를 그만둔다. */}
                         {row.needsRecovery ? (
-                          <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
-                            {` → ${t('adminPayments.outcomeFailed')}`}
-                          </span>
+                          <>
+                            {' → '}
+                            <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                              {t('adminPayments.outcomeFailed')}
+                            </span>
+                          </>
                         ) : row.kind === 'auto' && row.recoveredAt && row.planStatus === 'onetime' ? (
-                          <span style={{ color: 'var(--text-tertiary)' }}>
-                            {` → ${t('adminPayments.kindOnetime')}`}
-                          </span>
+                          <>
+                            {' → '}
+                            <span style={{ color: 'var(--text-tertiary)' }}>
+                              {t('adminPayments.kindOnetime')}
+                            </span>
+                          </>
                         ) : null}
                       </div>
                       {/* 계정 상태는 계정당 하나뿐이라 그 사람의 가장 최근 결제 행에만 붙인다. */}
