@@ -13,7 +13,7 @@ import { ExternalLink, Search, X } from 'lucide-react'
 
 const STATUS_FILTERS = ['all', 'done', 'failed', 'pending', 'canceled', 'recovery'] as const
 type StatusFilter = (typeof STATUS_FILTERS)[number]
-const PERIOD_FILTERS = ['all', '30', '90', '365'] as const
+const PERIOD_FILTERS = ['all', '30', '365', 'custom'] as const
 type PeriodFilter = (typeof PERIOD_FILTERS)[number]
 
 type PaymentRow = {
@@ -61,6 +61,10 @@ export default function AdminPaymentsPage() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all')
+  // period가 'custom'일 때만 쓰는 직접 지정 범위(YYYY-MM-DD).
+  // period를 바꿔도 지우지 않는다 — 다시 custom을 골랐을 때 그대로 쓴다.
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
   // 복구 진행 중인 결제 id. 같은 버튼을 두 번 누르지 못하게 막는다.
   const [recoveringId, setRecoveringId] = useState<string | null>(null)
@@ -72,17 +76,31 @@ export default function AdminPaymentsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const firstLoadDone = useRef(false)
 
+  // 직접 지정 범위의 상태.
+  //  - 'incomplete' : 아직 다 안 채웠다. 날짜를 타이핑하는 동안 매번 조회가 도는 것을 막는다.
+  //  - 'invalid'    : 시작 > 끝. 빈 목록을 보여주면 "결제가 없구나"로 오해하므로 안내를 띄운다.
+  const customState: 'off' | 'incomplete' | 'invalid' | 'ready' =
+    periodFilter !== 'custom' ? 'off'
+      : !customFrom || !customTo ? 'incomplete'
+        : customFrom > customTo ? 'invalid'
+          : 'ready'
+  const canFetch = customState === 'off' || customState === 'ready'
+
   const fetchPage = useCallback(async (before?: string) => {
     const params = new URLSearchParams()
     if (before) params.set('before', before)
     if (statusFilter !== 'all') params.set('status', statusFilter)
     if (periodFilter !== 'all') params.set('period', periodFilter)
+    if (periodFilter === 'custom' && customFrom && customTo) {
+      params.set('from', customFrom)
+      params.set('to', customTo)
+    }
     if (query) params.set('q', query)
     const qs = params.toString()
     const res = await fetch(`/api/admin/payments${qs ? `?${qs}` : ''}`)
     if (!res.ok) throw new Error(`payments fetch failed (${res.status})`)
     return (await res.json()) as { payments: PaymentRow[]; hasMore: boolean; summary: Summary }
-  }, [query, statusFilter, periodFilter])
+  }, [query, statusFilter, periodFilter, customFrom, customTo])
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +129,8 @@ export default function AdminPaymentsPage() {
   // 목록 조회 — 기간·상태·검색어가 바뀌면 커서를 버리고 처음부터 다시 불러온다.
   useEffect(() => {
     if (!isAdmin) return
+    // 범위가 덜 채워졌거나 뒤집혔으면 조회하지 않고 이전 결과를 그대로 둔다.
+    if (!canFetch) return
     let cancelled = false
     async function load() {
       setLoadFailed(false)
@@ -138,7 +158,7 @@ export default function AdminPaymentsPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [isAdmin, fetchPage, reloadKey])
+  }, [isAdmin, fetchPage, reloadKey, canFetch])
 
   async function loadMore() {
     if (!rows.length || loadingMore) return
@@ -317,6 +337,16 @@ export default function AdminPaymentsPage() {
     return <span style={{ ...badgeStyle, color: 'var(--text-muted)' }}>{status}</span>
   }
 
+  // 기간 select와 같은 토큰. 결제 기록은 과거에만 있으므로 미래 날짜는 고를 수 없게 한다.
+  const dateInputStyle: React.CSSProperties = {
+    flexShrink: 0,
+    background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+    borderRadius: 7, padding: '5px 10px', fontSize: 12,
+    color: 'var(--text-secondary)', fontFamily: 'inherit',
+    outline: 'none',
+  }
+  const todayYmd = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
   // 재조회 중 표시 — 표를 비우고 "불러오는 중"을 띄우면 화면이 깜빡이며 스크롤이 튄다.
   // 필터는 연달아 누르는 동작이라 이전 결과가 자리를 지키는 편이 안정적이다.
   const refreshingStyle: React.CSSProperties = {
@@ -411,10 +441,33 @@ export default function AdminPaymentsPage() {
             }}>
             <option value="all">{t('adminPayments.periodAll')}</option>
             <option value="30">{t('adminPayments.period30')}</option>
-            <option value="90">{t('adminPayments.period90')}</option>
             <option value="365">{t('adminPayments.period365')}</option>
+            <option value="custom">{t('adminPayments.periodCustom')}</option>
           </select>
+          {/* 기간 선택일 때만 — 필터 줄은 flexWrap이라 모바일에서는 자연히 아래로 내려간다. */}
+          {periodFilter === 'custom' && (
+            <>
+              <input
+                type="date"
+                value={customFrom}
+                max={todayYmd}
+                onChange={e => setCustomFrom(e.target.value)}
+                style={dateInputStyle} />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>~</span>
+              <input
+                type="date"
+                value={customTo}
+                max={todayYmd}
+                onChange={e => setCustomTo(e.target.value)}
+                style={dateInputStyle} />
+            </>
+          )}
         </div>
+        {customState === 'invalid' && (
+          <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 10 }}>
+            {t('adminPayments.invalidRange')}
+          </div>
+        )}
 
         {recoverError && (
           <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 10 }}>

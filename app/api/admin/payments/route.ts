@@ -28,7 +28,7 @@ const IN_CHUNK = 150
 
 const STATUSES = ['all', 'done', 'failed', 'pending', 'canceled', 'recovery'] as const
 type StatusFilter = (typeof STATUSES)[number]
-const PERIODS = ['all', '30', '90', '365'] as const
+const PERIODS = ['all', '30', '365', 'custom'] as const
 type PeriodFilter = (typeof PERIODS)[number]
 
 type PaymentRow = {
@@ -213,7 +213,27 @@ export async function GET(request: Request) {
   const rawQuery = (searchParams.get('q') ?? '').trim()
 
   const nowMs = Date.now()
-  const periodStart = period === 'all' ? null : new Date(nowMs - Number(period) * DAY_MS).toISOString()
+
+  // === 기간 범위 ===
+  // custom은 from·to(YYYY-MM-DD)를 KST 하루 경계로 바꾼다. 화면이 KST로 시각을 보여주므로
+  // 경계도 KST여야 한다 — UTC로 자르면 하루가 밀린다. 끝은 종료일 당일을 포함해야 한다.
+  // 그러지 않으면 오늘까지로 잡았는데 오늘 결제가 안 나와 "어제까지만 나오네"가 된다.
+  let periodStart: string | null = null
+  let periodEnd: string | null = null
+  if (period === 'custom') {
+    const from = searchParams.get('from') ?? ''
+    const to = searchParams.get('to') ?? ''
+    // 화면에서 이미 막지만 서버도 스스로 방어한다. 잘못된 값은 400이 아니라 전체 기간으로 본다 —
+    // 목록이 비면 관리자가 "결제가 없구나"로 오해하기 때문이다.
+    const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+    if (isDate(from) && isDate(to) && from <= to) {
+      periodStart = `${from}T00:00:00+09:00`
+      periodEnd = `${to}T23:59:59.999+09:00`
+    }
+  } else if (period !== 'all') {
+    periodStart = new Date(nowMs - Number(period) * DAY_MS).toISOString()
+  }
+
   const recoveryWindowStart = new Date(nowMs - PERIOD_DAYS * DAY_MS).toISOString()
 
   // === 검색 조건 ===
@@ -278,6 +298,7 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE + 1) // hasMore 판별용 +1
     if (periodStart) query = query.gte('created_at', periodStart)
+    if (periodEnd) query = query.lte('created_at', periodEnd)
     if (status !== 'all') query = query.eq('status', status)
     if (before) query = query.lt('created_at', before)
     if (searchFilter.mode === 'or') query = query.or(searchFilter.expr)
@@ -374,10 +395,17 @@ export async function GET(request: Request) {
   const countQuery = serviceClient.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'done')
   const amountQuery = serviceClient.from('payments').select('amount').eq('status', 'done').limit(AMOUNT_SCAN_LIMIT)
   const failedQuery = serviceClient.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'failed')
+  // 기간을 두 끝 모두에 건다 — 시작만 걸면 custom의 종료일 이후 결제까지 집계에 섞인다.
+  const inPeriod = <T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T }>(q: T): T => {
+    let scoped = q
+    if (periodStart) scoped = scoped.gte('created_at', periodStart)
+    if (periodEnd) scoped = scoped.lte('created_at', periodEnd)
+    return scoped
+  }
   const [countResult, amountResult, failedResult] = await Promise.all([
-    periodStart ? countQuery.gte('created_at', periodStart) : countQuery,
-    periodStart ? amountQuery.gte('created_at', periodStart) : amountQuery,
-    periodStart ? failedQuery.gte('created_at', periodStart) : failedQuery,
+    inPeriod(countQuery),
+    inPeriod(amountQuery),
+    inPeriod(failedQuery),
   ])
   if (countResult.error) console.error('[admin/payments] 집계(건수) 실패:', countResult.error.message)
   if (amountResult.error) console.error('[admin/payments] 집계(금액) 실패:', amountResult.error.message)
