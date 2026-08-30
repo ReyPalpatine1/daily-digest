@@ -35,7 +35,7 @@ export default function ProfilePage() {
   const [cardLabel, setCardLabel] = useState<string | null>(null)
   // 결제 내역(최근 20건). 서버가 done·failed만 내려준다 — 미완료(pending)·청구 없는 취소분은 제외.
   const [payments, setPayments] = useState<
-    { createdAt: string; amount: number; kind: string; status: string; receiptUrl: string | null }[]
+    { createdAt: string; amount: number; kind: string; status: string; receiptUrl: string | null; refundedAt: string | null }[]
   >([])
   // 자동 갱신 해지 확인 모달 / 중복 클릭 방지
   const [showCancelRenew, setShowCancelRenew] = useState(false)
@@ -43,6 +43,11 @@ export default function ProfilePage() {
   // 카드 삭제 확인 모달 / 중복 클릭 방지
   const [showDeleteCard, setShowDeleteCard] = useState(false)
   const [cardBusy, setCardBusy] = useState(false)
+  // 환불 진행 중 / 결과 안내. 결과는 성공·실패 한 자리에 쓰고 색으로만 구분한다.
+  const [refundBusy, setRefundBusy] = useState(false)
+  const [refundNote, setRefundNote] = useState<{ text: string; failed: boolean } | null>(null)
+  // 환불 후 프로필·결제 내역을 다시 불러오기 위한 트리거.
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -72,7 +77,7 @@ export default function ProfilePage() {
       setReady(true)
     })
     return () => { cancelled = true }
-  }, [router])
+  }, [router, reloadKey])
 
   // 등록된 카드 표시명 조회. 카드가 없으면 null이고, 그 경우 카드 줄 자체를 그리지 않는다.
   useEffect(() => {
@@ -103,7 +108,7 @@ export default function ProfilePage() {
         // 조회 실패는 조용히 넘긴다 — 결제 내역 카드가 안 보일 뿐 다른 기능에는 영향이 없다.
       })
     return () => { cancelled = true }
-  }, [])
+  }, [reloadKey])
 
   // HelpPopup 반응형 분기용 (대시보드와 동일 브레이크포인트)
   useEffect(() => {
@@ -272,6 +277,52 @@ export default function ProfilePage() {
     borderRadius: 12, padding: 18, boxSizing: 'border-box',
   }
   const sectionTitle: React.CSSProperties = { fontSize: 14, fontWeight: 600, marginBottom: 10 }
+  // 환불 — 자격을 먼저 물어보고, 가능한 경우에만 확인창을 띄운다.
+  //
+  // 자격 미달 사유는 사람마다 다르고(기간 경과 / 이미 발송됨 / 결제 없음) 각각 다음 행동이
+  // 다르므로, 버튼을 감추지 않고 눌렀을 때 사유를 알려준다. 특히 체험·관리자 Pro·VIP처럼
+  // 결제 자체가 없는 사용자는 "환불할 결제 내역이 없습니다"를 봐야 납득할 수 있다.
+  //
+  // ★ 여기 판정은 안내용이다. 실제 자격은 POST가 서버에서 다시 판정한다.
+  async function requestRefund() {
+    if (refundBusy) return
+    setRefundBusy(true)
+    setRefundNote(null)
+    try {
+      const res = await fetch('/api/billing/refund')
+      const data = await res.json().catch(() => ({})) as {
+        eligible?: boolean; reason?: string
+      }
+      if (!res.ok) {
+        setRefundNote({ text: t('profile.refundFailed'), failed: true })
+        return
+      }
+      if (!data.eligible) {
+        const key =
+          data.reason === 'expired' ? 'profile.refundDeniedExpired'
+            : data.reason === 'used' ? 'profile.refundDeniedUsed'
+              : 'profile.refundDeniedNone'
+        window.alert(t(key))
+        return
+      }
+      if (!window.confirm(t('profile.refundConfirm'))) return
+
+      const postRes = await fetch('/api/billing/refund', { method: 'POST' })
+      if (!postRes.ok) {
+        setRefundNote({ text: t('profile.refundFailed'), failed: true })
+        return
+      }
+      setRefundNote({ text: t('profile.refundDone'), failed: false })
+      // 플랜·결제 내역이 바뀌었으므로 둘 다 다시 불러온다.
+      setReloadKey(key => key + 1)
+    } catch (e) {
+      console.error('[profile] 환불 요청 실패:', e)
+      setRefundNote({ text: t('profile.refundFailed'), failed: true })
+    } finally {
+      setRefundBusy(false)
+    }
+  }
+
   const btnSecondary: React.CSSProperties = {
     padding: '7px 12px', borderRadius: 7, border: '0.5px solid var(--border)',
     background: 'var(--bg-card)', color: 'var(--text-secondary)',
@@ -325,9 +376,9 @@ export default function ProfilePage() {
               <span style={{ ...sectionTitle, marginBottom: 0, marginRight: 8 }}>{t('profile.planSection')}</span>
               <UserPlanBadge plan={plan} size="md" />
             </div>
-            {plan === 'FREE'
-              ? <UpgradeButton />
-              : canExtend && (
+            {plan === 'FREE' ? <UpgradeButton /> : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {canExtend && (
                   /* 잠금 유도가 아니라 이미 Pro인 사용자의 관리 조작이므로
                      UpgradeButton(강조 CTA)이 아니라 같은 카드의 btnSecondary를 쓴다.
                      해지·카드 변경·카드 삭제와 같은 급으로 보이는 것이 맞다. */
@@ -337,7 +388,22 @@ export default function ProfilePage() {
                     {t('profile.extendPeriod')}
                   </button>
                 )}
+                {/* 유료인 사람 모두에게 보인다(체험·관리자 Pro·VIP 포함) —
+                    결제가 없는 사람도 눌러서 사유를 확인할 수 있어야 한다. */}
+                <button style={btnSecondary} disabled={refundBusy} onClick={requestRefund}>
+                  {t('profile.refundBtn')}
+                </button>
+              </div>
+            )}
           </div>
+          {refundNote && (
+            <div style={{
+              marginTop: 10, fontSize: 12,
+              color: refundNote.failed ? 'var(--warning)' : 'var(--text-secondary)',
+            }}>
+              {refundNote.text}
+            </div>
+          )}
           {/* 아랫줄: 멘트 */}
           <div style={{ marginTop: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
@@ -447,12 +513,19 @@ export default function ProfilePage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   {/* 실패 건은 청구되지 않았다 — 금액을 성공 건처럼 진하게 두지 않는다. */}
+                  {/* 환불된 건도 청구가 남아 있지 않다 — 실패 건과 같은 급으로 낮춘다. */}
                   <span style={{
                     fontSize: 13,
-                    color: p.status === 'failed' ? 'var(--text-muted)' : 'var(--text-primary)',
+                    color: p.status === 'failed' || p.refundedAt
+                      ? 'var(--text-muted)' : 'var(--text-primary)',
                   }}>
                     {won(p.amount)}
                   </span>
+                  {p.refundedAt && (
+                    <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+                      {t('profile.refunded')}
+                    </span>
+                  )}
                   {p.status === 'failed' && (
                     <span style={{ fontSize: 11.5, color: 'var(--warning)' }}>
                       {t('profile.paymentFailedLabel')}

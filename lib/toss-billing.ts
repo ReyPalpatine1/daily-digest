@@ -29,3 +29,20 @@ export async function requestCardRegistration(
     failUrl: `${returnUrl}&fail=1`,
   })
 }
+
+// ───────────────────────────────────────────────────────────────
+// 결제 취소(환불) — 토스 빌링 심사 승인 후 연결한다.
+//
+// TODO: 토스 승인 후 연결. 지금은 실결제 0건이라 검증할 수 없어 자리만 비워 둔다.
+//   붙일 때: POST https://api.tosspayments.com/v1/payments/{paymentKey}/cancel
+//            body { cancelReason }, 헤더는 lib/billing.ts의 tossAuthHeader()를 쓴다.
+//
+// ★ 붙일 때 반드시 이 파일 밖으로 옮길 것. 이 모듈은 최상단에서 토스 브라우저 SDK를
+//   import하므로 서버(Workers)에서 import하면 로드 단계에서 터진다. 취소는 서버에서만
+//   호출해야 하는 동작이므로(시크릿 키 사용) lib/billing.ts 같은 서버 안전 모듈에 둔다.
+//
+// ★ 호출 순서: 취소가 성공한 뒤에만 계정 처리(플랜 차감)와 refunded_at 기록을 한다.
+//   돈을 돌려주지 않고 계정만 내리면 최악의 사고다.
+export async function cancelPayment(_paymentKey: string, _reason: string): Promise<void> {
+  throw new Error('not_implemented')
+}

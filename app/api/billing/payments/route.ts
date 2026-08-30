@@ -26,7 +26,7 @@ export async function GET() {
 
   const { data, error } = await serviceClient
     .from('payments')
-    .select('created_at, amount, kind, status, receipt_url')
+    .select('created_at, amount, kind, status, receipt_url, refunded_at')
     .eq('user_id', user.id)
     .in('status', ['done', 'failed'])
     .order('created_at', { ascending: false })
@@ -43,6 +43,8 @@ export async function GET() {
     kind: row.kind as string,
     status: row.status as string,
     receiptUrl: (row.receipt_url as string | null) ?? null,
+    // 환불된 건도 목록에서 지우지 않는다 — 기록이 남아야 나중에 조회된다.
+    refundedAt: (row.refunded_at as string | null) ?? null,
   }))
 
   return NextResponse.json({ payments })
