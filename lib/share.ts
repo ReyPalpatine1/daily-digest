@@ -328,4 +328,44 @@ export async function cleanupExpiredShares(): Promise<void> {
   } catch (e) {
     console.error('[share] 공유 조회 기록 정리 예외:', e)
   }
+
+  // 신고 기록(share_reports)은 처리·반복 위반 확인 목적으로 1년만 보관한다(개인정보처리방침 제3조 6항).
+  // 신고 접수 시점의 공유 메모 원문을 담고 있어 기간이 지나면 남겨둘 근거가 없다.
+  // 별도 try/catch — 여기서 실패해도 앞뒤 정리에는 영향이 없다.
+  try {
+    const reportCutoff = new Date(Date.now() - 365 * 24 * 3600_000).toISOString()
+    const { data, error } = await getSupabase()
+      .from('share_reports')
+      .delete()
+      .lt('created_at', reportCutoff)
+      .select('id')
+    if (error) {
+      console.error(`[share] 신고 기록 정리 실패: ${error.message}`)
+    } else {
+      console.log(`[share] 신고 기록 정리: ${data?.length ?? 0}건 삭제`)
+    }
+  } catch (e) {
+    console.error('[share] 신고 기록 정리 예외:', e)
+  }
+
+  // 광고 클릭(ad_clicks)은 90일이 지나면 식별 정보만 지운다(개인정보처리방침 제3조 7항).
+  // ★ 행을 지우지 않는다 — slot·source·is_bot·clicked_at은 광고 성과 집계에 계속 쓰이므로,
+  //   행째 지우면 과거 광고 성과가 통째로 사라진다.
+  // visitor_hash is not null 조건이 반드시 있어야 이미 정리된 행을 매번 다시 갱신하지 않는다.
+  try {
+    const adCutoff = new Date(Date.now() - 90 * 24 * 3600_000).toISOString()
+    const { data, error } = await getSupabase()
+      .from('ad_clicks')
+      .update({ visitor_hash: null, user_agent: null })
+      .lt('clicked_at', adCutoff)
+      .not('visitor_hash', 'is', null)
+      .select('id')
+    if (error) {
+      console.error(`[share] 광고 클릭 식별정보 정리 실패: ${error.message}`)
+    } else {
+      console.log(`[share] 광고 클릭 식별정보 정리: ${data?.length ?? 0}건 익명화`)
+    }
+  } catch (e) {
+    console.error('[share] 광고 클릭 식별정보 정리 예외:', e)
+  }
 }
