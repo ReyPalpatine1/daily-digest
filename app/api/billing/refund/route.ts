@@ -12,9 +12,6 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 // 환불 후 남는 이용 기간(ISO). 이 결제가 부여한 30일을 만료일에서 빼고,
 // 그러고도 지금보다 미래면 그 시각을, 아니면 null(즉시 무료 전환)을 돌려준다.
-//
-// ★ 안내(GET)와 실제 처리(POST)가 같은 함수를 쓴다. 같은 계산을 두 곳에 따로 쓰면
-//   확인창이 알려준 날짜와 실제 결과가 어긋난다.
 function refundedExpiresAt(planExpiresAt: string | null, nowMs: number): string | null {
   const expiresMs = planExpiresAt ? Date.parse(planExpiresAt) : NaN
   // 만료일이 없거나 깨져 있으면 남은 기간을 계산할 수 없다 — 차감 결과를 0으로 보아 내린다.
@@ -40,15 +37,15 @@ export async function GET() {
   if (!eligibility.ok) {
     return NextResponse.json({ eligible: false, reason: eligibility.reason })
   }
-  // 확인창이 "환불하면 언제까지 남는지"와 "자동 갱신도 함께 해지되는지"를 말해야 하므로
-  // 자격이 있을 때만 계정 상태를 함께 본다.
+  // 확인창이 "자동 갱신도 함께 해지되는지"를 말해야 하므로 자격이 있을 때만 계정 상태를 함께 본다.
+  // 환불 후 만료일은 내려보내지 않는다 — 창을 닫으면 프로필 플랜 카드에서 바로 확인된다.
   const { data: profile, error: profileError } = await serviceClient
     .from('profiles')
-    .select('plan_status, plan_expires_at')
+    .select('plan_status')
     .eq('id', user.id)
     .single()
   if (profileError || !profile) {
-    // 안내 값만 못 채우는 것이라 자격 판정은 그대로 내려준다 — 확인창의 잔여 기간 줄만 빠진다.
+    // 안내 값만 못 채우는 것이라 자격 판정은 그대로 내려준다(자동 갱신 문구만 1개월권용이 된다).
     console.error('[billing/refund] 프로필 조회 실패:', user.id, profileError?.message)
   }
 
@@ -57,7 +54,6 @@ export async function GET() {
     amount: eligibility.payment.amount,
     paidAt: eligibility.payment.createdAt,
     isAutoRenew: profile?.plan_status === 'active',
-    expiresAfter: refundedExpiresAt((profile?.plan_expires_at as string | null) ?? null, Date.now()),
   })
 }
 

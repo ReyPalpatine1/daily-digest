@@ -54,7 +54,6 @@ export default function ProfilePage() {
     reason: string | null
     amount: number | null
     paidAt: string | null
-    expiresAfter: string | null
     isAutoRenew: boolean
   } | null>(null)
   // 환불 후 프로필·결제 내역을 다시 불러오기 위한 트리거.
@@ -303,7 +302,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/billing/refund')
       const data = await res.json().catch(() => ({})) as {
         eligible?: boolean; reason?: string
-        amount?: number; paidAt?: string; expiresAfter?: string | null; isAutoRenew?: boolean
+        amount?: number; paidAt?: string; isAutoRenew?: boolean
       }
       if (!res.ok) {
         setRefundNote({ text: t('profile.refundFailed'), failed: true })
@@ -314,7 +313,6 @@ export default function ProfilePage() {
         reason: data.reason ?? null,
         amount: typeof data.amount === 'number' ? data.amount : null,
         paidAt: data.paidAt ?? null,
-        expiresAfter: data.expiresAfter ?? null,
         isAutoRenew: !!data.isAutoRenew,
       })
     } catch (e) {
@@ -611,7 +609,6 @@ export default function ProfilePage() {
           reason={refundModal.reason}
           amount={refundModal.amount}
           paidAt={refundModal.paidAt}
-          expiresAfter={refundModal.expiresAfter}
           isAutoRenew={refundModal.isAutoRenew}
           busy={refundBusy}
           onConfirm={confirmRefund}

@@ -3,13 +3,14 @@
 // 환불 확인 모달.
 //
 // window.confirm/alert을 쓰지 않는 이유: 브라우저 기본창은 도메인 머리말이 붙고,
-// 결제일·금액·환불 후 남는 기간 같은 구체적인 정보를 함께 보여줄 수 없다.
-// 환불은 되돌릴 수 없는 조작이라 무엇이 어떻게 되는지가 창 안에 다 있어야 한다.
+// 결제일·금액 같은 구체적인 정보를 함께 보여줄 수 없다. 환불은 되돌릴 수 없는
+// 조작이라 무엇이 어떻게 되는지가 창 안에 다 있어야 한다.
 //
 // 오버레이 구조·z-index는 ReportModal과 동일 규칙(fixed inset 0 / zIndex 200 /
 // 배경 클릭 시 닫힘 / lucide X 닫기 버튼). 단 ReportModal은 외부인용 한국어 고정
 // 페이지의 모달이라 문구를 직접 쓰지만, 이 모달은 로그인 사용자용이라 t()를 쓴다.
 import type { CSSProperties } from 'react'
+import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
@@ -19,8 +20,6 @@ type Props = {
   reason?: string | null
   amount?: number | null
   paidAt?: string | null
-  // 환불 후 남는 이용 기간(ISO). null이면 즉시 무료 전환이라 그 줄을 그리지 않는다.
-  expiresAfter?: string | null
   isAutoRenew?: boolean
   onConfirm: () => void
   onClose: () => void
@@ -28,13 +27,14 @@ type Props = {
 }
 
 export default function RefundModal({
-  eligible, reason, amount, paidAt, expiresAfter, isAutoRenew, onConfirm, onClose, busy,
+  eligible, reason, amount, paidAt, isAutoRenew, onConfirm, onClose, busy,
 }: Props) {
   const { t, locale } = useTranslation()
+  const router = useRouter()
 
   const dateLocale =
     locale === 'ko' ? 'ko-KR' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US'
-  // 결제·만료 시각은 KST 기준이다 — 사용자의 기기 타임존을 따르면 결제일이 하루 어긋나 보인다.
+  // 결제 시각은 KST 기준이다 — 사용자의 기기 타임존을 따르면 결제일이 하루 어긋나 보인다.
   const formatKstDate = (iso: string) =>
     new Date(iso).toLocaleDateString(dateLocale, {
       timeZone: 'Asia/Seoul',
@@ -64,6 +64,12 @@ export default function RefundModal({
     background: 'var(--text-primary)', color: 'var(--bg-card)',
     cursor: busy ? 'default' : 'pointer',
     opacity: busy ? 0.5 : 1,
+  }
+  // 자격 없음 화면의 두 링크 — 문구와 같은 급으로 조용히 두되 눌리는 것으로 읽혀야 한다.
+  const linkStyle: CSSProperties = {
+    background: 'transparent', border: 'none', padding: 0,
+    fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'inherit',
+    cursor: 'pointer', textDecoration: 'underline',
   }
 
   return (
@@ -115,30 +121,34 @@ export default function RefundModal({
 
         {eligible ? (
           <>
-            {/* 어느 결제를 무르는지 — 결제일과 금액을 그대로 보여준다. */}
+            {/* 묻는 말이 먼저 온다 — 무엇을 승낙하는 창인지가 맨 위에 있어야 한다. */}
+            <div style={{
+              fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.7,
+            }}>
+              {t('profile.refundConfirmQ')}
+            </div>
+
+            {/* 어느 결제를 무르는지 — 금액이 이 창에서 가장 중요한 숫자라 날짜와 크기를 나눈다. */}
             {paidAt && typeof amount === 'number' && (
               <div style={{
                 background: 'var(--bg-subtle)', borderRadius: 8,
-                padding: '10px 12px', marginBottom: 14,
-                fontSize: 13, color: 'var(--text-primary)',
+                padding: '12px 14px', margin: '12px 0 14px',
               }}>
-                {formatKstDate(paidAt)} · {won(amount)}
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  {formatKstDate(paidAt)}
+                </div>
+                <div style={{
+                  fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2,
+                }}>
+                  {won(amount)}
+                </div>
               </div>
             )}
 
+            {/* 승낙하면 계정이 어떻게 되는지 — 자동 갱신 해지 여부가 갈린다. */}
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
               {isAutoRenew ? t('profile.refundConfirmAuto') : t('profile.refundConfirm')}
             </div>
-
-            {/* 차감 후에도 기간이 남는 경우에만. "30일이 차감됩니다"만으로는
-                며칠이 남는지 사용자가 직접 계산해야 한다. */}
-            {expiresAfter && (
-              <div style={{
-                marginTop: 8, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7,
-              }}>
-                {t('profile.refundRemainAfter', { date: formatKstDate(expiresAfter) })}
-              </div>
-            )}
 
             <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
               <button type="button" onClick={onClose} disabled={busy} style={cancelBtn}>
@@ -155,6 +165,25 @@ export default function RefundModal({
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
               {t(deniedKey)}
             </div>
+
+            {/* 자동 환불이 막혔다고 해서 길이 끊기면 안 된다 — 문의 창구와 환불정책으로
+                이 화면에서 바로 닿게 둔다(전자상거래법 제21조 제1항 제1호). */}
+            <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => { onClose(); router.push('/feedback') }}
+                style={linkStyle}>
+                {t('profile.refundContactCta')}
+              </button>
+              <a
+                href="/refund"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ...linkStyle, cursor: 'pointer' }}>
+                {t('settings.refund')}
+              </a>
+            </div>
+
             <div style={{ display: 'flex', marginTop: 20 }}>
               <button type="button" onClick={onClose} style={cancelBtn}>
                 {t('common.close')}
