@@ -40,6 +40,9 @@ type PaymentRow = {
   isLatestForUser: boolean
   recoveredAt: string | null
   recoveredBy: string | null
+  // 환불한 결제. 환불로 내린 계정은 "결제는 성공인데 지금 무료"라 Pro 전환 실패와
+  // 모양이 같다 — 이 값이 있으면 복구 대상에서 빼고 결과를 "환불됨"으로 보여준다.
+  refundedAt: string | null
 }
 
 type Summary = { count: number; amount: number; failed: number; mismatch: number }
@@ -226,10 +229,11 @@ export default function AdminPaymentsPage() {
       if (!res.ok || !data.ok) {
         const errorKey =
           data.error === 'already_recovered' ? 'adminPayments.recoverErrAlreadyRecovered'
-            : data.error === 'already_applied' ? 'adminPayments.recoverErrAlreadyApplied'
-              : data.error === 'vip' ? 'adminPayments.recoverErrVip'
-                : data.error === 'not_paid' ? 'adminPayments.recoverErrNotPaid'
-                  : 'adminPayments.recoverFailed'
+            : data.error === 'refunded' ? 'adminPayments.recoverErrRefunded'
+              : data.error === 'already_applied' ? 'adminPayments.recoverErrAlreadyApplied'
+                : data.error === 'vip' ? 'adminPayments.recoverErrVip'
+                  : data.error === 'not_paid' ? 'adminPayments.recoverErrNotPaid'
+                    : 'adminPayments.recoverFailed'
         setRecoverError(t(errorKey))
         return
       }
@@ -516,7 +520,17 @@ export default function AdminPaymentsPage() {
                         {row.kind === 'auto' ? t('adminPayments.kindAuto') : t('adminPayments.kindOnetime')}
                         {/* 화살표는 "결제와 결과가 어긋난 경우"에만 쓴다. 만료·해지·결제 실패는
                             정상 동작이라 붙이지 않는다 — 붙이면 화살표가 신호이기를 그만둔다. */}
-                        {row.needsRecovery ? (
+                        {/* 환불이 먼저다 — 환불로 내린 계정을 "Pro 적용 실패"로 보여주면
+                            관리자가 복구를 눌러 돈은 돌려준 채 Pro를 다시 주게 된다.
+                            환불은 정상 처리 결과라 경고색(danger)을 쓰지 않는다. */}
+                        {row.refundedAt ? (
+                          <>
+                            {' → '}
+                            <span style={{ color: 'var(--text-tertiary)' }}>
+                              {t('adminPayments.outcomeRefunded')}
+                            </span>
+                          </>
+                        ) : row.needsRecovery ? (
                           <>
                             {' → '}
                             <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
@@ -562,7 +576,8 @@ export default function AdminPaymentsPage() {
                       )}
                     </td>
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                      {row.needsRecovery ? (
+                      {/* 환불 건은 복구 대상도, 복구된 것도 아니다 — 어느 쪽 표시도 붙이지 않는다. */}
+                      {row.refundedAt ? noData : row.needsRecovery ? (
                         <button
                           onClick={() => recover(row)}
                           disabled={recoveringId !== null}

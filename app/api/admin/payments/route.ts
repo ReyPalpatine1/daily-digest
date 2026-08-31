@@ -23,6 +23,11 @@ const AMOUNT_SCAN_LIMIT = 10000
 const RECOVERY_SCAN_LIMIT = 1000
 // "그 사용자의 최근 결제" 판정을 위해 훑을 상한.
 const LATEST_SCAN_LIMIT = 2000
+// "결제 후 발송" 칸이 세는 발송 유형. lib/refund-eligibility.ts의 USAGE_LOG_TYPES와 같은 기준이다 —
+// 이 숫자가 환불 가부 판단의 근거라 기준이 어긋나면 관리자가 잘못 판단한다
+// (속보만 받은 사람이 화면에서 0건으로 보이면 환불해도 되는 건으로 읽힌다).
+const SENT_LOG_TYPES = ['digest', 'breaking', 'preview']
+
 // PostgREST .in() 은 id를 URL에 싣는다 — uuid 150개면 약 5.5KB로, 헤더 한도 안에 들어간다.
 const IN_CHUNK = 150
 
@@ -43,6 +48,7 @@ type PaymentRow = {
   created_at: string
   recovered_at: string | null
   recovered_by: string | null
+  refunded_at: string | null
 }
 
 type ProfileInfo = {
@@ -120,7 +126,7 @@ async function loadLatestPaymentIds(
 }
 
 const PAYMENT_COLUMNS =
-  'id, user_id, order_id, amount, kind, status, receipt_url, fail_code, created_at, recovered_at, recovered_by'
+  'id, user_id, order_id, amount, kind, status, receipt_url, fail_code, created_at, recovered_at, recovered_by, refunded_at'
 
 // 프로필을 청크로 나눠 조회한다 — id가 많으면 .in()의 URL이 헤더 한도를 넘는다.
 async function loadProfiles(
@@ -155,6 +161,10 @@ async function loadProfiles(
 function isNeedsRecovery(row: PaymentRow, profile: ProfileInfo | undefined, nowMs: number): boolean {
   if (row.status !== 'done') return false
   if (row.recovered_at) return false
+  // 환불한 결제는 복구 대상이 아니다. 환불로 내린 계정은 "결제는 성공인데 지금 무료"라
+  // 사고로 Pro가 안 켜진 계정과 화면상 구분되지 않는다 — 이 검사가 없으면 복구 버튼이 떠서
+  // 환불해 준 사람에게 Pro를 다시 주게 된다.
+  if (row.refunded_at) return false
   const paidMs = Date.parse(row.created_at)
   if (Number.isNaN(paidMs)) return false
   // 이미 30일이 지난 결제는 free인 것이 정상이다.
@@ -323,7 +333,8 @@ export async function GET(request: Request) {
   ])
 
   // === 결제 후 발송 건수 ===
-  // 환불 정책이 "결제 7일 내 + 다이제스트 미발송이면 전액"이라 이 숫자가 환불 가부를 가른다.
+  // 환불 정책이 "결제 7일 내 + 유료 발송 없음이면 전액"이라 이 숫자가 환불 가부를 가른다.
+  // 세는 유형은 SENT_LOG_TYPES — 환불 자격 판정(lib/refund-eligibility.ts)과 같은 기준이다.
   // done이 아닌 결제는 애초에 청구가 없어 대상이 아니므로 null로 둔다.
   const doneRows = page.filter(row => row.status === 'done')
   const sentAfterMap = new Map<string, number>()
@@ -338,7 +349,7 @@ export async function GET(request: Request) {
       .from('email_logs')
       .select('user_id, sent_at')
       .in('user_id', doneUserIds)
-      .eq('type', 'digest')
+      .in('type', SENT_LOG_TYPES)
       .eq('status', 'success')
       .gt('sent_at', oldestPaidAt)
       .limit(SENT_LOG_LIMIT)
@@ -388,6 +399,7 @@ export async function GET(request: Request) {
       isLatestForUser: latestPaymentIds.has(row.id),
       recoveredAt: row.recovered_at ?? null,
       recoveredBy: row.recovered_by ?? null,
+      refundedAt: row.refunded_at ?? null,
     }
   })
 

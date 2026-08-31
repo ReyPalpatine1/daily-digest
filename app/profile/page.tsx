@@ -11,6 +11,7 @@ import { AppHeader } from '@/components/AppHeader'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import HelpPopup from '@/components/HelpPopup'
+import RefundModal from '@/components/RefundModal'
 import { AlertTriangle, CreditCard, ExternalLink } from 'lucide-react'
 import { requestCardRegistration } from '@/lib/toss-billing'
 
@@ -46,6 +47,16 @@ export default function ProfilePage() {
   // 환불 진행 중 / 결과 안내. 결과는 성공·실패 한 자리에 쓰고 색으로만 구분한다.
   const [refundBusy, setRefundBusy] = useState(false)
   const [refundNote, setRefundNote] = useState<{ text: string; failed: boolean } | null>(null)
+  // 환불 확인 모달. 자격 조회(GET) 결과를 그대로 담아 열고, 확인하면 POST를 쏜다.
+  // 서버가 거절하면 창을 닫지 않고 이 값을 자격 없음으로 바꿔 사유를 그 자리에서 보여준다.
+  const [refundModal, setRefundModal] = useState<{
+    eligible: boolean
+    reason: string | null
+    amount: number | null
+    paidAt: string | null
+    expiresAfter: string | null
+    isAutoRenew: boolean
+  } | null>(null)
   // 환불 후 프로필·결제 내역을 다시 불러오기 위한 트리거.
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -277,7 +288,7 @@ export default function ProfilePage() {
     borderRadius: 12, padding: 18, boxSizing: 'border-box',
   }
   const sectionTitle: React.CSSProperties = { fontSize: 14, fontWeight: 600, marginBottom: 10 }
-  // 환불 — 자격을 먼저 물어보고, 가능한 경우에만 확인창을 띄운다.
+  // 환불 — 자격을 먼저 물어보고, 그 결과를 그대로 확인 모달에 넘긴다.
   //
   // 자격 미달 사유는 사람마다 다르고(기간 경과 / 이미 발송됨 / 결제 없음) 각각 다음 행동이
   // 다르므로, 버튼을 감추지 않고 눌렀을 때 사유를 알려준다. 특히 체험·관리자 Pro·VIP처럼
@@ -292,31 +303,58 @@ export default function ProfilePage() {
       const res = await fetch('/api/billing/refund')
       const data = await res.json().catch(() => ({})) as {
         eligible?: boolean; reason?: string
+        amount?: number; paidAt?: string; expiresAfter?: string | null; isAutoRenew?: boolean
       }
       if (!res.ok) {
         setRefundNote({ text: t('profile.refundFailed'), failed: true })
         return
       }
-      if (!data.eligible) {
-        const key =
-          data.reason === 'expired' ? 'profile.refundDeniedExpired'
-            : data.reason === 'used' ? 'profile.refundDeniedUsed'
-              : 'profile.refundDeniedNone'
-        window.alert(t(key))
+      setRefundModal({
+        eligible: !!data.eligible,
+        reason: data.reason ?? null,
+        amount: typeof data.amount === 'number' ? data.amount : null,
+        paidAt: data.paidAt ?? null,
+        expiresAfter: data.expiresAfter ?? null,
+        isAutoRenew: !!data.isAutoRenew,
+      })
+    } catch (e) {
+      console.error('[profile] 환불 자격 조회 실패:', e)
+      setRefundNote({ text: t('profile.refundFailed'), failed: true })
+    } finally {
+      setRefundBusy(false)
+    }
+  }
+
+  // 환불 실행 — 모달의 '환불하기'.
+  // 서버가 자격을 다시 판정하므로(그 사이 발송됐거나 기간이 지났을 수 있다) 409는 실패가
+  // 아니라 사유가 있는 거절이다 — 창을 닫지 않고 자격 없음으로 바꿔 그 자리에서 알린다.
+  async function confirmRefund() {
+    if (refundBusy) return
+    setRefundBusy(true)
+    setRefundNote(null)
+    try {
+      const res = await fetch('/api/billing/refund', { method: 'POST' })
+      const data = await res.json().catch(() => ({})) as {
+        ok?: boolean; error?: string; reason?: string
+      }
+      if (res.status === 409) {
+        // 이미 환불된 결제(refunded)는 무를 대상이 남아 있지 않다는 뜻이라 '결제 없음'으로 안내한다.
+        const reason = data.error === 'refunded' ? 'no_payment' : (data.reason ?? 'no_payment')
+        setRefundModal(prev => (prev ? { ...prev, eligible: false, reason } : prev))
         return
       }
-      if (!window.confirm(t('profile.refundConfirm'))) return
-
-      const postRes = await fetch('/api/billing/refund', { method: 'POST' })
-      if (!postRes.ok) {
+      if (!res.ok || !data.ok) {
+        setRefundModal(null)
         setRefundNote({ text: t('profile.refundFailed'), failed: true })
         return
       }
+      setRefundModal(null)
       setRefundNote({ text: t('profile.refundDone'), failed: false })
       // 플랜·결제 내역이 바뀌었으므로 둘 다 다시 불러온다.
       setReloadKey(key => key + 1)
     } catch (e) {
       console.error('[profile] 환불 요청 실패:', e)
+      setRefundModal(null)
       setRefundNote({ text: t('profile.refundFailed'), failed: true })
     } finally {
       setRefundBusy(false)
@@ -565,6 +603,21 @@ export default function ProfilePage() {
           </button>
         </div>
       </main>
+
+      {/* === 환불 확인 모달 === */}
+      {refundModal && (
+        <RefundModal
+          eligible={refundModal.eligible}
+          reason={refundModal.reason}
+          amount={refundModal.amount}
+          paidAt={refundModal.paidAt}
+          expiresAfter={refundModal.expiresAfter}
+          isAutoRenew={refundModal.isAutoRenew}
+          busy={refundBusy}
+          onConfirm={confirmRefund}
+          onClose={() => { if (!refundBusy) setRefundModal(null) }}
+        />
+      )}
 
       {/* === 카드 삭제 확인 모달 === */}
       {showDeleteCard && (

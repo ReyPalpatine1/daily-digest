@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   // 1. 결제 조회
   const { data: payment, error: paymentError } = await serviceClient
     .from('payments')
-    .select('id, user_id, kind, status, created_at, recovered_at')
+    .select('id, user_id, kind, status, created_at, recovered_at, refunded_at')
     .eq('id', paymentId)
     .maybeSingle()
   if (paymentError) {
@@ -76,6 +76,14 @@ export async function POST(request: Request) {
   // 3. 이중 적용 잠금 — 복구는 30일을 새로 붙이므로 두 번 누르면 60일이 된다.
   if (payment.recovered_at) {
     return NextResponse.json({ error: 'already_recovered' }, { status: 409 })
+  }
+
+  // 3-1. 환불한 결제는 복구 대상이 아니다.
+  //      환불로 내린 계정은 "결제는 성공인데 지금 무료"라 Pro 전환 실패와 구분되지 않는다.
+  //      화면(needsRecovery)이 이미 걸러내지만, 이 요청은 남의 플랜을 바꾸므로 서버도 막는다 —
+  //      복구하면 돈은 돌려준 채 Pro를 다시 주게 된다.
+  if (payment.refunded_at) {
+    return NextResponse.json({ error: 'refunded' }, { status: 409 })
   }
 
   // 4. 프로필 조회

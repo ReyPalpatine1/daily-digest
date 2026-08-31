@@ -10,6 +10,19 @@ import { checkRefundEligibility, REFUND_PERIOD_DAYS } from '@/lib/refund-eligibi
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+// 환불 후 남는 이용 기간(ISO). 이 결제가 부여한 30일을 만료일에서 빼고,
+// 그러고도 지금보다 미래면 그 시각을, 아니면 null(즉시 무료 전환)을 돌려준다.
+//
+// ★ 안내(GET)와 실제 처리(POST)가 같은 함수를 쓴다. 같은 계산을 두 곳에 따로 쓰면
+//   확인창이 알려준 날짜와 실제 결과가 어긋난다.
+function refundedExpiresAt(planExpiresAt: string | null, nowMs: number): string | null {
+  const expiresMs = planExpiresAt ? Date.parse(planExpiresAt) : NaN
+  // 만료일이 없거나 깨져 있으면 남은 기간을 계산할 수 없다 — 차감 결과를 0으로 보아 내린다.
+  if (Number.isNaN(expiresMs)) return null
+  const reducedMs = expiresMs - REFUND_PERIOD_DAYS * DAY_MS
+  return reducedMs > nowMs ? new Date(reducedMs).toISOString() : null
+}
+
 // 자격 조회 — 화면이 버튼을 어떻게 그릴지(그리고 어떤 안내를 띄울지) 정하는 데만 쓴다.
 export async function GET() {
   // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로 핸들러 안에서 읽는다.
@@ -27,10 +40,24 @@ export async function GET() {
   if (!eligibility.ok) {
     return NextResponse.json({ eligible: false, reason: eligibility.reason })
   }
+  // 확인창이 "환불하면 언제까지 남는지"와 "자동 갱신도 함께 해지되는지"를 말해야 하므로
+  // 자격이 있을 때만 계정 상태를 함께 본다.
+  const { data: profile, error: profileError } = await serviceClient
+    .from('profiles')
+    .select('plan_status, plan_expires_at')
+    .eq('id', user.id)
+    .single()
+  if (profileError || !profile) {
+    // 안내 값만 못 채우는 것이라 자격 판정은 그대로 내려준다 — 확인창의 잔여 기간 줄만 빠진다.
+    console.error('[billing/refund] 프로필 조회 실패:', user.id, profileError?.message)
+  }
+
   return NextResponse.json({
     eligible: true,
     amount: eligibility.payment.amount,
     paidAt: eligibility.payment.createdAt,
+    isAutoRenew: profile?.plan_status === 'active',
+    expiresAfter: refundedExpiresAt((profile?.plan_expires_at as string | null) ?? null, Date.now()),
   })
 }
 
@@ -79,18 +106,17 @@ export async function POST() {
   }
 
   const nowMs = Date.now()
-  const expiresMs = profile.plan_expires_at ? Date.parse(profile.plan_expires_at as string) : NaN
-  // 만료일이 없거나 깨져 있으면 남은 기간을 계산할 수 없다 — 차감 결과를 0으로 보아 내린다.
-  const reducedMs = Number.isNaN(expiresMs) ? 0 : expiresMs - REFUND_PERIOD_DAYS * DAY_MS
+  // GET(확인창 안내)과 같은 함수로 계산한다 — 안내한 날짜와 실제 결과가 어긋나지 않게.
+  const expiresAfter = refundedExpiresAt((profile.plan_expires_at as string | null) ?? null, nowMs)
 
   // 자동 갱신 중이었다면 함께 해지한다. 카드를 남기는 것은 기존 해지 기능과 같다 —
   // 환불은 그 결제를 무르는 것이지 계정을 정리하는 것이 아니다.
   const cancelAutoRenew = profile.plan_status === 'active'
 
   // 차감하고도 기간이 남으면 Pro를 유지한다(1개월권을 이어 붙여 기간이 쌓인 경우).
-  const update: Record<string, unknown> = reducedMs > nowMs
+  const update: Record<string, unknown> = expiresAfter
     ? {
-        plan_expires_at: new Date(reducedMs).toISOString(),
+        plan_expires_at: expiresAfter,
         ...(cancelAutoRenew ? { plan_status: 'onetime', cancel_at_period_end: false } : {}),
       }
     : {
@@ -128,7 +154,7 @@ export async function POST() {
 
   console.log(
     `[billing/refund] 환불 완료: user=${user.id} payment=${payment.id} amount=${payment.amount} ` +
-    `expiresAfter=${reducedMs > nowMs ? new Date(reducedMs).toISOString() : 'free(즉시 종료)'}`,
+    `expiresAfter=${expiresAfter ?? 'free(즉시 종료)'}`,
   )
 
   return NextResponse.json({ ok: true })
