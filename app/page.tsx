@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Mail } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { captureSignupRef } from '@/lib/signup-ref'
 
 // 전화번호 조각 (스팸 수집기 방어: 완성 문자열을 소스·초기 DOM에 두지 않음)
-const PHONE_PARTS = ['010', '8791', '9498'] // ← 배포 시 실제 번호 조각으로 교체
+const PHONE_PARTS = ['010', '8791', '9498']
 
 export default function Home() {
   const { t } = useTranslation()
@@ -263,11 +264,11 @@ export default function Home() {
           display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
-            <a href="/terms" style={footerLinkStyle}>{t('settings.terms')}</a>
+            <Link href="/terms" style={footerLinkStyle}>{t('settings.terms')}</Link>
             <span aria-hidden="true">·</span>
-            <a href="/privacy" style={footerLinkStyle}>{t('settings.privacy')}</a>
+            <Link href="/privacy" style={footerLinkStyle}>{t('settings.privacy')}</Link>
             <span aria-hidden="true">·</span>
-            <a href="/refund" style={footerLinkStyle}>{t('settings.refund')}</a>
+            <Link href="/refund" style={footerLinkStyle}>{t('settings.refund')}</Link>
           </div>
           {/* 사업자 정보 (법정 표기 — 언어 설정과 무관하게 한국어 고정) */}
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.8, textAlign: 'center' }}>
