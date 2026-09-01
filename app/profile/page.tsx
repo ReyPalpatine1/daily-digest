@@ -440,14 +440,19 @@ export default function ProfilePage() {
               {refundNote.text}
             </div>
           )}
-          {/* 아랫줄: 멘트 */}
-          <div style={{ marginTop: 10 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-              {plan === 'PRO'
-                ? `${t('profile.expiresAt')}: ${expiresLabel}`
-                : t('profile.freeUpsell')}
-            </span>
-          </div>
+          {/* 아랫줄: 멘트 — 환불 안내가 떠 있는 동안에는 그리지 않는다.
+              방금 환불한 사람에게 업그레이드를 권하는 꼴이 되고, 만료일도 환불 안내와
+              겹쳐 읽힌다. 새로고침하면 refundNote가 사라져 원래 문구가 돌아온다.
+              (refundNote를 타이머로 지우지 않는다 — 실패 문구도 같은 자리를 쓴다.) */}
+          {!refundNote && (
+            <div style={{ marginTop: 10 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                {plan === 'PRO'
+                  ? `${t('profile.expiresAt')}: ${expiresLabel}`
+                  : t('profile.freeUpsell')}
+              </span>
+            </div>
+          )}
 
           {/* 자동 갱신 상태 — plan_status='active'일 때만 의미가 있다.
               1개월권(onetime)·체험(trialing)은 애초에 갱신되지 않으므로 이 영역을 그리지 않는다. */}
@@ -459,7 +464,7 @@ export default function ProfilePage() {
             }}>
               <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
                 {profile.cancel_at_period_end
-                  ? t('profile.autoRenewOff', { date: expiresLabel })
+                  ? t('profile.autoRenewOff')
                   : t('profile.autoRenewOn')}
               </span>
               {/* 안내 문장이 길어 줄바꿈되면 버튼만 왼쪽으로 떨어진다 —
