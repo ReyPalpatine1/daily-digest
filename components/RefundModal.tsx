@@ -123,7 +123,7 @@ export default function RefundModal({
           <>
             {/* 묻는 말이 먼저 온다 — 무엇을 승낙하는 창인지가 맨 위에 있어야 한다. */}
             <div style={{
-              fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.7,
+              fontSize: 14, fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1.7,
             }}>
               {t('profile.refundConfirmQ')}
             </div>
@@ -168,12 +168,12 @@ export default function RefundModal({
 
             {/* 자동 환불이 막혔다고 해서 길이 끊기면 안 된다 — 문의 창구와 환불정책으로
                 이 화면에서 바로 닿게 둔다(전자상거래법 제21조 제1항 제1호). */}
-            <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => { onClose(); router.push('/feedback') }}
                 style={linkStyle}>
-                {t('profile.refundContactCta')}
+                {t('feedback.title')}
               </button>
               <a
                 href="/refund"

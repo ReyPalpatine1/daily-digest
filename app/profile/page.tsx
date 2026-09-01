@@ -462,16 +462,20 @@ export default function ProfilePage() {
                   ? t('profile.autoRenewOff', { date: expiresLabel })
                   : t('profile.autoRenewOn')}
               </span>
-              {profile.cancel_at_period_end ? (
-                <button style={btnSecondary} disabled={renewBusy} onClick={() => setAutoRenew(false)}>
-                  {t('profile.resumeAutoRenew')}
-                </button>
-              ) : (
-                /* 실수로 해지되지 않도록 확인 단계를 둔다(탈퇴 모달과 같은 패턴). */
-                <button style={btnSecondary} disabled={renewBusy} onClick={() => setShowCancelRenew(true)}>
-                  {t('profile.cancelAutoRenew')}
-                </button>
-              )}
+              {/* 안내 문장이 길어 줄바꿈되면 버튼만 왼쪽으로 떨어진다 —
+                  남은 폭을 채우고 flex-end로 붙여 같은 카드의 환불·카드 버튼과 축을 맞춘다. */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', flexGrow: 1 }}>
+                {profile.cancel_at_period_end ? (
+                  <button style={btnSecondary} disabled={renewBusy} onClick={() => setAutoRenew(false)}>
+                    {t('profile.resumeAutoRenew')}
+                  </button>
+                ) : (
+                  /* 실수로 해지되지 않도록 확인 단계를 둔다(탈퇴 모달과 같은 패턴). */
+                  <button style={btnSecondary} disabled={renewBusy} onClick={() => setShowCancelRenew(true)}>
+                    {t('profile.cancelAutoRenew')}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
