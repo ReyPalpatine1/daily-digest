@@ -168,7 +168,7 @@ export default function RefundModal({
 
             {/* 자동 환불이 막혔다고 해서 길이 끊기면 안 된다 — 문의 창구와 환불정책으로
                 이 화면에서 바로 닿게 둔다(전자상거래법 제21조 제1항 제1호). */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => { onClose(); router.push('/feedback') }}

@@ -459,14 +459,19 @@ export default function ProfilePage() {
           {profile?.plan_status === 'active' && (
             <div style={{
               marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              display: 'flex', alignItems: 'center',
+              // 해지 상태에는 왼쪽 문장이 없다 — 버튼만 남으므로 오른쪽으로 붙인다.
+              justifyContent: profile.cancel_at_period_end ? 'flex-end' : 'space-between',
               gap: 12, flexWrap: 'wrap',
             }}>
-              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                {profile.cancel_at_period_end
-                  ? t('profile.autoRenewOff')
-                  : t('profile.autoRenewOn')}
-              </span>
+              {/* 해지 상태에서는 문장을 두지 않는다 — 만료일이 바로 위에 이미 있어
+                  정보를 더하지 못하고, 지시어만 남아 기준점이 흐려진다.
+                  줄 자체(구분선·여백)는 유지해야 아래 카드 줄과 붙지 않는다. */}
+              {!profile.cancel_at_period_end && (
+                <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  {t('profile.autoRenewOn')}
+                </span>
+              )}
               {/* 안내 문장이 길어 줄바꿈되면 버튼만 왼쪽으로 떨어진다 —
                   남은 폭을 채우고 flex-end로 붙여 같은 카드의 환불·카드 버튼과 축을 맞춘다. */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', flexGrow: 1 }}>
