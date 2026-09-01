@@ -166,9 +166,17 @@ export default function RefundModal({
               {t(deniedKey)}
             </div>
 
+            {/* 대부분은 사유를 읽고 그냥 닫는다 — 주된 동작인 닫기를 먼저 둔다. */}
+            <div style={{ display: 'flex', marginTop: 20 }}>
+              <button type="button" onClick={onClose} style={cancelBtn}>
+                {t('common.close')}
+              </button>
+            </div>
+
             {/* 자동 환불이 막혔다고 해서 길이 끊기면 안 된다 — 문의 창구와 환불정책으로
-                이 화면에서 바로 닿게 둔다(전자상거래법 제21조 제1항 제1호). */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
+                이 화면에서 바로 닿게 둔다(전자상거래법 제21조 제1항 제1호).
+                닫기 다음 선택지이므로 아래에 두되, 크기·색은 줄이지 않는다. */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginTop: 14, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => { onClose(); router.push('/feedback') }}
@@ -182,12 +190,6 @@ export default function RefundModal({
                 style={{ ...linkStyle, cursor: 'pointer' }}>
                 {t('settings.refund')}
               </a>
-            </div>
-
-            <div style={{ display: 'flex', marginTop: 20 }}>
-              <button type="button" onClick={onClose} style={cancelBtn}>
-                {t('common.close')}
-              </button>
             </div>
           </>
         )}
