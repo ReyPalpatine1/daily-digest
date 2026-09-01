@@ -121,10 +121,10 @@ export default function RefundModal({
 
         {eligible ? (
           <>
-            {/* 묻는 말이 먼저 온다 — 무엇을 승낙하는 창인지가 맨 위에 있어야 한다. */}
-            <div style={{
-              fontSize: 14, fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1.7,
-            }}>
+            {/* 묻는 말이 먼저 온다 — 무엇을 승낙하는 창인지가 맨 위에 있어야 한다.
+                굵기·크기·색은 아래 설명문과 같게 둔다. 위계는 제목(16/700)이 지고,
+                이 문장은 순서(맨 위)로 읽히게 한다. */}
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
               {t('profile.refundConfirmQ')}
             </div>
 
