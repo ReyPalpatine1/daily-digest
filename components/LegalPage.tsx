@@ -29,8 +29,13 @@ const DOCS: Record<LegalDoc, { ko: { title: string; body: string }; en?: { title
   },
 }
 
-export default function LegalPage({ doc }: { doc: LegalDoc }) {
-  // useSearchParams 는 Suspense 경계가 없으면 next build 가 실패한다.
+export default function LegalPage({ doc, fixedLang }: { doc: LegalDoc; fixedLang?: DocLang }) {
+  // 언어 고정(/terms/en 등 영어 전용 주소): useSearchParams 를 타지 않으므로
+  // Next 가 정적 프리렌더할 수 있고, 영어 본문이 그대로 HTML 에 들어간다.
+  // 구글 검증 검사기는 JS 를 실행하지 않으므로 이 경로가 필요하다.
+  if (fixedLang) return <LegalView doc={doc} requested={fixedLang} />
+
+  // 기본 주소: useSearchParams 는 Suspense 경계가 없으면 next build 가 실패한다.
   // fallback 을 한국어판으로 두어 정적 프리렌더 HTML에도 본문이 남게 한다(빈 화면 방지).
   return (
     <Suspense fallback={<LegalView doc={doc} requested="ko" />}>
@@ -63,9 +68,17 @@ function LegalView({ doc, requested }: { doc: LegalDoc; requested: DocLang }) {
   // 줄바꿈(빈 줄 포함) 기준으로 문단 분리 후, 빈 문단 제거.
   const blocks = body.split('\n').map(l => l.trim()).filter(Boolean)
 
-  // 언어 전환은 localStorage 가 아니라 URL 쿼리로 남긴다 — 구글 재심사에 주소를 제출해야 한다.
+  // 언어 전환은 localStorage 가 아니라 주소로 남긴다 — 구글 재심사에 주소를 제출해야 한다.
+  // English 는 /en 전용 주소로 보낸다. 그래야 공유된 링크도 JS 없이 영어로 열린다.
+  const onEnPath = pathname.endsWith('/en')
   const selectLang = (next: DocLang) => {
-    router.replace(`${pathname}?lang=${next}`, { scroll: false })
+    if (onEnPath) {
+      if (next === 'en') return // 이미 영어 전용 주소
+      router.push(pathname.slice(0, -'/en'.length), { scroll: false })
+      return
+    }
+    if (next === 'en') router.push(`${pathname}/en`, { scroll: false })
+    else router.replace(`${pathname}?lang=ko`, { scroll: false })
   }
 
   // 관리자 필터 칩과 같은 톤 (선택된 쪽만 배경/글자를 올린다).
