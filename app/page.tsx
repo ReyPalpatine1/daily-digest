@@ -61,6 +61,27 @@ export default function Home() {
   const consentLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'underline' }
   const footerLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'none' }
 
+  // 서비스 소개 섹션 (구글 OAuth 브랜드 검증 — 로그인 전 화면에 목적·수집 정보를 노출)
+  const sectionTitleStyle: React.CSSProperties = {
+    fontSize: isMobile ? 17 : 20,
+    fontWeight: 600,
+    margin: 0,
+    letterSpacing: -0.3,
+    color: 'var(--text-primary)',
+  }
+  const sectionBodyStyle: React.CSSProperties = {
+    fontSize: 14,
+    lineHeight: 1.7,
+    color: 'var(--text-secondary)',
+    margin: '12px 0 0',
+    maxWidth: 720,
+  }
+  const features = [
+    { title: t('landing.feature1Title'), body: t('landing.feature1Body') },
+    { title: t('landing.feature2Title'), body: t('landing.feature2Body') },
+    { title: t('landing.feature3Title'), body: t('landing.feature3Body') },
+  ]
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -253,6 +274,47 @@ export default function Home() {
               background: 'linear-gradient(to bottom, transparent, var(--bg-primary))',
               pointerEvents: 'none',
             }} />
+          </div>
+        </section>
+
+        {/* 서비스 소개 — 로그인하지 않아도 보이는 자리. 접거나 링크 뒤로 숨기지 말 것. */}
+        <section style={{
+          borderTop: '0.5px solid var(--border)',
+          padding: isMobile ? '40px 0' : '56px 0',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: isMobile ? 36 : 48,
+        }}>
+          {/* 소개 */}
+          <div>
+            <h2 style={sectionTitleStyle}>{t('landing.aboutTitle')}</h2>
+            <p style={sectionBodyStyle}>{t('landing.aboutBody')}</p>
+          </div>
+
+          {/* 기능 3개 (모바일에서는 flexWrap 으로 세로 정렬) */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 26 : 32 }}>
+            {features.map((f, i) => (
+              <div key={i} style={{ flex: '1 1 240px', minWidth: 0 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
+                  {f.title}
+                </h3>
+                <p style={{ ...sectionBodyStyle, marginTop: 8 }}>{f.body}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* 구글 로그인으로 받는 정보 — 브랜드 검증의 핵심 문단 */}
+          <div style={{
+            border: '0.5px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-subtle)',
+            padding: isMobile ? '20px 18px' : '24px 26px',
+          }}>
+            <h2 style={sectionTitleStyle}>{t('landing.dataTitle')}</h2>
+            <p style={sectionBodyStyle}>
+              {t('landing.dataBody')}{' '}
+              <Link href="/privacy" style={consentLinkStyle}>{t('settings.privacy')}</Link>
+            </p>
           </div>
         </section>
 
