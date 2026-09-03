@@ -6,6 +6,7 @@ import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
+import LogoMark from '@/components/LogoMark'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import HelpPopup from '@/components/HelpPopup'
 import { Sun, Moon, Settings } from 'lucide-react'
@@ -206,7 +207,7 @@ export function AppHeader({
     width: 24, height: 24, borderRadius: 7,
     background: 'var(--accent)',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    color: 'var(--bg-card)', fontSize: 12, fontWeight: 700,
+    color: 'var(--bg-card)',
     flexShrink: 0,
   }
   const gearBtn: React.CSSProperties = {
@@ -414,7 +415,7 @@ export function AppHeader({
               background: 'transparent', border: 'none', cursor: 'pointer',
               padding: 0, fontFamily: 'inherit', color: 'var(--text-primary)',
             }}>
-            <div style={logoBox}>D</div>
+            <div style={logoBox}><LogoMark /></div>
             <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</div>
           </button>
           {isLoggedIn && <UserPlanBadge plan={plan} size="sm" />}

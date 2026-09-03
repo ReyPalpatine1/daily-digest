@@ -9,6 +9,7 @@ import { recordSignupRef } from '@/lib/signup-ref'
 import { captureShareIntent, readShareIntent, clearShareIntent } from '@/lib/share-intent'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import UserPlanBadge from '@/components/UserPlanBadge'
+import LogoMark from '@/components/LogoMark'
 import { UpgradeButton } from '@/components/UpgradeButton'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import HelpPopup from '@/components/HelpPopup'
@@ -1090,7 +1091,7 @@ export default function Dashboard() {
     width: 24, height: 24, borderRadius: 7,
     background: 'var(--accent)',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    color: 'var(--bg-card)', fontSize: 12, fontWeight: 700,
+    color: 'var(--bg-card)',
     flexShrink: 0,
   }
   // 탭 네비/기어/업그레이드 버튼 스타일은 공용 AppHeader로 이동(대시보드에선 제거).
@@ -1302,7 +1303,7 @@ export default function Dashboard() {
               borderBottom: '0.5px solid var(--border)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <div style={logoBox}>D</div>
+                <div style={logoBox}><LogoMark /></div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>Daily Video Digest</div>
                 <UserPlanBadge plan={plan} size="sm" />
               </div>
