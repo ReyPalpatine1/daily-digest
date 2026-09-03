@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AppHeader } from '@/components/AppHeader'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { TERMS_KO, PRIVACY_KO, PRIVACY_EN, REFUND_KO } from '@/lib/legal/content'
+import { TERMS_KO, TERMS_EN, PRIVACY_KO, PRIVACY_EN, REFUND_KO, REFUND_EN } from '@/lib/legal/content'
 
 // 법률 문서 공통 렌더 컴포넌트.
 // 본문은 lib/legal/content.ts 의 마크다운형 문자열(줄바꿈 기준 문단).
@@ -12,11 +12,12 @@ import { TERMS_KO, PRIVACY_KO, PRIVACY_EN, REFUND_KO } from '@/lib/legal/content
 export type LegalDoc = 'terms' | 'privacy' | 'refund'
 type DocLang = 'ko' | 'en'
 
-// 문서별 언어판. en 이 없는 문서는 English 를 눌러도 ko 로 떨어진다.
-// (현재 영어판이 있는 문서는 개인정보처리방침뿐)
+// 문서별 언어판. 현재 3종 모두 영어판이 있어 한국어 폴백은 발생하지 않는다.
+// (en 이 없는 문서를 추가하면 English 를 눌러도 ko 로 떨어지고 안내문이 뜬다)
 const DOCS: Record<LegalDoc, { ko: { title: string; body: string }; en?: { title: string; body: string } }> = {
   terms: {
     ko: { title: '이용약관', body: TERMS_KO },
+    en: { title: 'Terms of Service', body: TERMS_EN },
   },
   privacy: {
     ko: { title: '개인정보처리방침', body: PRIVACY_KO },
@@ -24,6 +25,7 @@ const DOCS: Record<LegalDoc, { ko: { title: string; body: string }; en?: { title
   },
   refund: {
     ko: { title: '환불 정책', body: REFUND_KO },
+    en: { title: 'Refund Policy', body: REFUND_EN },
   },
 }
 
