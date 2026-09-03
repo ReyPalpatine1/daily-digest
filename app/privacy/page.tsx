@@ -1,8 +1,8 @@
 'use client'
 
 import LegalPage from '@/components/LegalPage'
-import { PRIVACY_KO } from '@/lib/legal/content'
 
+// 제목·본문·언어 선택은 LegalPage 안에서 처리한다(문서 종류만 넘긴다).
 export default function PrivacyPage() {
-  return <LegalPage title="개인정보처리방침" content={PRIVACY_KO} />
+  return <LegalPage doc="privacy" />
 }
