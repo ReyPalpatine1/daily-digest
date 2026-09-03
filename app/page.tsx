@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Mail } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import LogoMark from '@/components/LogoMark'
 import { captureSignupRef } from '@/lib/signup-ref'
 
 // 전화번호 조각 (스팸 수집기 방어: 완성 문자열을 소스·초기 DOM에 두지 않음)
@@ -89,8 +90,7 @@ export default function Home() {
               borderRadius: 8,
               background: 'var(--accent)',
               color: 'var(--bg-primary)',
-              fontSize: 16, fontWeight: 700,
-            }}>D</div>
+            }}><LogoMark size={17} /></div>
             <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: -0.2 }}>Daily Video Digest</span>
           </div>
           <button
@@ -214,9 +214,8 @@ export default function Home() {
                 borderRadius: 7,
                 background: 'var(--accent)',
                 color: 'var(--bg-primary)',
-                fontSize: 13, fontWeight: 700,
                 flexShrink: 0,
-              }}>D</div>
+              }}><LogoMark size={15} /></div>
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3, minWidth: 0 }}>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Daily Video Digest</span>
                 <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>{t('landing.previewMeta')}</span>

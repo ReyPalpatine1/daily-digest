@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import LogoMark from '@/components/LogoMark'
 
 // 관리자 페이지 공통 상단바 — 개요 탭 헤더를 기준으로 통일.
 // 검정 바(#0A0A0A) + ADMIN 빨강 뱃지 + 로고 + 네비 + 모드 토글.
@@ -94,8 +95,8 @@ export function AdminHeader({ activeKey, feedbackNewCount, errorsUnread, reports
             width: 24, height: 24, borderRadius: 7,
             background: '#FAFAFA', color: '#0A0A0A',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 700, flexShrink: 0,
-          }}>D</div>
+            flexShrink: 0,
+          }}><LogoMark size={14} /></div>
           <span style={{ fontSize: 15, fontWeight: 600, color: ADMIN_BAR_FG, letterSpacing: -0.2 }}>
             Daily Video Digest
           </span>
