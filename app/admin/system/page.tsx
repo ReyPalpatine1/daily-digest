@@ -43,6 +43,15 @@ type ShareStats = {
   recent7d: number
 }
 
+// 영상 단건 요약(/api/admin/summarize-one)의 실패 코드 → 화면 문구.
+// 관리자 전용 내부 도구라 i18n 키를 만들지 않고 한국어로 둔다.
+const SUMMARIZE_ONE_ERROR: Record<string, string> = {
+  bad_url: '유튜브 주소를 인식하지 못했습니다.',
+  no_video: '영상 정보를 가져오지 못했습니다.',
+  no_transcript: '자막을 가져오지 못했습니다.',
+}
+const SUMMARIZE_ONE_ERROR_FALLBACK = '요약에 실패했습니다.'
+
 export default function AdminSystemPage() {
   const router = useRouter()
   const { t, locale } = useTranslation()
@@ -55,6 +64,11 @@ export default function AdminSystemPage() {
   const [adminUserId, setAdminUserId] = useState<string | null>(null)
   const [runResult, setRunResult] = useState<string | null>(null)
   const digestRun = usePending()
+  // 영상 단건 요약 도구 — 관리자 본인이 가끔 쓰는 내부 도구라 i18n 없이 한국어로 둔다
+  // (기존 관리자 화면과 같은 방식).
+  const [oneUrl, setOneUrl] = useState('')
+  const [oneResult, setOneResult] = useState<{ ok: boolean; text: string } | null>(null)
+  const oneRun = usePending()
 
   const loadStats = useCallback(async () => {
     try {
@@ -175,6 +189,39 @@ export default function AdminSystemPage() {
     } catch (e: any) {
       console.error('[admin/system] runDigestNow failed:', e)
       setRunResult(e?.name === 'AbortError' ? t('adminSystem.runTimeout') : t('adminSystem.runFailed'))
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  // 유튜브 주소 하나를 요약해 관리자 메일로 발송.
+  async function summarizeOne() {
+    const url = oneUrl.trim()
+    if (!url) return
+    setOneResult(null)
+    // 서버 maxDuration=60s + 네트워크/콜드스타트 여유 = 90s (수동 발송 도구와 같은 기준)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90_000)
+    try {
+      const res = await fetch('/api/admin/summarize-one', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+        signal: controller.signal,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        setOneResult({ ok: false, text: SUMMARIZE_ONE_ERROR[data?.error] ?? SUMMARIZE_ONE_ERROR_FALLBACK })
+        return
+      }
+      setOneResult({
+        ok: true,
+        text: `보냈습니다 · ${data.title ?? ''}${data.reused ? ' (기존 요약 재사용)' : ''}`,
+      })
+      setOneUrl('')
+    } catch (e) {
+      console.error('[admin/system] summarizeOne failed:', e)
+      setOneResult({ ok: false, text: SUMMARIZE_ONE_ERROR_FALLBACK })
     } finally {
       clearTimeout(timeoutId)
     }
@@ -350,6 +397,38 @@ export default function AdminSystemPage() {
             </button>
             {runResult && (
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10 }}>{runResult}</div>
+            )}
+          </div>
+
+          {/* 영상 단건 요약 — 관리자 본인이 가끔 쓰는 내부 도구라 탭을 늘리지 않고 이 카드로 둔다.
+              i18n 키 없이 한국어 하드코딩(기존 관리자 화면과 같은 방식). */}
+          <div style={{ ...cardStyle, marginTop: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>영상 단건 요약</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, marginBottom: 12, lineHeight: 1.6 }}>
+              유튜브 주소를 넣으면 요약해서 관리자 메일로 보냅니다.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input
+                value={oneUrl}
+                onChange={e => setOneUrl(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !oneRun.pending) oneRun.run(summarizeOne) }}
+                placeholder="https://youtube.com/watch?v=..."
+                style={{
+                  flex: '1 1 240px', minWidth: 0,
+                  background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
+                  borderRadius: 8, padding: '8px 12px',
+                  color: 'var(--text-primary)',
+                  fontSize: 13, fontFamily: 'inherit', outline: 'none',
+                }} />
+              <button onClick={() => oneRun.run(summarizeOne)} disabled={oneRun.pending}
+                style={oneRun.pending ? pendingBtn : primaryBtn}>
+                {oneRun.pending ? '보내는 중…' : '요약 보내기'}
+              </button>
+            </div>
+            {oneResult && (
+              <div style={{ fontSize: 12, color: oneResult.ok ? 'var(--text-secondary)' : 'var(--warning)', marginTop: 10 }}>
+                {oneResult.text}
+              </div>
             )}
           </div>
         </section>
