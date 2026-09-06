@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
 import { checkRefundEligibility, REFUND_PERIOD_DAYS } from '@/lib/refund-eligibility'
+import { enforceChannelLimit, restoreDeliveryToEmail } from '@/lib/plan-sync'
 
 // 사용자 환불 — 본인의 가장 최근 결제 1건.
 // 판정 기준은 lib/refund-eligibility.ts 한 곳에 있다(환불정책 제3조).
@@ -131,6 +132,26 @@ export async function POST() {
   if (updateError) {
     console.error('[billing/refund] 플랜 차감 실패:', user.id, updateError.message)
     return NextResponse.json({ error: 'update_failed' }, { status: 500 })
+  }
+
+  // 3-1. 무료로 내려간 경우에만 강등 정리를 함께 한다.
+  //      지금까지 이 경로는 profiles만 고쳐 채널이 7개 모두 활성인 채 free로 남았다
+  //      (cron의 만료 정리는 "만료일이 지난 pro"를 찾으므로 이미 free인 계정은 영영 대상이 아니다).
+  //      기간이 남아 Pro가 유지되는 환불에서는 부르지 않는다 — 여전히 Pro이므로 채널을 잠그면 안 된다.
+  //
+  //      실패해도 환불 자체는 성공 처리한다 — 돈은 이미 처리된 상태라 되돌리면 더 나쁘다.
+  //      채널은 다음 syncUserPlan 호출(발송 경로)에서도 정리될 여지가 있으나,
+  //      로그로 남겨 수동 확인이 가능하게 한다.
+  if (!expiresAfter) {
+    try {
+      await enforceChannelLimit(user.id)
+      await restoreDeliveryToEmail(user.id)
+    } catch (e) {
+      console.error(
+        `[billing/refund] ⚠️ 무료 강등 정리 실패(플랜은 free로 내려감 — 채널/발송 수동 확인 필요): user=${user.id}:`,
+        e instanceof Error ? e.message : e,
+      )
+    }
   }
 
   // 4. 환불 이력 기록 — 같은 결제를 두 번 환불하지 못하게 막는 잠금이기도 하다.
