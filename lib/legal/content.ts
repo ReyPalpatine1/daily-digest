@@ -93,7 +93,7 @@ Daily Video Digest(이하 "서비스")를 운영하는 솔로옵스(이하 "회�
 
 제9조(안전성 확보 조치) 접근 권한 관리, 전송 구간 암호화, 인증 기반 접근 통제 등.
 
-제9조의2(개인정보 자동 수집 장치의 설치·운영 및 거부) 1. 회사는 로그인 상태 유지 등 서비스 제공을 위하여 쿠키(cookie) 및 브라우저 로컬 스토리지를 사용합니다. 2. 이용자는 웹 브라우저 설정을 통해 쿠키 저장을 허용·확인·거부할 수 있습니다. 다만 쿠키 등의 저장을 거부하는 경우 로그인이 필요한 서비스의 이용이 불가능할 수 있습니다.
+제9조의2(개인정보 자동 수집 장치의 설치·운영 및 거부) 1. 회사는 로그인 상태 유지 등 서비스 제공을 위하여 쿠키(cookie) 및 브라우저 로컬 스토리지를 사용합니다. 2. 이용자는 웹 브라우저 설정을 통해 쿠키 저장을 허용·확인·거부할 수 있습니다. 다만 쿠키 등의 저장을 거부하는 경우 로그인이 필요한 서비스의 이용이 불가능할 수 있습니다. 3. 회사는 무료 플랜 화면의 광고 배너, 공유 페이지의 YouTube 영상 재생 기능 등 제3자가 제공하는 콘텐츠를 서비스 화면에 포함하고 있으며, 이 과정에서 해당 제3자가 이용자의 브라우저에 자체 쿠키 등을 설치하거나 이를 통해 정보를 수집할 수 있습니다. 회사는 해당 쿠키를 읽거나 그 정보에 접근할 수 없으며, 이에 대한 처리는 각 제3자의 개인정보처리방침에 따릅니다. 해당 제3자는 다음과 같습니다. ① 광고 배너: 쿠팡 파트너스(쿠팡 주식회사) ② YouTube 영상 재생: Google LLC. 4. 이용자는 제2항의 브라우저 설정을 통하여 제3항의 제3자 쿠키 저장도 거부할 수 있습니다. 이 경우 광고 표시나 영상 재생이 제한될 수 있으나, 그 밖의 서비스 이용에는 지장이 없습니다.
 
 제10조(개인정보 보호책임자 및 고충처리) 1. 개인정보 보호책임자: 김해솔(대표), 연락처: support@dailyvideodigest.com. 2. 개인정보 열람·정정·삭제·처리정지 청구 접수 및 고충처리 부서: 고객지원(운영), 연락처: support@dailyvideodigest.com.
 
@@ -132,7 +132,7 @@ Article 8 (Destruction) 1. Personal information is destroyed without delay once 
 
 Article 9 (Security Measures) Management of access privileges, encryption of data in transit, authentication-based access control, and similar measures.
 
-Article 9-2 (Installation, Operation and Refusal of Automatic Personal Information Collection Tools) 1. The Company uses cookies and browser local storage in order to provide the Service, including maintaining the signed-in state. 2. Users may allow, review, or refuse the storage of cookies through their web browser settings. However, if the storage of cookies and similar items is refused, services that require signing in may become unavailable.
+Article 9-2 (Installation, Operation and Refusal of Automatic Personal Information Collection Tools) 1. The Company uses cookies and browser local storage in order to provide the Service, including maintaining the signed-in state. 2. Users may allow, review, or refuse the storage of cookies through their web browser settings. However, if the storage of cookies and similar items is refused, services that require signing in may become unavailable. 3. The Company includes third-party content on the Service screens, such as advertisement banners on free-plan screens and the YouTube video playback feature on share pages. In the course of this, those third parties may set their own cookies in the user's browser or collect information through them. The Company cannot read those cookies or access that information, and such processing is governed by the privacy policy of each third party. The third parties concerned are as follows: (i) advertisement banners: Coupang Partners (Coupang Corp.); (ii) YouTube video playback: Google LLC. 4. Users may also refuse the storage of the third-party cookies referred to in paragraph 3 through the browser settings described in paragraph 2. In that case, the display of advertisements or the playback of videos may be limited, but there is no impediment to the use of other parts of the Service.
 
 Article 10 (Chief Privacy Officer and Grievance Handling) 1. Chief Privacy Officer: Haesol Kim (Representative), contact: support@dailyvideodigest.com. 2. Department receiving requests for access, correction, deletion, or suspension of processing of personal information, and handling grievances: Customer Support (Operations), contact: support@dailyvideodigest.com.
 
