@@ -158,6 +158,20 @@ export async function POST(req: Request) {
     console.error('[billing/confirm] payments 마감 실패:', user.id, doneError.message)
   }
 
+  // 결제수단 유형은 부가 정보라 마감 기록과 분리해 따로 쓴다 — 이 쓰기가 실패해도
+  // 결제 완료(status='done')를 막지 않는다. 마감이 성공한 경우에만 쓴다.
+  if (!doneError) {
+    try {
+      const { error: methodError } = await serviceClient
+        .from('payments')
+        .update({ method: toss.method ?? null })
+        .eq('order_id', orderId)
+      if (methodError) console.error('[billing/confirm] 결제수단 기록 실패:', user.id, methodError.message)
+    } catch (e) {
+      console.error('[billing/confirm] 결제수단 기록 실패:', user.id, e instanceof Error ? e.message : e)
+    }
+  }
+
   console.log('[billing/confirm] 결제 완료:', user.id, orderId)
   return NextResponse.json({ ok: true, planExpiresAt, receiptUrl: toss.receipt?.url ?? null })
 }

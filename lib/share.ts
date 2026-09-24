@@ -348,6 +348,24 @@ export async function cleanupExpiredShares(): Promise<void> {
     console.error('[share] 신고 기록 정리 예외:', e)
   }
 
+  // 의견(feedback)은 서비스 개선 목적으로 접수일로부터 1년만 보관한다(개인정보처리방침 제3조 8항).
+  // 별도 try/catch — 여기서 실패해도 앞뒤 정리에는 영향이 없다.
+  try {
+    const feedbackCutoff = new Date(Date.now() - 365 * 24 * 3600_000).toISOString()
+    const { data, error } = await getSupabase()
+      .from('feedback')
+      .delete()
+      .lt('created_at', feedbackCutoff)
+      .select('id')
+    if (error) {
+      console.error(`[share] 의견 정리 실패: ${error.message}`)
+    } else {
+      console.log(`[share] 의견 정리: ${data?.length ?? 0}건 삭제`)
+    }
+  } catch (e) {
+    console.error('[share] 의견 정리 예외:', e)
+  }
+
   // 광고 클릭(ad_clicks)은 90일이 지나면 식별 정보만 지운다(개인정보처리방침 제3조 7항).
   // ★ 행을 지우지 않는다 — slot·source·is_bot·clicked_at은 광고 성과 집계에 계속 쓰이므로,
   //   행째 지우면 과거 광고 성과가 통째로 사라진다.

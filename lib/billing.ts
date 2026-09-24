@@ -39,6 +39,7 @@ export type TossPaymentResponse = {
   orderId?: string
   status?: string
   receipt?: { url?: string }
+  method?: string // 결제수단 유형('카드', '간편결제' 등) — payments.method에 기록
   code?: string
   message?: string
 }

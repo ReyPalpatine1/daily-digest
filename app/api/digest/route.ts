@@ -6,6 +6,7 @@ import { DigestTrigger } from '@/lib/mailer'
 import { sendAdminFailureAlert } from '@/lib/admin-alert'
 import { logErrorEvent, cleanupOldErrorLogs } from '@/lib/error-log'
 import { cleanupExpiredShares } from '@/lib/share'
+import { cleanupExpiredPaymentArchive } from '@/lib/payments-archive'
 import { deliverDigest, deliverBreaking, deliverEmptyDigest } from '@/lib/delivery'
 import { syncUserPlan } from '@/lib/plan-sync'
 import { markScheduledSent, markScheduledFailed, logManualSend, tryStartBreaking, markBreakingSent, markBreakingFailed, hasDigestSentToday } from '@/lib/send-guard'
@@ -571,6 +572,7 @@ async function runDigest(
     await supabase.rpc('delete_old_digests')
     await cleanupOldErrorLogs()
     await cleanupExpiredShares()
+    await cleanupExpiredPaymentArchive() // 매월 1일(KST)만 동작 — 결제 보관 기록 5년 경과분
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
     const successCount = digestItems.length - failedItems.length

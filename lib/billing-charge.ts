@@ -113,6 +113,20 @@ export async function chargeWithBillingKey(
     console.error(`[${logTag}] payments 마감 실패:`, userId, doneError.message)
   }
 
+  // 결제수단 유형은 부가 정보라 마감 기록과 분리해 따로 쓴다 — 이 쓰기가 실패해도
+  // 결제 완료(status='done')를 막지 않는다. 마감이 성공한 경우에만 쓴다.
+  if (!doneError) {
+    try {
+      const { error: methodError } = await client
+        .from('payments')
+        .update({ method: toss.method ?? null })
+        .eq('order_id', orderId)
+      if (methodError) console.error(`[${logTag}] 결제수단 기록 실패:`, userId, methodError.message)
+    } catch (e) {
+      console.error(`[${logTag}] 결제수단 기록 실패:`, userId, e instanceof Error ? e.message : e)
+    }
+  }
+
   console.log(`[${logTag}] 결제 완료:`, userId, orderId)
   return { ok: true, planExpiresAt, receiptUrl: toss.receipt?.url ?? null }
 }
