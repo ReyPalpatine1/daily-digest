@@ -3,7 +3,9 @@
 import { AppHeader } from '@/components/AppHeader'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import {
-  TERMS_KO, TERMS_EN, PRIVACY_KO, PRIVACY_EN, PRIVACY_JA, PRIVACY_ZH, REFUND_KO, REFUND_EN,
+  TERMS_KO, TERMS_EN, TERMS_JA, TERMS_ZH,
+  PRIVACY_KO, PRIVACY_EN, PRIVACY_JA, PRIVACY_ZH,
+  REFUND_KO, REFUND_EN, REFUND_JA, REFUND_ZH,
 } from '@/lib/legal/content'
 
 // 법률 문서 공통 렌더 컴포넌트.
@@ -13,13 +15,14 @@ export type LegalDoc = 'terms' | 'privacy' | 'refund'
 type DocLang = 'ko' | 'en' | 'ja' | 'zh'
 type DocEntry = { title: string; body: string }
 
-// 문서별 언어판. ko 는 필수, 나머지는 있는 것만 둔다.
-// 요청 언어판이 없으면 영어판으로, 영어판도 없으면 한국어판으로 떨어진다.
-// (현재 ja·zh 는 개인정보처리방침에만 있다 — 이용약관·환불정책의 ja·zh 는 영어로 보인다)
-const DOCS: Record<LegalDoc, { ko: DocEntry } & Partial<Record<Exclude<DocLang, 'ko'>, DocEntry>>> = {
+// 문서별 언어판. 3종 모두 4개 언어(ko·en·ja·zh)가 있어야 한다 — 타입으로 강제해
+// 언어판이 빠지면 빌드가 실패한다(폴백 없음).
+const DOCS: Record<LegalDoc, Record<DocLang, DocEntry>> = {
   terms: {
     ko: { title: '이용약관', body: TERMS_KO },
     en: { title: 'Terms of Service', body: TERMS_EN },
+    ja: { title: '利用規約', body: TERMS_JA },
+    zh: { title: '服务条款', body: TERMS_ZH },
   },
   privacy: {
     ko: { title: '개인정보처리방침', body: PRIVACY_KO },
@@ -30,6 +33,8 @@ const DOCS: Record<LegalDoc, { ko: DocEntry } & Partial<Record<Exclude<DocLang, 
   refund: {
     ko: { title: '환불 정책', body: REFUND_KO },
     en: { title: 'Refund Policy', body: REFUND_EN },
+    ja: { title: '返金ポリシー', body: REFUND_JA },
+    zh: { title: '退款政策', body: REFUND_ZH },
   },
 }
 
@@ -38,16 +43,13 @@ export default function LegalPage({ doc, fixedLang }: { doc: LegalDoc; fixedLang
   // 언어 고정(/terms/en, /privacy/ja 등 언어 전용 주소): 전역 언어와 무관하게 그 언어로 그린다.
   // 서버 페이지에서 넘어오므로 본문이 빌드 시 정적 HTML 에 들어간다
   // (구글 검증 검사기는 JS 를 실행하지 않는다).
-  // 기본 주소: 전역 언어를 따른다. 그 언어판이 없는 문서는 LegalView 에서 영어로 떨어진다.
+  // 기본 주소: 전역 언어를 따른다.
   const requested: DocLang = fixedLang ?? locale
   return <LegalView doc={doc} requested={requested} />
 }
 
 function LegalView({ doc, requested }: { doc: LegalDoc; requested: DocLang }) {
-  const entry = DOCS[doc]
-  // 요청 언어판 → 영어판 → 한국어판 순으로 쓴다.
-  const { title, body } =
-    requested === 'ko' ? entry.ko : entry[requested] ?? entry.en ?? entry.ko
+  const { title, body } = DOCS[doc][requested]
 
   // 줄바꿈(빈 줄 포함) 기준으로 문단 분리 후, 빈 문단 제거.
   const blocks = body.split('\n').map(l => l.trim()).filter(Boolean)
