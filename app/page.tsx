@@ -61,9 +61,6 @@ export default function Home() {
   const consentLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'underline' }
   const footerLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'none' }
 
-  // 히어로 기능 요약 3줄 (로그인 없이도 앱이 무엇을 하는지 보이는 자리)
-  const points = [t('landing.point1'), t('landing.point2'), t('landing.point3')]
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -156,29 +153,7 @@ export default function Home() {
             }}>
               {t('landing.sub')}
             </p>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-              margin: '20px 0 24px',
-            }}>
-              {points.map((point, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <span style={{
-                    width: 3,
-                    height: 3,
-                    borderRadius: '50%',
-                    background: 'var(--text-muted)',
-                    flexShrink: 0,
-                    marginTop: 8,
-                  }} />
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    {point}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div>
+            <div style={{ marginTop: 32 }}>
               <button
                 onClick={loginWithGoogle}
                 onTouchEnd={(e) => { e.preventDefault(); loginWithGoogle() }}
