@@ -45,9 +45,14 @@ function toSeconds(time: string): number {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { token } = await params
+  // 공유 페이지는 검색에서 제외한다(정상·무효·만료·차단 모두). 공유자의 메모가 검색에
+  // 노출되지 않게, 그리고 만료된 공유가 죽은 링크로 남지 않게 — 공유는 링크를 받은 사람이
+  // 보는 용도다. openGraph(메신저 미리보기 카드)는 검색 색인과 별개라 그대로 동작한다.
+  const robots: Metadata['robots'] = { index: false, follow: false }
   const fallback: Metadata = {
     title: '공유된 요약 | Daily Video Digest',
     description: '유튜브 영상 AI 요약 공유',
+    robots,
   }
   if (!isValidTokenFormat(token)) return fallback
 
@@ -69,6 +74,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${title} — 요약 | Daily Video Digest`,
     description,
+    robots,
     openGraph: {
       title: cardTitle,
       ...(cardDesc ? { description: cardDesc } : {}),

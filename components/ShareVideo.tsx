@@ -56,7 +56,7 @@ export default function ShareVideo({
   watchUrl: string
   timeline: TimelineItem[]
 }) {
-  const base = `https://www.youtube.com/embed/${videoId}`
+  const base = `https://www.youtube-nocookie.com/embed/${videoId}`
   const [src, setSrc] = useState(base)
   // 타임라인은 기본 접힘 — 접으면 강조 구간만, 펼치면 전체 목록.
   const [expanded, setExpanded] = useState(false)
