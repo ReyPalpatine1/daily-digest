@@ -78,7 +78,7 @@ Daily Video Digest(이하 "서비스")를 운영하는 솔로옵스(이하 "회�
 
 제4조(제3자 제공) 회사는 목적 범위를 초과하여 제3자에게 제공하지 않습니다. 다만 법령 근거 또는 수사기관의 적법한 요청은 예외입니다.
 
-제5조(처리 위탁) 회사는 다음과 같이 위탁합니다(위탁 목적 범위 내 처리): Google LLC(소셜 로그인 인증, YouTube 영상 정보 조회, AI 요약(Gemini) — 이메일·이름·요약 대상 영상 정보), Supabase Inc.(DB·인증 인프라 — 계정·서비스 이용 정보), Cloudflare Inc.(호스팅·실행 인프라, 이메일 발송 처리, 데이터 백업 보관 — 서비스 이용 관련 정보·수신 이메일 주소·발송 콘텐츠), TranscriptAPI·Supadata(영상 자막 추출 — 요약 대상 영상 식별자만 전달되며 이용자 개인정보는 포함되지 않음), Telegram(메신저 알림 발송(연동 시) — 텔레그램 식별자·발송 콘텐츠), 토스페이먼츠 주식회사(유료 결제 처리(도입 시) — 결제 관련 정보).
+제5조(처리 위탁) 회사는 다음과 같이 위탁합니다(위탁 목적 범위 내 처리): Google LLC(소셜 로그인 인증, YouTube 영상 정보 조회, AI 요약(Gemini) — 이름·이메일·프로필 식별자·요약 대상 영상 정보), Supabase Inc.(DB·인증 인프라 — 계정·서비스 이용 정보), Cloudflare Inc.(호스팅·실행 인프라, 이메일 발송 처리, 데이터 백업 보관 — 서비스 이용 관련 정보·수신 이메일 주소·발송 콘텐츠), TranscriptAPI·Supadata(영상 자막 추출 — 요약 대상 영상 식별자만 전달되며 이용자 개인정보는 포함되지 않음), Telegram(메신저 알림 발송(연동 시) — 텔레그램 식별자·발송 콘텐츠), 토스페이먼츠 주식회사(유료 결제 처리(도입 시) — 결제 관련 정보).
 
 제6조(개인정보의 국외 이전) 회사는 서비스 제공에 필요한 처리 위탁·보관을 위하여 다음과 같이 개인정보를 국외로 이전하며, 개인정보 보호법 제28조의8 제1항 제3호에 따라 본 처리방침을 통해 이를 공개합니다. 이전 일시·방법은 모두 '서비스 이용 시점에 정보통신망을 통한 수시 전송'입니다.
 1. Google LLC(미국) — 이전 항목: 이름·이메일·프로필 식별자, 요약 대상 영상 정보 / 목적: 소셜 로그인 인증 및 AI 요약 생성 / 보유기간: 회원 탈퇴 또는 위탁 계약 종료 시까지 / 문의: privacy.google.com
@@ -117,7 +117,7 @@ Article 3 (Retention and Use Period) 1. As a rule, personal information is destr
 
 Article 4 (Provision to Third Parties) The Company does not provide personal information to third parties beyond the scope of the stated purposes. Exceptions apply where there is a statutory basis or a lawful request from an investigative agency.
 
-Article 5 (Outsourcing of Processing) The Company outsources processing as follows (processing is limited to the scope of the outsourced purpose): Google LLC (social login authentication, retrieval of YouTube video information, AI summarization (Gemini) — email address, name, and information on the videos to be summarized), Supabase Inc. (database and authentication infrastructure — account and service usage information), Cloudflare Inc. (hosting and execution infrastructure, email delivery processing, and storage of data backups — service usage information, recipient email addresses, and delivered content), TranscriptAPI and Supadata (extraction of video transcripts — only the identifier of the video to be summarized is transmitted; no personal information of users is included), Telegram (delivery of messenger notifications, where integrated — Telegram identifier and delivered content), and Toss Payments Inc. (processing of paid transactions, once introduced — payment-related information).
+Article 5 (Outsourcing of Processing) The Company outsources processing as follows (processing is limited to the scope of the outsourced purpose): Google LLC (social login authentication, retrieval of YouTube video information, AI summarization (Gemini) — name, email address, profile identifier, and information on the videos to be summarized), Supabase Inc. (database and authentication infrastructure — account and service usage information), Cloudflare Inc. (hosting and execution infrastructure, email delivery processing, and storage of data backups — service usage information, recipient email addresses, and delivered content), TranscriptAPI and Supadata (extraction of video transcripts — only the identifier of the video to be summarized is transmitted; no personal information of users is included), Telegram (delivery of messenger notifications, where integrated — Telegram identifier and delivered content), and Toss Payments Inc. (processing of paid transactions, once introduced — payment-related information).
 
 Article 6 (Cross-Border Transfer of Personal Information) For the outsourced processing and storage necessary to provide the Service, the Company transfers personal information overseas as set out below, and discloses such transfers through this Privacy Policy pursuant to Article 28-8(1)3 of the Personal Information Protection Act (개인정보 보호법). In every case, the time and method of transfer are "transmission from time to time over an information and communications network at the time the Service is used."
 1. Google LLC (United States) — Items transferred: name, email address, profile identifier, and information on the videos to be summarized / Purpose: social login authentication and generation of AI summaries / Retention period: until withdrawal of membership or termination of the outsourcing agreement / Contact: privacy.google.com
@@ -154,7 +154,7 @@ Daily Video Digest（以下「本サービス」）を運営するSoloOps（솔�
 
 第4条（第三者への提供）当社は、利用目的の範囲を超えて個人情報を第三者に提供しません。ただし、法令に根拠がある場合または捜査機関から適法な要請があった場合は例外とします。
 
-第5条（処理の委託）当社は、次のとおり処理を委託しています（委託目的の範囲内で処理）：Google LLC（ソーシャルログイン認証、YouTube動画情報の照会、AI要約（Gemini）— メールアドレス・氏名・要約対象の動画情報）、Supabase Inc.（データベース・認証基盤 — アカウント・サービス利用情報）、Cloudflare Inc.（ホスティング・実行基盤、メール配信処理、データバックアップの保管 — サービス利用関連情報・受信メールアドレス・配信コンテンツ）、TranscriptAPI・Supadata（動画字幕の抽出 — 要約対象の動画識別子のみが伝達され、利用者の個人情報は含まれません）、Telegram（メッセンジャー通知の配信（連携時）— Telegram識別子・配信コンテンツ）、Toss Payments株式会社（有料決済の処理（導入時）— 決済関連情報）。
+第5条（処理の委託）当社は、次のとおり処理を委託しています（委託目的の範囲内で処理）：Google LLC（ソーシャルログイン認証、YouTube動画情報の照会、AI要約（Gemini）— 氏名・メールアドレス・プロフィール識別子・要約対象の動画情報）、Supabase Inc.（データベース・認証基盤 — アカウント・サービス利用情報）、Cloudflare Inc.（ホスティング・実行基盤、メール配信処理、データバックアップの保管 — サービス利用関連情報・受信メールアドレス・配信コンテンツ）、TranscriptAPI・Supadata（動画字幕の抽出 — 要約対象の動画識別子のみが伝達され、利用者の個人情報は含まれません）、Telegram（メッセンジャー通知の配信（連携時）— Telegram識別子・配信コンテンツ）、Toss Payments株式会社（有料決済の処理（導入時）— 決済関連情報）。
 
 第6条（個人情報の国外移転）当社は、本サービスの提供に必要な処理の委託・保管のため、次のとおり個人情報を国外に移転し、韓国「個人情報保護法」第28条の8第1項第3号に基づき、本ポリシーを通じてこれを公開します。移転の日時・方法はいずれも「本サービス利用時に情報通信網を通じて随時送信」です。
 1. Google LLC（米国）— 移転項目：氏名・メールアドレス・プロフィール識別子、要約対象の動画情報／目的：ソーシャルログイン認証およびAI要約の生成／保有期間：退会または委託契約終了時まで／お問い合わせ：privacy.google.com
@@ -191,7 +191,7 @@ export const PRIVACY_ZH = `生效日期：2026-07-14
 
 第4条（向第三方提供）本公司不会超出使用目的范围向第三方提供个人信息。但有法律依据或侦查机关依法提出要求的情形除外。
 
-第5条（委托处理）本公司委托处理如下（在委托目的范围内处理）：Google LLC（社交登录认证、YouTube 视频信息查询、AI 摘要（Gemini）— 电子邮件地址、姓名、摘要对象视频信息），Supabase Inc.（数据库及认证基础设施 — 账户及服务使用信息），Cloudflare Inc.（托管及运行基础设施、邮件发送处理、数据备份保管 — 服务使用相关信息、接收邮箱地址、发送内容），TranscriptAPI、Supadata（视频字幕提取 — 仅传递摘要对象视频的标识符，不包含用户个人信息），Telegram（即时通讯通知发送（关联时）— Telegram 标识符、发送内容），Toss Payments 株式会社（付费付款处理（上线后）— 付款相关信息）。
+第5条（委托处理）本公司委托处理如下（在委托目的范围内处理）：Google LLC（社交登录认证、YouTube 视频信息查询、AI 摘要（Gemini）— 姓名、电子邮件地址、个人资料标识符、摘要对象视频信息），Supabase Inc.（数据库及认证基础设施 — 账户及服务使用信息），Cloudflare Inc.（托管及运行基础设施、邮件发送处理、数据备份保管 — 服务使用相关信息、接收邮箱地址、发送内容），TranscriptAPI、Supadata（视频字幕提取 — 仅传递摘要对象视频的标识符，不包含用户个人信息），Telegram（即时通讯通知发送（关联时）— Telegram 标识符、发送内容），Toss Payments 株式会社（付费付款处理（上线后）— 付款相关信息）。
 
 第6条（个人信息的跨境转移）本公司为提供本服务所需的委托处理及保管，按如下方式将个人信息转移至境外，并依据韩国《个人信息保护法》第28条之8第1款第3项，通过本政策予以公开。转移时间及方式均为"使用本服务时通过信息通信网络随时传输"。
 1. Google LLC（美国）— 转移项目：姓名、电子邮件地址、个人资料标识符、摘要对象视频信息／目的：社交登录认证及 AI 摘要生成／保存期限：至会员注销或委托合同终止时／咨询：privacy.google.com
