@@ -149,7 +149,8 @@ export default function Home() {
               lineHeight: 1.6,
               color: 'var(--text-secondary)',
               margin: '18px 0 0',
-              maxWidth: 320,
+              maxWidth: 420,
+              textWrap: 'pretty',
             }}>
               {t('landing.sub')}
             </p>
