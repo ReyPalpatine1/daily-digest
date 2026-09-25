@@ -25,6 +25,7 @@ import { usePending } from '@/lib/use-pending'
 import { TOAST_MS } from '@/lib/toast'
 import { SkeletonList } from '@/components/Skeleton'
 import ScrollTopButton from '@/components/ScrollTopButton'
+import ConfirmModal from '@/components/ConfirmModal'
 
 // 진행 중 버튼 표기 — "지금 바로 실행" 버튼의 비활성 처리와 동일 토큰.
 const pendingBtnStyle: React.CSSProperties = {
@@ -196,6 +197,10 @@ export default function Dashboard() {
   const [initialLoading, setInitialLoading] = useState(true)
   // 미리보기 실행 결과 토스트 (하단 중앙 알약)
   const [previewToast, setPreviewToast] = useState<string | null>(null)
+  // 확인창(브라우저 confirm() 대체). 삭제 대상 id·name은 열 때 담아두고 확인 시 그 값으로 실행한다.
+  const [showChannelLimit, setShowChannelLimit] = useState(false)
+  const [channelToDelete, setChannelToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [categoryToDelete, setCategoryToDelete] = useState<{ id: string; name: string } | null>(null)
   const previewToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 두 토스트 타이머 정리 (언마운트 시 setState 호출 방지)
   useEffect(() => () => {
@@ -775,24 +780,22 @@ export default function Dashboard() {
 
   // Free 플랜 채널 한도 도달 시 업그레이드 유도 (확인 시 /pricing 이동)
   function promptChannelLimit() {
-    if (confirm(t('alerts.channelLimitReached'))) {
-      router.push('/pricing')
-    }
+    setShowChannelLimit(true)
   }
 
   async function addChannel() {
     if (!newChannel.url.trim()) {
-      alert(t('alerts.needChannelUrl'))
+      showPreviewToast(t('alerts.needChannelUrl'))
       return
     }
     if (!newChannel.alias.trim()) {
-      alert(t('alerts.needChannelAlias'))
+      showPreviewToast(t('alerts.needChannelAlias'))
       return
     }
     // 중복 채널 방지 (정규화 URL 기준)
     const normalizedNew = normalizeChannelUrl(newChannel.url)
     if (channels.some(ch => normalizeChannelUrl(ch.url) === normalizedNew)) {
-      alert(t('alerts.channelDuplicate'))
+      showPreviewToast(t('alerts.channelDuplicate'))
       return
     }
     // Free 사용자 채널 수 제한 (활성 채널 기준, 프론트 1차 체크)
@@ -816,9 +819,9 @@ export default function Dashboard() {
       if (res.status === 403 && err.code === 'CHANNEL_LIMIT') {
         promptChannelLimit()
       } else if (res.status === 409 && err.code === 'CHANNEL_DUPLICATE') {
-        alert(t('alerts.channelDuplicate'))
+        showPreviewToast(t('alerts.channelDuplicate'))
       } else {
-        alert(t('alerts.channelAddFailed'))
+        showPreviewToast(t('alerts.channelAddFailed'))
       }
       return
     }
@@ -827,16 +830,20 @@ export default function Dashboard() {
     loadData(user.id)
   }
 
+  // 삭제 확인창을 연다. 실제 삭제는 확인 시 confirmDeleteChannel이 한다.
   async function deleteChannel(id: string) {
     const channel = channels.find(c => c.id === id)
-    if (!confirm(t('alerts.confirmDeleteChannel', { name: channel?.alias ?? '' }))) return
+    setChannelToDelete({ id, name: channel?.alias ?? '' })
+  }
+
+  async function confirmDeleteChannel(id: string) {
     await supabase.from('channels').delete().eq('id', id)
     loadData(user.id)
   }
 
   async function addCategory() {
     if (!newCategory.name.trim()) {
-      alert(t('alerts.needCategoryName'))
+      showPreviewToast(t('alerts.needCategoryName'))
       return
     }
     await supabase.from('categories').insert({
@@ -849,9 +856,13 @@ export default function Dashboard() {
     loadData(user.id)
   }
 
+  // 삭제 확인창을 연다. 실제 삭제는 확인 시 confirmDeleteCategory가 한다.
   async function deleteCategory(id: string) {
     const category = categories.find(c => c.id === id)
-    if (!confirm(t('alerts.confirmDeleteCategory', { name: category?.name ?? '' }))) return
+    setCategoryToDelete({ id, name: category?.name ?? '' })
+  }
+
+  async function confirmDeleteCategory(id: string) {
     await supabase.from('channels').update({ category_id: null }).eq('category_id', id)
     await supabase.from('categories').delete().eq('id', id)
     loadData(user.id)
@@ -873,11 +884,11 @@ export default function Dashboard() {
 
   async function updateChannel(id: string) {
     if (!editChannelData.alias.trim()) {
-      alert(t('alerts.needChannelAlias'))
+      showPreviewToast(t('alerts.needChannelAlias'))
       return
     }
     if (!editChannelData.url.trim()) {
-      alert(t('alerts.needChannelUrl'))
+      showPreviewToast(t('alerts.needChannelUrl'))
       return
     }
     await supabase.from('channels').update({
@@ -3067,6 +3078,35 @@ export default function Dashboard() {
           <Lock size={13} color="var(--bg-card)" />
           {channelNotice}
         </div>
+      )}
+
+      {/* === 확인창 (브라우저 confirm() 대체) === */}
+      {showChannelLimit && (
+        <ConfirmModal
+          title={t('alerts.channelLimitTitle')}
+          lines={[t('alerts.channelLimitLine')]}
+          confirmLabel={t('common.proUpgrade')}
+          onConfirm={() => { setShowChannelLimit(false); router.push('/pricing') }}
+          onCancel={() => setShowChannelLimit(false)}
+        />
+      )}
+      {channelToDelete && (
+        <ConfirmModal
+          title={t('alerts.confirmDeleteChannel', { name: channelToDelete.name })}
+          lines={[]}
+          confirmLabel={t('common.deleteConfirm')}
+          onConfirm={() => { const { id } = channelToDelete; setChannelToDelete(null); confirmDeleteChannel(id) }}
+          onCancel={() => setChannelToDelete(null)}
+        />
+      )}
+      {categoryToDelete && (
+        <ConfirmModal
+          title={t('alerts.confirmDeleteCategory', { name: categoryToDelete.name })}
+          lines={[t('alerts.deleteCategoryLine')]}
+          confirmLabel={t('common.deleteConfirm')}
+          onConfirm={() => { const { id } = categoryToDelete; setCategoryToDelete(null); confirmDeleteCategory(id) }}
+          onCancel={() => setCategoryToDelete(null)}
+        />
       )}
 
       {/* 미리보기 결과 토스트 — 결제/PRO 안내 토스트와 동일 스타일(하단 중앙 알약).
