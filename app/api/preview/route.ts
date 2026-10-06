@@ -16,7 +16,7 @@ import {
 import { isDescriptionBasedSummary, isTranscriptFailedSummary } from '@/lib/summary-basis'
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 import { failReasonTranslationKeys } from '@/lib/email-templates'
-import { getAuthedUser, isAdminEmail } from '@/lib/route-auth'
+import { getAuthedUser } from '@/lib/route-auth'
 
 // 가입 직후 "미리보기" — 구독 채널의 최신 영상 3개를 지금 요약해 열람 기록에만 저장한다.
 // 메일 발송·send_log·속보 발송은 일절 하지 않는다(정기 발송 경로와 완전 분리).
@@ -113,14 +113,11 @@ export async function POST() {
 
     const userName = profile?.name ?? '사용자'
 
-    // 4) 플랜 판정 (digest 라우트와 동일 — 만료 동기화 + 관리자 예외)
+    // 4) 플랜 판정 (digest 라우트와 동일 — 만료 동기화, 관리자 예외 없음)
     const currentPlan = await syncUserPlan(user.id)
-    const isPro =
-      currentPlan === 'pro' ||
-      currentPlan === 'vip' ||
-      isAdminEmail(profile?.email ?? user.email)
+    const isPro = currentPlan === 'pro' || currentPlan === 'vip'
 
-    // 5) 채널 목록 — Free는 활성 채널만, Pro/VIP/관리자는 전체
+    // 5) 채널 목록 — Free는 활성 채널만, Pro/VIP는 전체
     const { data: allChannels } = await supabase
       .from('channels')
       .select('*, categories(name, color)')

@@ -1495,8 +1495,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Pro 업그레이드 배너 (Free + 비관리자만) */}
-              {plan === 'FREE' && !isAdmin && (
+              {/* Pro 업그레이드 배너 (Free만 — 관리자도 DB 플랜 기준) */}
+              {plan === 'FREE' && (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 14,
                   background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-subtle) 100%)',

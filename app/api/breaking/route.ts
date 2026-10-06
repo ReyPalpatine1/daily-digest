@@ -82,9 +82,6 @@ export async function POST(req: Request) {
 }
 
 async function runBreaking(userId: string): Promise<{ status: number; body: any }> {
-  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 시점에 채워짐)
-  // adminEmails는 요청 처리 시점(이 함수 내부)에서 계산한다.
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
   try {
     const { data: settings, error: settingsError } = await supabase
       .from('settings')
@@ -119,10 +116,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       return { status: 500, body: { error: profileError.message } }
     }
 
-    const isPro =
-      currentPlan === 'pro' ||
-      currentPlan === 'vip' ||
-      (profile?.email && adminEmails.includes(String(profile.email).toLowerCase()))
+    const isPro = currentPlan === 'pro' || currentPlan === 'vip'
 
     const { data: allChannels, error: channelsError } = await supabase
       .from('channels')
@@ -134,7 +128,7 @@ async function runBreaking(userId: string): Promise<{ status: number; body: any 
       return { status: 500, body: { error: channelsError.message } }
     }
 
-    // Free는 활성 채널만 속보 감시. Pro/VIP/관리자는 전체.
+    // Free는 활성 채널만 속보 감시. Pro/VIP는 전체.
     const channels = isPro
       ? allChannels
       : (allChannels ?? []).filter(c => c.is_active !== false)

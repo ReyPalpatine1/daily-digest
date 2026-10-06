@@ -56,7 +56,7 @@ export type Profile = {
 // ★ 화면 판정의 유일한 근거는 DB(profiles)다. 관리자 예외도, localStorage 미리보기 플래그도 두지 않는다.
 //   과거엔 isAdmin=true면 무조건 Pro로 보는 단축이 있었는데, 그 탓에 관리자는 헤더가 항상 PRO라
 //   자기 실제 플랜을 화면에서 확인할 수 없었고 페이지마다 표시가 어긋났다.
-//   (서버의 ADMIN_EMAILS 단축은 "표시"가 아니라 "실행 권한"이라 그대로 둔다 — api/channels·digest·preview·breaking)
+//   (서버도 플랜 판정에 관리자 예외를 두지 않는다. 관리자 예외는 다른 사용자 대상 실행 같은 권한 확인에만 쓴다.)
 export function checkIsPro(profile: Profile | null): boolean {
   if (!profile) return false
 

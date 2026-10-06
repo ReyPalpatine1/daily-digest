@@ -5,11 +5,8 @@ import { normalizeChannelUrl } from '@/lib/channel-url'
 
 const FREE_CHANNEL_LIMIT = 5
 
-// 서버 측 Pro 판정 (lib/supabase.ts의 checkIsPro와 동일 로직)
-// 요청 처리 중에만 호출되므로 ADMIN_EMAILS는 여기서 읽는다(Cloudflare는 모듈 로드 시 env가 빔).
-function isProPlan(plan: string | null | undefined, planExpiresAt: string | null | undefined, email: string | null | undefined): boolean {
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-  if (email && adminEmails.includes(email.toLowerCase())) return true
+// 서버 측 Pro 판정 — DB(profiles)의 plan/plan_expires_at만 따른다(관리자 예외 없음, lib/supabase.ts checkIsPro와 같은 원칙)
+function isProPlan(plan: string | null | undefined, planExpiresAt: string | null | undefined): boolean {
   if (plan === 'vip') return true
   if (plan === 'pro') {
     if (!planExpiresAt) return true
@@ -83,7 +80,7 @@ export async function POST(request: Request) {
     .eq('id', user.id)
     .single()
 
-  const isPro = isProPlan(profile?.plan, profile?.plan_expires_at, user.email)
+  const isPro = isProPlan(profile?.plan, profile?.plan_expires_at)
   const activeCount = existingChannels.filter(ch => ch.is_active !== false).length
 
   if (!isPro && activeCount >= FREE_CHANNEL_LIMIT) {

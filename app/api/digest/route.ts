@@ -259,9 +259,6 @@ async function runDigest(
   trigger: DigestTrigger
 ): Promise<{ status: number; body: any }> {
   const startTime = Date.now()
-  // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 시점에 채워짐)
-  // adminEmails는 요청 처리 시점(이 함수 내부)에서 계산한다.
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
   try {
     // 유저 설정 가져오기
     const { data: settings } = await supabase
@@ -290,10 +287,7 @@ async function runDigest(
       .eq('id', userId)
       .single()
 
-    const isPro =
-      currentPlan === 'pro' ||
-      currentPlan === 'vip' ||
-      (profile?.email && adminEmails.includes(String(profile.email).toLowerCase()))
+    const isPro = currentPlan === 'pro' || currentPlan === 'vip'
 
     // 지난 대기 항목 사후 갱신 — 발송과 무관한 정리 작업이므로 이 아래의 어떤 early return
     // (채널 없음 / 새 영상 0개)에도 걸리지 않도록 사용자·플랜 판정 직후에 실행한다.
@@ -313,7 +307,7 @@ async function runDigest(
       .select('*, categories(name, color)')
       .eq('user_id', userId)
 
-    // Free는 활성 채널(오래된 5개)만 요약. Pro/VIP/관리자는 전체.
+    // Free는 활성 채널(오래된 5개)만 요약. Pro/VIP는 전체.
     const channels = isPro
       ? allChannels
       : (allChannels ?? []).filter(c => c.is_active !== false)
