@@ -25,7 +25,7 @@ import { usePending } from '@/lib/use-pending'
 import { TOAST_MS } from '@/lib/toast'
 import { SkeletonList } from '@/components/Skeleton'
 import ScrollTopButton from '@/components/ScrollTopButton'
-import ConfirmModal from '@/components/ConfirmModal'
+import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
 
 // 진행 중 버튼 표기 — "지금 바로 실행" 버튼의 비활성 처리와 동일 토큰.
 const pendingBtnStyle: React.CSSProperties = {
@@ -3084,16 +3084,15 @@ export default function Dashboard() {
       {showChannelLimit && (
         <ConfirmModal
           title={t('alerts.channelLimitTitle')}
-          lines={[t('alerts.channelLimitLine')]}
-          confirmLabel={t('common.proUpgrade')}
+          confirmLabel={t('nav.proUpgrade')}
           onConfirm={() => { setShowChannelLimit(false); router.push('/pricing') }}
-          onCancel={() => setShowChannelLimit(false)}
-        />
+          onCancel={() => setShowChannelLimit(false)}>
+          <ModalText>{t('alerts.channelLimitLine')}</ModalText>
+        </ConfirmModal>
       )}
       {channelToDelete && (
         <ConfirmModal
           title={t('alerts.confirmDeleteChannel', { name: channelToDelete.name })}
-          lines={[]}
           confirmLabel={t('common.deleteConfirm')}
           onConfirm={() => { const { id } = channelToDelete; setChannelToDelete(null); confirmDeleteChannel(id) }}
           onCancel={() => setChannelToDelete(null)}
@@ -3102,11 +3101,11 @@ export default function Dashboard() {
       {categoryToDelete && (
         <ConfirmModal
           title={t('alerts.confirmDeleteCategory', { name: categoryToDelete.name })}
-          lines={[t('alerts.deleteCategoryLine')]}
           confirmLabel={t('common.deleteConfirm')}
           onConfirm={() => { const { id } = categoryToDelete; setCategoryToDelete(null); confirmDeleteCategory(id) }}
-          onCancel={() => setCategoryToDelete(null)}
-        />
+          onCancel={() => setCategoryToDelete(null)}>
+          <ModalText>{t('alerts.deleteCategoryLine')}</ModalText>
+        </ConfirmModal>
       )}
 
       {/* 미리보기 결과 토스트 — 결제/PRO 안내 토스트와 동일 스타일(하단 중앙 알약).

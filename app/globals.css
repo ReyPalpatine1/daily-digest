@@ -298,3 +298,14 @@ button, a, [onclick], div[role="button"], span[onclick], div[onClick] {
 .cat-chip-row::-webkit-scrollbar {
   height: 4px;
 }
+
+/* =============================================================
+   확인창 본문 문단 (components/ConfirmModal.tsx의 ModalText)
+   여러 문단이 이어지면 문단 사이만 6px 띄운다 — 인라인 스타일로는 인접 형제를 걸 수 없다.
+   ============================================================= */
+.modal-text {
+  margin: 0;
+}
+.modal-text + .modal-text {
+  margin-top: 6px;
+}

@@ -28,16 +28,17 @@ export default function TrialPopup({ variant, endDateLabel, planKind = 'trial', 
     ? (isOnetime ? 'trialPopup.passEndingBody' : 'trialPopup.endingBody')
     : (isOnetime ? 'trialPopup.passEndedBody' : 'trialPopup.endedBody')
 
+  // 버튼 크기·색은 공용 ConfirmModal과 같다(닫기=흰색, 구독하기=검정). 알림창이라 가운데 정렬.
   const subBtn: React.CSSProperties = {
-    flex: 1, height: 42, borderRadius: 9,
-    border: '0.5px solid var(--border)', background: 'transparent',
-    color: 'var(--text-secondary)', fontSize: 13.5,
+    padding: '8px 14px', borderRadius: 8,
+    border: '0.5px solid var(--border)', background: 'var(--bg-card)',
+    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
     cursor: 'pointer', fontFamily: 'inherit',
   }
   const mainBtn: React.CSSProperties = {
-    flex: 1, height: 42, borderRadius: 9, border: 'none',
+    padding: '8px 14px', borderRadius: 8, border: 'none',
     background: 'var(--text-primary)', color: 'var(--bg-card)',
-    fontSize: 13.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+    fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
   }
 
   return (
@@ -98,7 +99,7 @@ export default function TrialPopup({ variant, endDateLabel, planKind = 'trial', 
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           <button onClick={onClose} style={subBtn}>
             {t('trialPopup.close')}
           </button>

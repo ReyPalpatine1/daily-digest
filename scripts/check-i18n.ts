@@ -13,9 +13,11 @@
 // 가장 위험하기 때문이다("0건"이 사전이 깨끗해서인지 검사가 죽어서인지 구분되어야 한다).
 //
 // 종료 코드: self-test 실패 시 1.
-//   본 검사는 오류(키 누락·잉여 키·플레이스홀더 불일치)가 하나라도 있으면 1, 아니면 0.
+//   본 검사는 오류(키 누락·잉여 키·플레이스홀더 불일치·사전에 없는 키 호출)가 하나라도 있으면 1, 아니면 0.
 //   미번역 의심·문체·마침표·종결 부호는 사람의 판단이 필요한 '경고'라 빌드를 막지 않는다.
 
+import * as fs from 'fs'
+import * as path from 'path'
 import { translations } from '../lib/i18n/translations'
 import { emailTranslations } from '../lib/i18n/email-translations'
 
@@ -299,6 +301,74 @@ function checkDict(dictName: string, dict: Record<string, unknown>, b: Buckets):
   }
 }
 
+// ── (8) 코드가 호출하는 키가 사전에 있는지 ──────────────────────
+// 사전에 없는 키로 t()를 부르면 화면에 키 이름이 그대로 찍힌다(예: 'common.proUpgrade').
+// 사전 대조(1)(2)는 사전끼리만 보므로 이런 오류를 못 잡는다 — 코드 쪽에서 키를 모아 대조한다.
+//
+// 수집 대상: 문자열 리터럴로 부른 t('a.b') / t("a.b"). 여러 줄에 걸친 호출도 잡도록
+// 줄 단위가 아니라 파일 전체에서 찾고, 줄 번호는 위치로 계산한다.
+// 제외: 템플릿 리터럴·변수로 만든 동적 키(t(deniedKey), t(`x.${y}`)) — 값을 알 수 없다.
+//       obj.t(…)·foo_t(…)처럼 이름 끝이 t인 다른 함수는 앞 글자 검사로 거른다.
+// 판정은 정규식이 아니라 실제 사전 객체를 경로로 조회한다 — 한 줄 객체로 정의된 키
+// (landing.item1.channel 등)도 런타임과 같은 방식으로 찾는다.
+const KEY_SCAN_DIRS = ['app', 'components', 'lib']
+const T_CALL = /(?<![\w$.])t\(\s*(['"])([^'"\\\r\n]+)\1\s*[,)]/g
+
+function extractKeys(source: string): { key: string; line: number }[] {
+  const found: { key: string; line: number }[] = []
+  T_CALL.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = T_CALL.exec(source)) !== null) {
+    const line = source.slice(0, m.index).split('\n').length
+    found.push({ key: m[2], line })
+  }
+  return found
+}
+
+// 경로로 조회해 문자열이 나오면 존재하는 키다(중간 객체만 있고 값이 아니면 없는 것으로 본다).
+function lookup(dict: unknown, key: string): unknown {
+  let cur: unknown = dict
+  for (const part of key.split('.')) {
+    if (cur === null || typeof cur !== 'object') return undefined
+    cur = (cur as Record<string, unknown>)[part]
+  }
+  return cur
+}
+
+function checkUsedKeys(
+  dict: Record<string, unknown>,
+  sources: { file: string; text: string }[],
+  out: Finding[],
+): void {
+  for (const src of sources) {
+    for (const { key, line } of extractKeys(src.text)) {
+      const absent = [BASE, ...TARGETS].filter(loc => typeof lookup(dict[loc], key) !== 'string')
+      if (absent.length > 0) {
+        out.push({ dict: 'code', path: src.file + ':' + line, detail: key + ' — 없음: ' + absent.join(', ') })
+      }
+    }
+  }
+}
+
+function collectSources(): { file: string; text: string }[] {
+  const root = process.cwd()
+  const out: { file: string; text: string }[] = []
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) walk(full)
+      else if (/\.(ts|tsx)$/.test(e.name)) {
+        out.push({ file: path.relative(root, full).split(path.sep).join('/'), text: fs.readFileSync(full, 'utf8') })
+      }
+    }
+  }
+  for (const d of KEY_SCAN_DIRS) {
+    const full = path.join(root, d)
+    if (fs.existsSync(full)) walk(full)
+  }
+  return out
+}
+
 // ── 자체 검증(self-test) ──────────────────────────────────────
 // 검사 도구는 자기가 고장 났을 때 조용히 통과하는 것이 가장 위험하다.
 // 그래서 본 검사 전에, 일부러 위반을 심어 둔 가짜 사전을 같은 checkDict()에 통과시켜
@@ -418,7 +488,31 @@ function runSelfTest(): void {
     console.error('')
     process.exit(1)
   }
-  console.log('[self-test] ' + SELF_TEST_EXPECT.length + '개 항목 정상')
+  // (8) 키 수집·조회 — 잡아야 할 호출과 걸러야 할 호출을 섞은 가짜 소스로 확인한다.
+  const keySrc = [
+    "t('shared')",                          // 있음 → 통과
+    't("missing.dq")',                      // 큰따옴표 리터럴 → 양성
+    "x = t(\n  'missing.multi',\n  { n: 1 })", // 여러 줄 호출 → 양성(t( 가 있는 3번째 줄로 보고)
+    't(`missing.${dyn}`)',                  // 템플릿 리터럴 → 제외
+    't(deniedKey)',                         // 변수 → 제외
+    "obj.t('missing.method')",              // 다른 객체의 t → 제외
+    "fmt('missing.fmt')",                   // 이름 끝이 t인 다른 함수 → 제외
+    "t('faq')",                             // 값이 문자열이 아닌 경로(배열) → 양성
+  ].join('\n')
+  const keyOut: Finding[] = []
+  checkUsedKeys(SELF_TEST_DICT, [{ file: 'fixture', text: keySrc }], keyOut)
+  const keyActual = keyOut.map(f => f.path + ' ' + f.detail.split(' ')[0]).sort().join('|')
+  const keyExpect = ['fixture:2 missing.dq', 'fixture:3 missing.multi', 'fixture:10 faq'].sort().join('|')
+  if (keyActual !== keyExpect) {
+    console.error('')
+    console.error('## 검사기 자체가 고장났습니다 (self-test 실패) — (8) 사전에 없는 키 호출')
+    console.error('      기대: [' + keyExpect + ']')
+    console.error('      실제: [' + (keyActual || '없음') + ']')
+    console.error('')
+    process.exit(1)
+  }
+
+  console.log('[self-test] ' + (SELF_TEST_EXPECT.length + 1) + '개 항목 정상')
 }
 
 // ── 출력 ───────────────────────────────────────────────────────
@@ -441,6 +535,9 @@ function main(): void {
   checkDict('translations.ts', translations as unknown as Record<string, unknown>, b)
   checkDict('email-translations.ts', emailTranslations as unknown as Record<string, unknown>, b)
 
+  const unknownKeys: Finding[] = []
+  checkUsedKeys(translations as unknown as Record<string, unknown>, collectSources(), unknownKeys)
+
   const line = '='.repeat(72)
   console.log(line)
   console.log('i18n 사전 검수 — 기준 언어: ko / 대상: en, zh, ja')
@@ -450,6 +547,7 @@ function main(): void {
   report('(1) 키 누락 — ko에 있는데 대상 언어에 없음', b.missing, true)
   report('(2) 잉여 키 — 대상 언어에만 있음(삭제 누락)', b.extra, true)
   report('(6) 플레이스홀더 불일치 — 런타임에 값이 안 채워짐', b.placeholder, true)
+  report('(8) 사전에 없는 키 호출 — 화면에 키 이름이 그대로 찍힘', unknownKeys, true)
 
   console.log('\n──────── 경고 (exit 0, 사람의 판단 필요) ────────')
   report('(3) 미번역 의심 — 값이 ko와 완전히 동일', b.untranslated, false)
@@ -457,7 +555,7 @@ function main(): void {
   report('(5) 마침표 규칙 위반 의심 — 오탐 가능', b.period, false)
   report('(7) 종결 부호 불일치 — ko와 다른 언어의 문장 끝 부호가 어긋남', b.terminal, false)
 
-  const errors = b.missing.length + b.extra.length + b.placeholder.length
+  const errors = b.missing.length + b.extra.length + b.placeholder.length + unknownKeys.length
   const warnings = b.untranslated.length + b.casual.length + b.period.length + b.terminal.length
 
   console.log('\n' + line)
@@ -465,6 +563,7 @@ function main(): void {
   console.log('  (1) 키 누락            : ' + b.missing.length)
   console.log('  (2) 잉여 키            : ' + b.extra.length)
   console.log('  (6) 플레이스홀더 불일치 : ' + b.placeholder.length)
+  console.log('  (8) 사전에 없는 키 호출 : ' + unknownKeys.length)
   console.log('  ── 오류 합계           : ' + errors)
   console.log('  (3) 미번역 의심        : ' + b.untranslated.length)
   console.log('  (4) 문체 위반          : ' + b.casual.length)

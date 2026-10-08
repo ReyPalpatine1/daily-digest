@@ -5,8 +5,9 @@
 // 공유 페이지는 외부인 대상 한국어 고정 페이지라 t() 없이 문구를 직접 쓴다(페이지 본문과 동일).
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { X, CheckCircle } from 'lucide-react'
+import { X } from 'lucide-react'
 import { usePending } from '@/lib/use-pending'
+import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
 
 type Reason = 'abuse' | 'privacy' | 'other'
 
@@ -72,6 +73,15 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
     })
   }
 
+  // 접수 완료 — 입력 폼이 아니라 확인창이므로 공용 ConfirmModal로 그린다(문구는 한국어 고정).
+  if (done) {
+    return (
+      <ConfirmModal title="신고가 접수되었습니다." cancelLabel="닫기" onCancel={onClose}>
+        <ModalText>처리 결과는 별도로 안내되지 않습니다.</ModalText>
+      </ConfirmModal>
+    )
+  }
+
   return (
     <div
       onClick={onClose}
@@ -95,33 +105,6 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
           boxSizing: 'border-box',
           boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
         }}>
-        {done ? (
-          // 완료 화면 — 의견 보내기 성공 화면과 같은 구성(원형 아이콘 + 제목 + 안내 + 닫기).
-          <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <div style={{
-              width: 52, height: 52, borderRadius: '50%', background: 'var(--bg-subtle)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-            }}>
-              <CheckCircle size={30} style={{ color: 'var(--accent)' }} />
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-              신고가 접수되었습니다.
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 24 }}>
-              처리 결과는 별도로 안내되지 않습니다.
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                minWidth: 120, height: 42, borderRadius: 8, border: '0.5px solid var(--border)',
-                background: 'transparent', color: 'var(--text-primary)', fontWeight: 500,
-                fontSize: 14, fontFamily: 'inherit', cursor: 'pointer',
-              }}>
-              닫기
-            </button>
-          </div>
-        ) : (
           <>
             {/* 헤더 */}
             <div style={{
@@ -206,7 +189,6 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
               </div>
             )}
           </>
-        )}
       </div>
     </div>
   )

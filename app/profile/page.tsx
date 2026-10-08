@@ -12,7 +12,7 @@ import { UpgradeButton } from '@/components/UpgradeButton'
 import UserPlanBadge from '@/components/UserPlanBadge'
 import HelpPopup from '@/components/HelpPopup'
 import RefundModal from '@/components/RefundModal'
-import ConfirmModal from '@/components/ConfirmModal'
+import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
 import NoticeList from '@/components/NoticeList'
 import { AlertTriangle, CreditCard, ExternalLink } from 'lucide-react'
 import { requestCardRegistration } from '@/lib/toss-billing'
@@ -178,6 +178,12 @@ export default function ProfilePage() {
   const expiresLabel = isVip || !profile?.plan_expires_at
     ? t('profile.noExpiry')
     : new Date(profile.plan_expires_at).toLocaleDateString(dateLocale)
+
+  // 카드 삭제 확인창 본문 — 해당하는 사람에게만 해당 문장을 보인다.
+  // (무료·1개월권 사용자에게 "자동 갱신이 중단됩니다"를 보이지 않기 위함)
+  const cardLineAuto = profile?.plan_status === 'active'
+  const cardLineDate = isPro && !isVip && !!profile?.plan_expires_at &&
+    (profile.plan_status === 'active' || profile.plan_status === 'onetime')
 
   // 토스트 1회 노출. 새 토스트가 뜨면 이전 타이머를 버린다 — 안 그러면 연속 호출 시
   // 이전 타이머가 살아 있어 두 번째 토스트가 제 시간을 못 채우고 일찍 사라진다.
@@ -657,127 +663,72 @@ export default function ProfilePage() {
       {showDeleteCard && (
         <ConfirmModal
           title={t('profile.deleteCardTitle')}
-          lines={[
-            ...(profile?.plan_status === 'active' ? [t('profile.deleteCardLineAuto')] : []),
-            ...(isPro && !isVip && profile?.plan_expires_at &&
-              (profile.plan_status === 'active' || profile.plan_status === 'onetime')
-              ? [t('profile.deleteCardLineDate', { date: expiresLabel })] : []),
-          ]}
           confirmLabel={t('profile.deleteCardConfirm')}
           busy={cardBusy}
           onConfirm={deleteCard}
-          onCancel={() => setShowDeleteCard(false)}
-        />
+          onCancel={() => setShowDeleteCard(false)}>
+          {/* 해당하는 줄만, 순서 고정. 둘 다 없으면 본문 없이 제목+버튼만. */}
+          {(cardLineAuto || cardLineDate) && (
+            <>
+              {cardLineAuto && <ModalText>{t('profile.deleteCardLineAuto')}</ModalText>}
+              {cardLineDate && (
+                <ModalText>{t('profile.deleteCardLineDate', { date: expiresLabel })}</ModalText>
+              )}
+            </>
+          )}
+        </ConfirmModal>
       )}
 
       {/* === 자동 갱신 해지 확인 모달 === */}
       {showCancelRenew && (
         <ConfirmModal
           title={t('profile.cancelRenewTitle')}
-          lines={[t('profile.cancelRenewBody', { date: expiresLabel })]}
           confirmLabel={t('profile.cancelRenewConfirm')}
           busy={renewBusy}
           onConfirm={() => setAutoRenew(true)}
-          onCancel={() => setShowCancelRenew(false)}
-        />
+          onCancel={() => setShowCancelRenew(false)}>
+          <ModalText>{t('profile.cancelRenewBody', { date: expiresLabel })}</ModalText>
+        </ConfirmModal>
       )}
 
       {/* === 탈퇴 확인 모달 === */}
       {showDelete && (
-        <div
-          onClick={closeDeleteModal}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 120,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 20,
+        <ConfirmModal
+          title={t('profile.deleteConfirmTitle')}
+          icon={<AlertTriangle size={18} style={{ color: 'var(--text-primary)', flexShrink: 0 }} />}
+          confirmLabel={t('profile.deleteConfirm')}
+          confirmDisabled={!deleteAgree}
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={closeDeleteModal}
+          links={[
+            { label: t('settings.refund'), href: '/refund' },
+            { label: t('settings.privacy'), href: '/privacy' },
+          ]}>
+          {/* 해당하는 줄만, 순서 고정: 데이터 → 남은 기간 → 환불 → 공유 → 결제 기록 */}
+          <NoticeList lines={[
+            t('profile.deleteLineData'),
+            ...(isPro && !isVip && (profile?.plan_status === 'active' || profile?.plan_status === 'onetime')
+              ? [t('profile.deleteLinePlan')] : []),
+            ...(deleteRefundLine === true ? [t('profile.deleteLineRefund')] : []),
+            t('profile.deleteLineShare'),
+            ...(payments.some(p => p.status === 'done') ? [t('profile.deleteLinePayment')] : []),
+          ]} />
+
+          <label style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            fontSize: 12.5, color: 'var(--text-primary)', cursor: 'pointer',
+            marginTop: 14,
           }}>
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '100%', maxWidth: 400,
-              background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-              borderRadius: 14, padding: 22, boxSizing: 'border-box',
-              boxShadow: 'var(--shadow-lg)',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <AlertTriangle size={18} style={{ color: 'var(--text-primary)' }} />
-              <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>
-                {t('profile.deleteConfirmTitle')}
-              </h2>
-            </div>
-
-            {/* 해당하는 줄만, 순서 고정: 데이터 → 남은 기간 → 환불 → 공유 → 결제 기록 */}
-            <div style={{ marginBottom: 12 }}>
-              <NoticeList lines={[
-                t('profile.deleteLineData'),
-                ...(isPro && !isVip && (profile?.plan_status === 'active' || profile?.plan_status === 'onetime')
-                  ? [t('profile.deleteLinePlan')] : []),
-                ...(deleteRefundLine === true ? [t('profile.deleteLineRefund')] : []),
-                t('profile.deleteLineShare'),
-                ...(payments.some(p => p.status === 'done') ? [t('profile.deleteLinePayment')] : []),
-              ]} />
-            </div>
-
-            <label style={{
-              display: 'flex', alignItems: 'flex-start', gap: 8,
-              fontSize: 12.5, color: 'var(--text-primary)', cursor: 'pointer',
-              margin: '4px 0 18px',
-            }}>
-              <input
-                type="checkbox"
-                checked={deleteAgree}
-                onChange={e => setDeleteAgree(e.target.checked)}
-                style={{ marginTop: 2, accentColor: 'var(--text-primary)', cursor: 'pointer' }}
-              />
-              <span>{t('profile.deleteAgree')}</span>
-            </label>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={closeDeleteModal}
-                disabled={deleting}
-                style={{
-                  padding: '8px 14px', borderRadius: 8,
-                  border: '0.5px solid var(--border)', background: 'var(--bg-card)',
-                  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
-                  cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit',
-                }}>
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={!deleteAgree || deleting}
-                style={{
-                  padding: '8px 14px', borderRadius: 8, border: 'none',
-                  background: 'var(--text-primary)', color: 'var(--bg-card)',
-                  fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                  cursor: !deleteAgree || deleting ? 'default' : 'pointer',
-                  opacity: !deleteAgree || deleting ? 0.5 : 1,
-                }}>
-                {t('profile.deleteConfirm')}
-              </button>
-            </div>
-
-            {/* 환불정책·처리방침으로 바로 닿는 링크 줄 — RefundModal 거절 화면과 같은 모양 */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginTop: 14, flexWrap: 'wrap' }}>
-              <a
-                href="/refund"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontSize: 12, color: 'var(--text-tertiary)', textDecoration: 'underline' }}>
-                {t('settings.refund')}
-              </a>
-              <a
-                href="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontSize: 12, color: 'var(--text-tertiary)', textDecoration: 'underline' }}>
-                {t('settings.privacy')}
-              </a>
-            </div>
-          </div>
-        </div>
+            <input
+              type="checkbox"
+              checked={deleteAgree}
+              onChange={e => setDeleteAgree(e.target.checked)}
+              style={{ marginTop: 2, accentColor: 'var(--text-primary)', cursor: 'pointer' }}
+            />
+            <span>{t('profile.deleteAgree')}</span>
+          </label>
+        </ConfirmModal>
       )}
 
       {/* === 도움말 팝업 (설정 메뉴에서 열기) === */}
