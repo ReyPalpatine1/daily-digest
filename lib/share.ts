@@ -4,6 +4,8 @@
 import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { shouldCountShareView } from './visit-guard'
+import type { Locale } from './i18n/translations'
+import { getT, isLocale } from './i18n/server-t'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워지므로 첫 사용 시점에 1회 lazy 생성한다. (error-log.ts와 동일 패턴)
@@ -100,6 +102,9 @@ export async function createShare(params: {
   highlightTime?: string
   annotations?: unknown
   showName: boolean
+  // 공유자가 화면에서 보던 언어. 공유 페이지·카드·신고 창이 이 언어로 나온다.
+  // 지원하지 않는 값이면 'ko'로 저장한다.
+  locale?: unknown
 }): Promise<string> {
   // comment: 100자 truncate, 빈 문자열은 null.
   const comment = params.comment?.trim() ? params.comment.trim().slice(0, 100) : null
@@ -110,6 +115,8 @@ export async function createShare(params: {
   const highlightTime = annotations && annotations.timeline.length > 0
     ? annotations.timeline[0].time
     : (params.highlightTime && /^\d{1,2}:\d{2}$/.test(params.highlightTime) ? params.highlightTime : null)
+
+  const locale: Locale = isLocale(params.locale) ? params.locale : 'ko'
 
   const supabase = getSupabase()
   // 토큰 충돌(PK 중복) 확률은 무시 가능 수준이지만, 만약 충돌하면 재생성해 1회만 재시도.
@@ -123,6 +130,7 @@ export async function createShare(params: {
       highlight_time: highlightTime,
       annotations,
       show_name: params.showName,
+      locale,
       // expires_at은 테이블 기본값 사용
     })
     if (!error) return token
@@ -139,6 +147,8 @@ export async function createShare(params: {
 // 채널명(channels.alias)도 사용자 별칭이라 공개 페이지에 부적절 — 원 채널명은 임베드에 표시된다.
 // show_name 컬럼은 DB에 남겨두되(기존 데이터 보존) 코드에서는 사용하지 않는다.
 export type ShareData = {
+  // 공유 페이지 문구·요약 언어. 기존 링크(locale null)와 알 수 없는 값은 'ko'.
+  locale: Locale
   expired: boolean
   blocked?: boolean // 운영 정책상 비공개 처리(blocked_at) — 만료보다 우선
   comment: string | null
@@ -166,7 +176,7 @@ const getShareRow = cache(async (token: string) => {
   // 조회 실패(error)는 기존과 같이 무시 — data가 null이면 호출부가 "없는 공유"로 처리한다.
   const { data } = await getSupabase()
     .from('shared_summaries')
-    .select('token, video_id, comment, highlight_time, annotations, expires_at, blocked_at')
+    .select('token, video_id, comment, highlight_time, annotations, expires_at, blocked_at, locale')
     .eq('token', token)
     .maybeSingle()
   return data
@@ -191,11 +201,15 @@ export async function getShareByToken(
       annotations: unknown
       expires_at: string | null
       blocked_at: string | null
+      locale: string | null
     }
+    // 컬럼 추가 전에 만든 링크는 null → 기존처럼 한국어로 보인다.
+    const shareLocale: Locale = isLocale(share.locale) ? share.locale : 'ko'
 
     // 차단(비공개 처리)은 만료 판정보다 우선.
     if (share.blocked_at) {
       return {
+        locale: shareLocale,
         blocked: true,
         expired: false,
         comment: null, highlightTime: null, annotations: null,
@@ -205,6 +219,7 @@ export async function getShareByToken(
 
     if (share.expires_at && new Date(share.expires_at) <= new Date()) {
       return {
+        locale: shareLocale,
         expired: true,
         comment: null, highlightTime: null, annotations: null,
         video: null, summary: null,
@@ -232,7 +247,7 @@ export async function getShareByToken(
       }
     }
 
-    // 영상 + 요약 병렬 조회 (요약은 ko 우선, 없으면 임의 1행)
+    // 영상 + 요약 병렬 조회 (요약은 공유 언어 우선 → ko → 임의 1행)
     const [videoRes, summaryRes] = await Promise.all([
       supabase.from('videos')
         .select('video_id, title, description')
@@ -257,7 +272,9 @@ export async function getShareByToken(
       summary_basis: string | null
     }
     const summaryRows = (summaryRes.data ?? []) as SummaryRow[]
-    const picked = summaryRows.find(r => r.locale === 'ko') ?? summaryRows[0] ?? null
+    const picked = summaryRows.find(r => r.locale === shareLocale)
+      ?? summaryRows.find(r => r.locale === 'ko')
+      ?? summaryRows[0] ?? null
 
     // JSONB 필드 방어적 정규화 (배열 아니거나 항목 형식이 다르면 버림)
     const keyPoints = Array.isArray(picked?.key_points)
@@ -273,6 +290,7 @@ export async function getShareByToken(
       : []
 
     return {
+      locale: shareLocale,
       expired: false,
       comment: share.comment,
       highlightTime: share.highlight_time,
@@ -280,7 +298,7 @@ export async function getShareByToken(
       video: videoRow
         ? {
             videoId: videoRow.video_id,
-            title: videoRow.title ?? '(제목 없음)',
+            title: videoRow.title ?? getT(shareLocale)('share.untitled'),
             description: videoRow.description,
           }
         : null,

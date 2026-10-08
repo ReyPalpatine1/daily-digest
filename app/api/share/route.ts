@@ -44,6 +44,7 @@ export async function POST(req: Request) {
     highlightTime?: string
     annotations?: unknown
     showName?: boolean
+    locale?: unknown
   }
 
   // videoId: 필수 (YouTube ID — 영문/숫자/-/_ 만, 상한 32자로 방어)
@@ -62,6 +63,8 @@ export async function POST(req: Request) {
       annotations: body.annotations,
       // showName은 더 이상 클라이언트에서 오지 않으므로 true로 고정(컬럼 유지, 미사용).
       showName: true,
+      // 공유자 화면 언어 — 검증('ko'|'en'|'zh'|'ja' 외는 'ko')은 share.ts가 담당.
+      locale: body.locale,
     })
     return NextResponse.json({ token, url: `${appUrl}/s/${token}` })
   } catch (e) {

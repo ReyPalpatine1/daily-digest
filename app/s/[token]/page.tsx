@@ -10,6 +10,8 @@ import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 import ShareVideo from '@/components/ShareVideo'
 import ScrollTopButton from '@/components/ScrollTopButton'
 import ShareReportButton from '@/components/ShareReportButton'
+import { getT, type TFn } from '@/lib/i18n/server-t'
+import type { Locale } from '@/lib/i18n/translations'
 
 // 공개 공유 페이지 — 로그인 불필요, 매 요청 조회 (토큰 만료/조회수 반영)
 export const dynamic = 'force-dynamic'
@@ -49,30 +51,33 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // 노출되지 않게, 그리고 만료된 공유가 죽은 링크로 남지 않게 — 공유는 링크를 받은 사람이
   // 보는 용도다. openGraph(메신저 미리보기 카드)는 검색 색인과 별개라 그대로 동작한다.
   const robots: Metadata['robots'] = { index: false, follow: false }
-  const fallback: Metadata = {
-    title: '공유된 요약 | Daily Video Digest',
-    description: '유튜브 영상 AI 요약 공유',
+  // 문구는 공유자가 고른 언어로 — 존재하지 않는 토큰은 언어를 알 수 없으므로 'ko'.
+  const fallbackFor = (t: TFn): Metadata => ({
+    title: t('share.metaFallbackTitle'),
+    description: t('share.metaDescription'),
     robots,
-  }
-  if (!isValidTokenFormat(token)) return fallback
+  })
+  if (!isValidTokenFormat(token)) return fallbackFor(getT('ko'))
 
   const data = await getShareByToken(token)
-  if (!data || data.blocked || data.expired || !data.video) return fallback
+  if (!data) return fallbackFor(getT('ko'))
+  const t = getT(data.locale)
+  if (data.blocked || data.expired || !data.video) return fallbackFor(t)
 
   const title = data.video.title
   const description =
-    (data.summary?.tldr || data.summary?.summary || '').slice(0, 160) || '유튜브 영상 AI 요약 공유'
+    (data.summary?.tldr || data.summary?.summary || '').slice(0, 160) || t('share.metaDescription')
   const thumb = `https://i.ytimg.com/vi/${data.video.videoId}/hqdefault.jpg`
 
   // 미리보기 카드는 카카오 카드와 같은 구성 — 제목=공유자 메모, 설명=tldr.
   // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다.
   // tldr이 없을 때만 설명을 영상 제목으로 대체하고, 그것도 없으면 설명을 생략한다.
   // 브라우저 탭 제목(title)은 영상 제목 그대로 — 미리보기 제목과 분리한다.
-  const cardTitle = cardText(data.comment, CARD_TITLE_MAX) || '📌 핵심 포인트'
+  const cardTitle = cardText(data.comment, CARD_TITLE_MAX) || t('history.keyPoints')
   const cardDesc = cardText(data.summary?.tldr, CARD_DESC_MAX) || cardText(title, CARD_DESC_MAX)
 
   return {
-    title: `${title} — 요약 | Daily Video Digest`,
+    title: t('share.metaTitle', { title }),
     description,
     robots,
     openGraph: {
@@ -98,24 +103,22 @@ const cardStyle: CSSProperties = {
   padding: 18,
 }
 
-// 섹션 라벨 — 열람기록(대시보드)과 동일 스타일. 문구도 같은 형태로 맞춘다(서버 컴포넌트라 t() 미사용).
+// 섹션 라벨 — 열람기록(대시보드)과 동일 스타일. 문구도 열람기록과 같은 키(history.*)를 쓴다.
 const sectionLabelStyle: CSSProperties = {
   fontSize: 11, fontWeight: 600, letterSpacing: 0.6,
   color: 'var(--text-muted)', marginBottom: 9,
 }
 
 // summary_basis(한국어 라벨) → 근거 표기 문구. 이 문구가 AI 부정확 고지를 겸한다.
-// 판정 기준은 메일(basisTranslationKey)·열람기록(summaryBasisKeys)과 동일하게 맞출 것.
+// 판정 기준·문구는 열람기록(summaryBasisKeys, history.basis*Label)과 같은 키를 쓴다
+// (메일 digest.basis*와도 같은 문장 — 채널마다 문구를 따로 만들지 않는다).
 // 폐지된 '제목 기반 요약'을 비롯해 알 수 없는 값은 null → 표기를 아예 렌더하지 않는다.
-function summaryBasisText(summaryBasis?: string | null): string | null {
+function summaryBasisText(t: TFn, summaryBasis?: string | null): string | null {
   const basis = summaryBasis ?? ''
-  // 자막 없음(설명 대체)과 자막 확보 실패는 사용자에게 같은 결과이므로 문구가 같다
-  // (메일 digest.basisDescription·열람기록 history.basisDescriptionLabel과 동일 문구).
-  const descriptionText = '자막을 확인할 수 없어 영상 설명으로 분석한 AI 요약입니다. 원문과 차이가 있을 수 있습니다.'
   // '자막 확보 실패 기반 요약'도 '자막'을 포함하므로 아래 includes 판정보다 먼저 정확 일치로 거른다.
-  if (basis === SUMMARY_BASIS_TRANSCRIPT_FAILED) return descriptionText
-  if (basis.includes('자막')) return '자막을 기반으로 분석한 AI 요약입니다. 오류가 있을 수 있습니다.'
-  if (basis.includes('설명')) return descriptionText
+  if (basis === SUMMARY_BASIS_TRANSCRIPT_FAILED) return t('history.basisTranscriptFailedLabel')
+  if (basis.includes('자막')) return t('history.basisTranscriptLabel')
+  if (basis.includes('설명')) return t('history.basisDescriptionLabel')
   return null
 }
 
@@ -140,8 +143,8 @@ const highlightStyle: CSSProperties = {
 }
 
 // 문제 신고 — 신고 모달(ReportModal)을 여는 버튼. 상태가 필요해 클라이언트 래퍼로 감싼다.
-function ReportLink({ token }: { token: string }) {
-  return <ShareReportButton token={token} />
+function ReportLink({ token, locale }: { token: string; locale: Locale }) {
+  return <ShareReportButton token={token} locale={locale} />
 }
 
 // 상단 서비스 로고 + 본문 래퍼 (외부인 대상 독립 페이지 — AppHeader 미사용)
@@ -170,7 +173,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 // 하단 가입 CTA
 // token을 알 수 있으면 어느 공유에서 왔는지까지 남긴다(없으면 ref=share만).
-function SignupCta({ token }: { token?: string }) {
+function SignupCta({ t, token }: { t: TFn; token?: string }) {
   const href = token ? `/?ref=share&t=${encodeURIComponent(token)}` : '/?ref=share'
   return (
     <div style={{
@@ -179,12 +182,10 @@ function SignupCta({ token }: { token?: string }) {
     }}>
       <Sparkles size={18} style={{ color: 'var(--text-tertiary)' }} />
       <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-        이런 요약을 매일 아침 받아보세요
+        {t('share.ctaHeading')}
       </div>
-      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-        구독 중인 유튜브 채널의 새 영상을 AI가 요약해서
-        <br />
-        매일 아침 메일함으로 보내드려요.
+      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+        {t('share.ctaBody')}
       </div>
       <Link href={href} style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -192,7 +193,7 @@ function SignupCta({ token }: { token?: string }) {
         background: 'var(--accent)', color: 'var(--bg-card)',
         fontSize: 13, fontWeight: 600, textDecoration: 'none',
       }}>
-        무료로 시작하기
+        {t('share.ctaButton')}
       </Link>
     </div>
   )
@@ -200,8 +201,9 @@ function SignupCta({ token }: { token?: string }) {
 
 // 없음/만료/차단 공통 안내
 function NoticePage({
-  title, desc, icon, cta = true, reportToken, ctaToken,
+  locale, title, desc, icon, cta = true, reportToken, ctaToken,
 }: {
+  locale: Locale
   title: string
   desc?: string
   icon?: React.ReactNode
@@ -228,11 +230,11 @@ function NoticePage({
         )}
         {reportToken && (
           <div style={{ marginTop: 14 }}>
-            <ReportLink token={reportToken} />
+            <ReportLink token={reportToken} locale={locale} />
           </div>
         )}
       </div>
-      {cta && <SignupCta token={ctaToken} />}
+      {cta && <SignupCta t={getT(locale)} token={ctaToken} />}
     </Shell>
   )
 }
@@ -241,9 +243,10 @@ export default async function SharePage({ params }: PageProps) {
   const { token } = await params
 
   // 형식부터 틀린 토큰은 여기서 끝낸다 — 방문자 해시 계산도, DB 조회도 하지 않는다.
+  // 존재하지 않는 공유는 언어를 알 수 없으므로 한국어.
   if (!isValidTokenFormat(token)) {
     return (
-      <NoticePage title="존재하지 않는 공유입니다." />
+      <NoticePage locale="ko" title={getT('ko')('share.notFound')} />
     )
   }
 
@@ -265,15 +268,19 @@ export default async function SharePage({ params }: PageProps) {
 
   if (!data) {
     return (
-      <NoticePage title="존재하지 않는 공유입니다." />
+      <NoticePage locale="ko" title={getT('ko')('share.notFound')} />
     )
   }
+  // 이 아래 문구는 모두 공유자가 고른 언어(기존 링크는 'ko').
+  const shareLocale = data.locale
+  const t = getT(shareLocale)
   if (data.blocked) {
     return (
       <NoticePage
+        locale={shareLocale}
         icon={<ShieldOff size={22} />}
-        title="더 이상 볼 수 없는 공유입니다."
-        desc="운영 정책에 따라 비공개 처리되었습니다."
+        title={t('share.blockedTitle')}
+        desc={t('share.blockedDesc')}
         cta={false}
       />
     )
@@ -281,8 +288,9 @@ export default async function SharePage({ params }: PageProps) {
   if (data.expired || !data.video) {
     return (
       <NoticePage
-        title="이 공유는 만료되었습니다."
-        desc="공유 링크는 생성 후 14일이 지나면 만료됩니다."
+        locale={shareLocale}
+        title={t('share.expiredTitle')}
+        desc={t('share.expiredDesc')}
         reportToken={token}
         ctaToken={token}
       />
@@ -304,7 +312,7 @@ export default async function SharePage({ params }: PageProps) {
   // 타임라인 강조 시각 — annotations 있으면 그 time, 없으면(구버전) highlight_time 폴백.
   const activeTlTimes = new Set<string>()
   if (ann) {
-    for (const t of ann.timeline) activeTlTimes.add(t.time)
+    for (const item of ann.timeline) activeTlTimes.add(item.time)
   } else if (data.highlightTime) {
     activeTlTimes.add(data.highlightTime)
   }
@@ -316,9 +324,8 @@ export default async function SharePage({ params }: PageProps) {
     active: activeTlTimes.has(it.time),
   }))
   const watchUrl = `https://youtube.com/watch?v=${video.videoId}`
-  // 요약 근거 문구 — 메일(digest.basis*)·열람기록(history.basis*)과 같은 한국어 문장.
-  // 이 페이지는 서버 컴포넌트 + 한국어 고정이라 t() 없이 그대로 둔다.
-  const basisText = summaryBasisText(summary?.summaryBasis)
+  // 요약 근거 문구 — 메일(digest.basis*)·열람기록(history.basis*)과 같은 문장.
+  const basisText = summaryBasisText(t, summary?.summaryBasis)
 
   return (
     <Shell>
@@ -331,7 +338,7 @@ export default async function SharePage({ params }: PageProps) {
         }}>
           <span style={bannerLabelStyle}>
             <MessageSquareQuote size={12} />
-            공유자 메모
+            {t('share.memoBanner')}
           </span>
           <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.6 }}>
             {data.comment}
@@ -350,6 +357,7 @@ export default async function SharePage({ params }: PageProps) {
           videoTitle={video.title}
           watchUrl={watchUrl}
           timeline={timelineItems}
+          locale={shareLocale}
         />
 
         {/* (3) tldr — 둥근 바 + 본문 (배경 없음) */}
@@ -374,7 +382,7 @@ export default async function SharePage({ params }: PageProps) {
             background: 'var(--bg-subtle)', borderRadius: 8,
             padding: '14px 15px',
           }}>
-            <div style={sectionLabelStyle}>📌 핵심 포인트</div>
+            <div style={sectionLabelStyle}>{t('history.keyPoints')}</div>
             {summary.keyPoints.map((p, i) => {
               const active = activeKpIdx.has(i)
               // 새 형식은 상세 요약과 같은 `**앵커.**` 마커 → 볼드 변환만.
@@ -407,13 +415,12 @@ export default async function SharePage({ params }: PageProps) {
 
         {!summary && (
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            이 영상의 요약을 불러올 수 없습니다. 위 영상에서 직접 확인해 주세요.
+            {t('share.noSummary')}
           </div>
         )}
 
         {/* 요약 근거 표기(= AI 부정확 고지) — 메일·열람기록과 같은 자리(요약 맨 아래).
-            비회원이 보는 화면이라 약관 동의가 없어 반드시 필요하다.
-            이 페이지는 한국어 고정 문구 방식이라 여기서도 한국어로 둔다(다른 채널과 같은 문장). */}
+            비회원이 보는 화면이라 약관 동의가 없어 반드시 필요하다. */}
         {basisText && (
           <div style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 14 }}>
             {basisText}
@@ -422,7 +429,7 @@ export default async function SharePage({ params }: PageProps) {
       </div>
 
       {/* (5) 하단 가입 CTA */}
-      <SignupCta token={token} />
+      <SignupCta t={t} token={token} />
 
       {/* (6) 푸터 — 만료 안내(좌) + 문제 신고(우) 한 줄. 좁은 화면에선 줄바꿈 */}
       <div style={{
@@ -431,13 +438,13 @@ export default async function SharePage({ params }: PageProps) {
         flexWrap: 'wrap', gap: 8,
       }}>
         <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
-          이 링크는 14일 후 만료됩니다.
+          {t('share.expiryNote')}
         </span>
-        <ReportLink token={token} />
+        <ReportLink token={token} locale={shareLocale} />
       </div>
 
       {/* 맨 위로 — 열람기록과 동일한 공용 버튼 */}
-      <ScrollTopButton label="맨 위로" />
+      <ScrollTopButton label={t('history.scrollTop')} />
     </Shell>
   )
 }

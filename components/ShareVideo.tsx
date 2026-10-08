@@ -5,8 +5,11 @@
 // 항목 클릭 시 iframe src를 ?start=초&autoplay=1 로 교체해 그 시각부터 재생하고,
 // 플레이어가 화면에 보이도록 부드럽게 스크롤한다.
 // 서식은 열람기록과 통일 — 자체 카드 박스 없이 여백으로만 구분한다(페이지가 카드 하나로 감싼다).
+// 토글 문구는 보는 사람이 아니라 공유자가 고른 언어(locale)로 낸다 — 페이지 나머지와 같은 언어.
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { getT } from '@/lib/i18n/server-t'
+import type { Locale } from '@/lib/i18n/translations'
 
 // 목록 컨테이너 — 좌우 -9px로 강조 배경이 살짝 넓게 칠해진다.
 // 접힘(강조 구간)·펼침(전체 목록) 두 상태가 같은 규칙을 써야 토글해도 글자가 움직이지 않는다.
@@ -49,13 +52,15 @@ function TimelineRow({ item, onSelect }: { item: TimelineItem; onSelect: () => v
 }
 
 export default function ShareVideo({
-  videoId, videoTitle, watchUrl, timeline,
+  videoId, videoTitle, watchUrl, timeline, locale,
 }: {
   videoId: string
   videoTitle: string
   watchUrl: string
   timeline: TimelineItem[]
+  locale: Locale
 }) {
+  const t = getT(locale)
   const base = `https://www.youtube-nocookie.com/embed/${videoId}`
   const [src, setSrc] = useState(base)
   // 타임라인은 기본 접힘 — 접으면 강조 구간만, 펼치면 전체 목록.
@@ -108,7 +113,7 @@ export default function ShareVideo({
               fontSize: 11.5, color: 'var(--text-muted)',
               cursor: 'pointer', fontFamily: 'inherit',
             }}>
-            {expanded ? '타임라인 접기' : '타임라인 펼치기'}
+            {expanded ? t('share.timelineCollapse') : t('share.timelineExpand')}
           </button>
 
           {/* 접힘: 강조 구간만 (펼치면 목록 안에 표시되므로 감춘다 — 중복 방지) */}

@@ -2,19 +2,22 @@
 
 // 공유 페이지(/s/[token]) 문제 신고 모달.
 // 오버레이 구조·z-index는 HelpPopup/ShareSheet와 동일 규칙(fixed inset 0 / zIndex 200 / 배경 클릭 시 닫힘).
-// 공유 페이지는 외부인 대상 한국어 고정 페이지라 t() 없이 문구를 직접 쓴다(페이지 본문과 동일).
+// 문구는 보는 사람이 아니라 공유자가 고른 언어(locale)로 낸다 — 공유 페이지와 같은 언어.
+// 서버로 보내는 reason 값('abuse' 등)은 언어와 무관하게 고정이다.
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { X } from 'lucide-react'
 import { usePending } from '@/lib/use-pending'
 import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
+import { getT } from '@/lib/i18n/server-t'
+import type { Locale } from '@/lib/i18n/translations'
 
 type Reason = 'abuse' | 'privacy' | 'other'
 
-const REASON_OPTIONS: { value: Reason; label: string }[] = [
-  { value: 'abuse', label: '욕설 · 비방' },
-  { value: 'privacy', label: '개인정보 노출' },
-  { value: 'other', label: '기타' },
+const REASON_OPTIONS: { value: Reason; labelKey: string }[] = [
+  { value: 'abuse', labelKey: 'share.reasonAbuse' },
+  { value: 'privacy', labelKey: 'share.reasonPrivacy' },
+  { value: 'other', labelKey: 'share.reasonOther' },
 ]
 
 const DETAIL_MAX = 300
@@ -43,7 +46,10 @@ function optionStyle(selected: boolean): CSSProperties {
   }
 }
 
-export default function ReportModal({ token, onClose }: { token: string; onClose: () => void }) {
+export default function ReportModal({
+  token, locale, onClose,
+}: { token: string; locale: Locale; onClose: () => void }) {
+  const t = getT(locale)
   const [reason, setReason] = useState<Reason | null>(null)
   const [detail, setDetail] = useState('')
   const [done, setDone] = useState(false)
@@ -73,11 +79,11 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
     })
   }
 
-  // 접수 완료 — 입력 폼이 아니라 확인창이므로 공용 ConfirmModal로 그린다(문구는 한국어 고정).
+  // 접수 완료 — 입력 폼이 아니라 확인창이므로 공용 ConfirmModal로 그린다(공유 언어).
   if (done) {
     return (
-      <ConfirmModal title="신고가 접수되었습니다." cancelLabel="닫기" onCancel={onClose}>
-        <ModalText>처리 결과는 별도로 안내되지 않습니다.</ModalText>
+      <ConfirmModal title={t('share.reportDoneTitle')} cancelLabel={t('common.close')} onCancel={onClose}>
+        <ModalText>{t('share.reportDoneBody')}</ModalText>
       </ConfirmModal>
     )
   }
@@ -103,7 +109,7 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
           borderRadius: 14,
           padding: 24,
           boxSizing: 'border-box',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
+          boxShadow: 'var(--shadow-lg)',
         }}>
           <>
             {/* 헤더 */}
@@ -111,13 +117,13 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               marginBottom: 20,
             }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                문제 신고
+              <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {t('share.report')}
               </span>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="닫기"
+                aria-label={t('common.close')}
                 style={{
                   width: 32, height: 32, borderRadius: '50%',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -131,7 +137,7 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
             {/* 신고 사유 — 단일 선택 */}
             <div style={{ marginBottom: 20 }}>
               <div style={labelRowStyle}>
-                <span style={labelStyle}>신고 사유</span>
+                <span style={labelStyle}>{t('share.reportReason')}</span>
               </div>
               {REASON_OPTIONS.map(opt => (
                 <button
@@ -140,7 +146,7 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
                   onClick={() => setReason(opt.value)}
                   aria-pressed={reason === opt.value}
                   style={optionStyle(reason === opt.value)}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </button>
               ))}
             </div>
@@ -148,14 +154,14 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
             {/* 상세 내용(선택) */}
             <div style={{ marginBottom: 20 }}>
               <div style={labelRowStyle}>
-                <span style={labelStyle}>상세 내용 (선택)</span>
+                <span style={labelStyle}>{t('share.reportDetail')}</span>
                 <span style={counterStyle}>{detail.length}/{DETAIL_MAX}</span>
               </div>
               <textarea
                 value={detail}
                 onChange={(e) => setDetail(e.target.value.slice(0, DETAIL_MAX))}
                 maxLength={DETAIL_MAX}
-                placeholder="어떤 점이 문제인지 알려주세요"
+                placeholder={t('share.reportPlaceholder')}
                 style={{
                   width: '100%', minHeight: 96, resize: 'vertical', boxSizing: 'border-box',
                   background: 'var(--bg-card)', border: '0.5px solid var(--border)', borderRadius: 8,
@@ -171,13 +177,13 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
               onClick={handleSubmit}
               disabled={!canSubmit}
               style={{
-                width: '100%', height: 44, borderRadius: 8, border: 'none',
+                width: '100%', height: 42, borderRadius: 8, border: 'none',
                 background: 'var(--text-primary)', color: 'var(--bg-card)',
                 fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
                 cursor: canSubmit ? 'pointer' : 'default',
                 opacity: canSubmit ? 1 : 0.5,
               }}>
-              {submitting ? '처리 중…' : '신고하기'}
+              {submitting ? t('common.processing') : t('share.reportSubmit')}
             </button>
 
             {failed && (
@@ -185,7 +191,7 @@ export default function ReportModal({ token, onClose }: { token: string; onClose
                 marginTop: 10, textAlign: 'center',
                 fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
               }}>
-                신고를 접수하지 못했어요. 잠시 후 다시 시도해 주세요.
+                {t('share.reportFailed')}
               </div>
             )}
           </>

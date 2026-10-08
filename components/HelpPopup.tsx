@@ -337,11 +337,13 @@ export default function HelpPopup({ t, isMobile, initialDontShow, isPro = false,
   const cur = steps[step]
   const k = cur.key
 
+  // 단계 이동 버튼 — 작업창 공통 버튼 규칙(사각 8 / padding 8px 14px / 13px).
+  // 이전·다음 = 흰색(되돌리기·보조), 마지막 단계 확인 = 검정(실행).
   const arrowBtn = (disabled: boolean): React.CSSProperties => ({
     display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-    height: 40, padding: '0 16px', borderRadius: 999,
+    padding: '8px 14px', borderRadius: 8,
     background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
+    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
     cursor: disabled ? 'default' : 'pointer',
     opacity: disabled ? 0.35 : 1, fontFamily: 'inherit', flexShrink: 0,
   })
@@ -367,11 +369,11 @@ export default function HelpPopup({ t, isMobile, initialDontShow, isPro = false,
           overflowY: isMobile ? 'auto' : 'hidden',
           background: 'var(--bg-card)',
           border: '0.5px solid var(--border)',
-          borderRadius: 16,
+          borderRadius: 14,
           padding: isMobile ? 20 : 32,
           display: 'flex', flexDirection: 'column',
           gap: isMobile ? 16 : 18,
-          boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
+          boxShadow: 'var(--shadow-lg)',
         }}>
         {/* 헤더: n/N + 닫기 (고정) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -453,8 +455,8 @@ export default function HelpPopup({ t, isMobile, initialDontShow, isPro = false,
               onClick={() => onClose(dontShow)}
               style={{
                 ...arrowBtn(false),
-                background: 'var(--accent)', color: 'var(--bg-card)', border: 'none',
-                padding: '0 22px',
+                background: 'var(--text-primary)', color: 'var(--bg-card)', border: 'none',
+                fontWeight: 600,
               }}>
               {t('help.confirm')}
             </button>

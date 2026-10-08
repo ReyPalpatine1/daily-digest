@@ -5,9 +5,13 @@
 // 겉모양은 기존 mailto 링크와 동일하게 유지한다(fontSize 10.5 / text-muted / 밑줄).
 import { useState } from 'react'
 import ReportModal from './ReportModal'
+import { getT } from '@/lib/i18n/server-t'
+import type { Locale } from '@/lib/i18n/translations'
 
-export default function ShareReportButton({ token }: { token: string }) {
+// locale: 공유자가 고른 언어 — 공유 페이지의 나머지 문구와 같은 언어로 버튼·신고 창을 낸다.
+export default function ShareReportButton({ token, locale }: { token: string; locale: Locale }) {
   const [open, setOpen] = useState(false)
+  const t = getT(locale)
 
   return (
     <>
@@ -19,9 +23,9 @@ export default function ShareReportButton({ token }: { token: string }) {
           fontSize: 10.5, color: 'var(--text-muted)', textDecoration: 'underline',
           cursor: 'pointer', fontFamily: 'inherit',
         }}>
-        문제 신고
+        {t('share.report')}
       </button>
-      {open && <ReportModal token={token} onClose={() => setOpen(false)} />}
+      {open && <ReportModal token={token} locale={locale} onClose={() => setOpen(false)} />}
     </>
   )
 }

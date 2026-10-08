@@ -6,6 +6,7 @@ import { X, Copy, Check, MessageCircle, Share2, Link, RefreshCw } from 'lucide-r
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { usePending } from '@/lib/use-pending'
 import { TOAST_MS } from '@/lib/toast'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -54,6 +55,22 @@ declare global {
   interface Window {
     Kakao?: KakaoSDK
   }
+}
+
+// 버튼 — 작업창 공통 규칙(ConfirmModal과 같은 크기). 보조=흰색, 실행=검정.
+// 기능 아이콘(링크·복사·카톡·공유)을 글자 앞에 두므로 inline-flex로 가운데 맞춘다.
+const btnBase: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  padding: '8px 14px', borderRadius: 8, fontSize: 13, fontFamily: 'inherit',
+}
+const btnWhite: CSSProperties = {
+  ...btnBase, fontWeight: 500,
+  background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+  color: 'var(--text-secondary)',
+}
+const btnBlack: CSSProperties = {
+  ...btnBase, fontWeight: 600, border: 'none',
+  background: 'var(--text-primary)', color: 'var(--bg-card)',
 }
 
 // 섹션 라벨 — 열람기록과 동일한 스타일.
@@ -120,8 +137,10 @@ function AnnRow(props: { time?: string; highlighted: boolean; onToggle: () => vo
 // 요약 공유 시트 — 열람기록과 같은 화면 구성(펼침). 상단 메모 + tldr·핵심 포인트·타임라인.
 // 상세 요약은 공유 페이지에 표시하지 않으므로 강조 대상에서 제외.
 // 항목 클릭으로 다중 강조. 링크 생성 후에도 위 내용은 유지하고 하단 버튼만 전환.
-// ※ 문구는 우선 한국어 하드코딩(i18n 키 추가는 백로그 — 수정 파일 범위 제한).
+// 문구는 공유자 화면 언어(t). 링크를 만들 때 그 언어(locale)를 함께 저장해,
+// 받는 사람이 여는 공유 페이지·카드·신고 창도 같은 언어로 나오게 한다.
 export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timeline, t, onClose }: Props) {
+  const { locale } = useTranslation()
   const [comment, setComment] = useState('')
   const [kpSel, setKpSel] = useState<Set<number>>(new Set())   // 핵심 포인트 인덱스
   const [tlSel, setTlSel] = useState<Set<string>>(new Set())   // 타임라인 시각(time)
@@ -242,6 +261,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           videoId,
           comment: comment.trim() || undefined,
           annotations,
+          locale,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -257,10 +277,10 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           // 무시
         }
       } else {
-        setErrorMsg('링크 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+        setErrorMsg(t('share.createFailed'))
       }
     } catch {
-      setErrorMsg('링크 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+      setErrorMsg(t('share.createFailed'))
     } finally {
       setCreating(false)
     }
@@ -279,12 +299,12 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
 
   // 공유 카드 문구 — 카카오·기기 공유가 같은 규칙을 쓴다(문구를 채널마다 따로 만들지 않는다).
   // 제목=메모, 설명=tldr 구성을 메모 유무와 관계없이 유지한다.
-  // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다.
+  // 메모가 없으면 제목 자리에 고정 문구를 넣어 첫 줄이 비지 않게 한다(공유 페이지 미리보기 카드와 같은 키).
   // tldr이 없을 때만 설명을 영상 제목으로 대체하고, 그것도 없으면 설명을 생략한다.
   const cardCopy = (): { title: string; desc: string } => {
     const memo = cardText(comment, KAKAO_TITLE_MAX)
     return {
-      title: memo || '📌 핵심 포인트',
+      title: memo || t('history.keyPoints'),
       desc: memo
         ? cardText(tldr, KAKAO_DESC_MAX)
         : cardText(tldr, KAKAO_DESC_MAX) || cardText(videoTitle, KAKAO_DESC_MAX),
@@ -295,7 +315,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
   const sendKakao = () => {
     if (!shareUrl) return
     if (!kakaoReady) {
-      showKakaoNotice('카카오톡 공유를 준비하지 못했습니다. 링크를 복사해 붙여넣어 주세요.')
+      showKakaoNotice(t('share.kakaoNotReady'))
       return
     }
     void kakaoSend.run(async () => {
@@ -312,10 +332,10 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
             imageUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
             link,
           },
-          buttons: [{ title: '요약 더보기', link }],
+          buttons: [{ title: t('share.kakaoMore'), link }],
         })
       } catch {
-        showKakaoNotice('카카오톡 공유에 실패했습니다. 링크를 복사해 붙여넣어 주세요.')
+        showKakaoNotice(t('share.kakaoFailed'))
       }
     })
   }
@@ -330,7 +350,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
         await navigator.share({ title, ...(desc ? { text: desc } : {}), url: shareUrl })
       } catch (e) {
         if ((e as { name?: string } | null)?.name === 'AbortError') return
-        showKakaoNotice('공유를 열지 못했습니다. 링크를 복사해 주세요.')
+        showKakaoNotice(t('share.nativeFailed'))
       }
     })
   }
@@ -355,18 +375,15 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
           maxHeight: 'calc(100dvh - 28px)', overflowY: 'auto',
           background: 'var(--bg-card)',
           border: '0.5px solid var(--border)',
-          borderRadius: 16,
+          borderRadius: 14,
           padding: 20,
           display: 'flex', flexDirection: 'column', gap: 14,
-          boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
+          boxShadow: 'var(--shadow-lg)',
         }}>
         {/* (a) 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7,
-            fontSize: 16, fontWeight: 700, color: 'var(--text-primary)',
-          }}>
-            <Share2 size={16} /> 요약 공유하기
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+            {t('share.title')}
           </span>
           <button
             onClick={onClose}
@@ -392,7 +409,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
               fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
               color: 'var(--text-tertiary)',
             }}>
-              메모 남기기
+              {t('share.memoLabel')}
             </div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
               {comment.length}/100
@@ -403,7 +420,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
             onChange={(e) => setComment(e.target.value.slice(0, 100))}
             maxLength={100}
             rows={2}
-            placeholder="예: 초반은 넘기고 여기부터 보세요"
+            placeholder={t('share.memoPlaceholder')}
             style={{
               width: '100%', boxSizing: 'border-box', resize: 'none',
               background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
@@ -436,7 +453,7 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
             {/* 안내 문구 — 실제 선택 가능한 영역 바로 위에 둬 메모 설명으로 읽히지 않게 한다. */}
             {hasSelectable && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 9 }}>
-                강조할 부분을 선택해주세요.
+                {t('share.selectHint')}
               </div>
             )}
 
@@ -485,12 +502,12 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
             disabled={creating}
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-              padding: '11px 14px', borderRadius: 8, border: 'none',
-              background: 'var(--accent)', color: 'var(--bg-card)',
-              fontSize: 13.5, fontWeight: 600, cursor: creating ? 'default' : 'pointer',
+              width: '100%', height: 42, borderRadius: 8, border: 'none',
+              background: 'var(--text-primary)', color: 'var(--bg-card)',
+              fontSize: 14, fontWeight: 600, cursor: creating ? 'default' : 'pointer',
               fontFamily: 'inherit', opacity: creating ? 0.6 : 1,
             }}>
-            <Link size={15} /> {creating ? '생성 중…' : '공유하기'}
+            <Link size={15} /> {creating ? t('share.creating') : t('share.create')}
           </button>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -501,19 +518,14 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
                 fontSize: 12.5, color: 'var(--text-primary)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 background: 'var(--bg-subtle)', border: '0.5px solid var(--border)',
-                borderRadius: 8, padding: '10px 12px', lineHeight: 1.4,
+                borderRadius: 8, padding: '8px 12px', lineHeight: 1.4,
               }}>
                 {shareUrl}
               </div>
               <button
                 onClick={copy}
-                style={{
-                  flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '10px 14px', borderRadius: 8, border: 'none',
-                  background: 'var(--accent)', color: 'var(--bg-card)',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                }}>
-                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? '복사됨' : '복사'}
+                style={{ ...btnBlack, flexShrink: 0, cursor: 'pointer' }}>
+                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? t('share.copied') : t('share.copy')}
               </button>
             </div>
             {/* 새 링크 만들기(내용을 수정했을 때만) — 문구가 길어 아래 공유 버튼들과 한 줄에 두지 않는다 */}
@@ -522,14 +534,11 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
                 onClick={create}
                 disabled={creating}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '10px 14px', borderRadius: 8,
-                  background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-                  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
-                  cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit',
+                  ...btnWhite,
+                  cursor: creating ? 'default' : 'pointer',
                   opacity: creating ? 0.6 : 1,
                 }}>
-                <RefreshCw size={15} /> {creating ? '생성 중…' : '수정한 내용으로 새 링크 만들기'}
+                <RefreshCw size={15} /> {creating ? t('share.creating') : t('share.regenerate')}
               </button>
             )}
             {/* 카카오톡 + 기기 공유(지원 기기에서만 — 미지원이면 복사 버튼이 폴백) */}
@@ -538,29 +547,23 @@ export default function ShareSheet({ videoId, videoTitle, tldr, keyPoints, timel
                 onClick={sendKakao}
                 disabled={kakaoSend.pending}
                 style={{
-                  flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '10px 14px', borderRadius: 8,
-                  background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                  ...btnWhite, flex: 1,
                   color: kakaoReady ? 'var(--text-secondary)' : 'var(--text-tertiary)',
-                  fontSize: 13, fontWeight: 600,
-                  cursor: kakaoSend.pending ? 'default' : 'pointer', fontFamily: 'inherit',
+                  cursor: kakaoSend.pending ? 'default' : 'pointer',
                   opacity: kakaoReady && !kakaoSend.pending ? 1 : 0.6,
                 }}>
-                <MessageCircle size={15} /> {kakaoSend.pending ? '여는 중…' : '카카오톡으로 보내기'}
+                <MessageCircle size={15} /> {kakaoSend.pending ? t('share.opening') : t('share.kakao')}
               </button>
               {canNativeShare && (
                 <button
                   onClick={shareNative}
                   disabled={nativeSend.pending}
                   style={{
-                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '10px 14px', borderRadius: 8,
-                    background: 'var(--bg-card)', border: '0.5px solid var(--border)',
-                    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
-                    cursor: nativeSend.pending ? 'default' : 'pointer', fontFamily: 'inherit',
+                    ...btnWhite, flex: 1,
+                    cursor: nativeSend.pending ? 'default' : 'pointer',
                     opacity: nativeSend.pending ? 0.6 : 1,
                   }}>
-                  <Share2 size={15} /> {nativeSend.pending ? '여는 중…' : '기기로 공유'}
+                  <Share2 size={15} /> {nativeSend.pending ? t('share.opening') : t('share.native')}
                 </button>
               )}
             </div>
