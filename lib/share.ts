@@ -176,7 +176,7 @@ const getShareRow = cache(async (token: string) => {
   // 조회 실패(error)는 기존과 같이 무시 — data가 null이면 호출부가 "없는 공유"로 처리한다.
   const { data } = await getSupabase()
     .from('shared_summaries')
-    .select('token, video_id, comment, highlight_time, annotations, expires_at, blocked_at, locale')
+    .select('token, video_id, comment, highlight_time, annotations, expires_at, blocked_at, locale, shared_by')
     .eq('token', token)
     .maybeSingle()
   return data
@@ -202,8 +202,10 @@ export async function getShareByToken(
       expires_at: string | null
       blocked_at: string | null
       locale: string | null
+      shared_by: string | null
     }
-    // 컬럼 추가 전에 만든 링크는 null → 기존처럼 한국어로 보인다.
+    // 페이지 문구 언어. 컬럼 추가 전에 만든 링크는 null → 기존처럼 한국어로 보인다.
+    // ※ 요약 내용의 언어는 이 값이 아니라 아래 요약 출처(공유자의 열람 기록)가 정한다.
     const shareLocale: Locale = isLocale(share.locale) ? share.locale : 'ko'
 
     // 차단(비공개 처리)은 만료 판정보다 우선.
@@ -247,8 +249,14 @@ export async function getShareByToken(
       }
     }
 
-    // 영상 + 요약 병렬 조회 (요약은 공유 언어 우선 → ko → 임의 1행)
-    const [videoRes, summaryRes] = await Promise.all([
+    // 영상 + 요약 후보 병렬 조회.
+    // 요약 내용은 "공유자가 열람 기록에서 본 그대로"가 원칙이다 — 공유하기 창이 보여주고
+    // 강조(annotations)를 칠한 문장이 바로 그 열람 기록(digests) 행이고, 언어도 받은 당시 언어다.
+    //   1순위: 공유자의 digests 행(user_id·video_id 유니크라 최대 1행. 정렬은 방어용).
+    //   2순위: 공유 풀 video_summaries — 공유자 정보가 없거나(shared_by null), 기록이 없거나
+    //          (보관 기간 정리 등), 그 기록이 실패 상태일 때만. 순서: 공유 언어 → ko → 첫 행.
+    // ※ digests는 RLS 대상이라 service_role 클라이언트(getSupabase)로 읽는다.
+    const [videoRes, summaryRes, digestRes] = await Promise.all([
       supabase.from('videos')
         .select('video_id, title, description')
         .eq('video_id', share.video_id)
@@ -257,6 +265,15 @@ export async function getShareByToken(
         .select('locale, tldr, summary, key_points, timeline, summary_basis')
         .eq('video_id', share.video_id)
         .limit(10),
+      share.shared_by
+        ? supabase.from('digests')
+            .select('tldr, summary, key_points, timeline, summary_basis, fail_reason')
+            .eq('user_id', share.shared_by)
+            .eq('video_id', share.video_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ])
 
     const videoRow = videoRes.data as {
@@ -264,19 +281,30 @@ export async function getShareByToken(
     } | null
 
     type SummaryRow = {
-      locale: string | null
       tldr: string | null
       summary: string | null
       key_points: unknown
       timeline: unknown
       summary_basis: string | null
     }
-    const summaryRows = (summaryRes.data ?? []) as SummaryRow[]
-    const picked = summaryRows.find(r => r.locale === shareLocale)
-      ?? summaryRows.find(r => r.locale === 'ko')
-      ?? summaryRows[0] ?? null
 
-    // JSONB 필드 방어적 정규화 (배열 아니거나 항목 형식이 다르면 버림)
+    // 열람 기록 행은 요약이 있을 때만 쓴다(실패·대기 기록은 공유할 내용이 없다).
+    // 조회 오류는 data가 null이라 자연히 2순위로 넘어간다.
+    const digestRow = digestRes.data as (SummaryRow & { fail_reason: string | null }) | null
+    const digestUsable = !!digestRow && !digestRow.fail_reason && (
+      !!digestRow.summary?.trim() ||
+      (Array.isArray(digestRow.key_points) && digestRow.key_points.length > 0)
+    )
+
+    const poolRows = (summaryRes.data ?? []) as (SummaryRow & { locale: string | null })[]
+    const picked: SummaryRow | null = digestUsable
+      ? digestRow
+      : poolRows.find(r => r.locale === shareLocale)
+        ?? poolRows.find(r => r.locale === 'ko')
+        ?? poolRows[0] ?? null
+
+    // 배열 필드 방어적 정규화 — digests.key_points(text[])·video_summaries.key_points(JSONB)
+    // 어느 쪽이든 같은 규칙: 배열이 아니거나 항목 형식이 다르면 버림.
     const keyPoints = Array.isArray(picked?.key_points)
       ? (picked!.key_points as unknown[]).filter((p): p is string => typeof p === 'string')
       : []
