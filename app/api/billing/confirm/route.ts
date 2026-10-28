@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
 import { applyPaidPlan } from '@/lib/plan-sync'
-import { TOSS_API, tossAuthHeader, type TossPaymentResponse } from '@/lib/billing'
+import { TOSS_API, tossAuthHeader, isOnetimeAvailableOnServer, type TossPaymentResponse } from '@/lib/billing'
 import { checkPurchaseBlock } from '@/lib/purchase-guard'
 
 // 1개월권(단건 결제) 승인 — 결제창에서 돌아온 paymentKey를 서버가 승인 처리한다.
@@ -31,10 +31,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
   }
 
-  const authHeader = tossAuthHeader()
+  // 1개월권은 일반결제 계약의 시크릿으로 승인한다(자동결제 TOSS_SECRET_KEY가 아니다).
+  // 키가 없으면 승인 자체를 할 수 없다 — 화면은 이 에러로 "준비 중" 안내를 띄운다.
+  const authHeader = isOnetimeAvailableOnServer() ? tossAuthHeader('payment') : null
   if (!authHeader) {
-    console.error('[billing/confirm] TOSS_SECRET_KEY 미설정')
-    return NextResponse.json({ error: 'not_configured' }, { status: 500 })
+    return NextResponse.json({ error: 'onetime_unavailable' }, { status: 503 })
   }
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)

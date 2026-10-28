@@ -1,5 +1,5 @@
 // 빌링키 결제 실행 (서버 전용) — 라우트(/api/billing/charge)와 cron(정기 갱신)이 같이 쓴다.
-// ⚠️ TOSS_SECRET_KEY·SUPABASE_SERVICE_KEY 경로라 클라이언트에서 import 금지.
+// ⚠️ TOSS_SECRET_KEY(자동결제 계약)·SUPABASE_SERVICE_KEY 경로라 클라이언트에서 import 금지.
 //
 // 이 함수가 책임지는 범위는 "카드로 긁고 기록하고 플랜을 켜는 것"까지다.
 // 누가 결제해도 되는지(중복 결제·해지 여부) 판단은 호출부가 한다 —
@@ -20,7 +20,7 @@ export async function chargeWithBillingKey(
   orderId: string,
   logTag: string
 ): Promise<ChargeResult> {
-  const authHeader = tossAuthHeader()
+  const authHeader = tossAuthHeader('billing')
   if (!authHeader) {
     console.error(`[${logTag}] TOSS_SECRET_KEY 미설정`)
     return { ok: false, code: 'not_configured', message: null }

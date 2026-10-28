@@ -24,6 +24,8 @@ function PaymentResultContent() {
 
   const [status, setStatus] = useState<Status>('loading')
   const [failMessage, setFailMessage] = useState<string | null>(null)
+  // 번역 키로 안내할 실패(예: 1개월권 준비 중) — 렌더 시점 언어로 번역한다.
+  const [failKey, setFailKey] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   // 헤더는 진입 시점(결제 전) 프로필을 들고 있다 — 승인 뒤 이 값을 올려 다시 읽게 한다.
   const [planRefreshKey, setPlanRefreshKey] = useState(0)
@@ -61,6 +63,12 @@ function PaymentResultContent() {
           setExpiresAt(typeof data.planExpiresAt === 'string' ? data.planExpiresAt : null)
           setStatus('success')
           setPlanRefreshKey(k => k + 1)
+          return
+        }
+        // 일반결제 계약 키가 없어 승인할 수 없는 경우 — /subscribe와 같은 "준비 중" 안내.
+        if (res.status === 503 && data?.error === 'onetime_unavailable') {
+          setFailKey('subscribe.onetimeUnavailable')
+          setStatus('fail')
           return
         }
         setFailMessage(typeof data?.message === 'string' ? data.message : null)
@@ -113,7 +121,7 @@ function PaymentResultContent() {
   const desc =
     status === 'success' ? (expiresLabel ? t('paymentResult.successDesc', { date: expiresLabel }) : null)
       : status === 'canceled' ? paymentResult.canceledDesc
-        : failMessage
+        : failKey ? t(failKey) : failMessage
 
   return (
     <div style={{

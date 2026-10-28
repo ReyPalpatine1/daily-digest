@@ -12,6 +12,7 @@ import { AppHeader } from '@/components/AppHeader'
 import { Ban } from 'lucide-react'
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import { requestCardRegistration } from '@/lib/toss-billing'
+import { isOnetimeAvailableOnClient, tossPaymentClientKey } from '@/lib/onetime-availability'
 
 const PRICE_MONTHLY = 4900
 
@@ -38,6 +39,9 @@ function SubscribeContent() {
   const [submitting, setSubmitting] = useState(false)
   // trial 모드로 잘못 진입한 재가입자(체험 이력 있음) 대비 — 확인 전엔 화면 미확정.
   const [trialChecked, setTrialChecked] = useState(false)
+  // 서버가 1개월권 불가(503 onetime_unavailable)를 알려 온 경우 — 화면 키는 있는데
+  // 서버 시크릿이 아직 없는 배포 상태. 이후로는 화면 판정과 같게 막힌 옵션으로 보인다.
+  const [onetimeServerDown, setOnetimeServerDown] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -99,7 +103,10 @@ function SubscribeContent() {
   // 체험 화면에는 결제가 없으므로 적용하지 않는다.
   const blockAuto = mode === 'pay' ? checkPurchaseBlock(profile, 'auto') : null
   const blockOnetime = mode === 'pay' ? checkPurchaseBlock(profile, 'onetime') : null
-  const blockedNow = payType === 'auto' ? blockAuto : blockOnetime
+  // 1개월권 사용 가능 여부(일반결제 계약 키) — 구매 제한(blockOnetime)과는 별개의 이유다.
+  // 숨기지 않고 막힌 옵션으로 보여주며, 키를 넣고 재빌드하면 코드 수정 없이 열린다.
+  const onetimeAvailable = isOnetimeAvailableOnClient() && !onetimeServerDown
+  const blockedNow = payType === 'auto' ? !!blockAuto : (!!blockOnetime || !onetimeAvailable)
   const expiresLabel = profile?.plan_expires_at
     ? new Date(profile.plan_expires_at).toLocaleDateString(dateLocale)
     : ''
@@ -110,9 +117,12 @@ function SubscribeContent() {
     profile?.plan === 'pro' && !!profile.plan_expires_at && new Date(profile.plan_expires_at) > new Date()
 
   // 기본 선택(자동 갱신)이 막혀 있고 1개월권은 열려 있으면 열린 쪽으로 옮겨 준다.
+  // 1개월권을 쓸 수 없으면 옮기지 않는다(둘 다 막히면 결제 버튼이 비활성이고 각 옵션에 이유가 보인다).
+  // 고른 뒤에 1개월권이 불가로 바뀌면(서버 503) 자동 갱신으로 되돌린다.
   useEffect(() => {
+    if (!onetimeAvailable) { setPayType('auto'); return }
     if (blockAuto && !blockOnetime) setPayType('onetime')
-  }, [blockAuto, blockOnetime])
+  }, [blockAuto, blockOnetime, onetimeAvailable])
 
   function blockReason(block: ReturnType<typeof checkPurchaseBlock>): string | null {
     if (block === 'active_subscription') return subscribe.blockedActive
@@ -178,12 +188,19 @@ function SubscribeContent() {
   // 남의 주문에 붙거나 금액이 다른 주문을 재사용당할 수 있다.
   async function payOnce() {
     if (!userId) { router.push('/'); return }
-    const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY
-    if (!clientKey) { showToast('adminUsers.actionFailed'); return }
+    // 1개월권은 일반결제 계약 키로 결제창을 연다(자동 갱신의 빌링 키가 아니다).
+    const clientKey = tossPaymentClientKey()
+    if (!clientKey) { showToast('subscribe.onetimeUnavailable'); return }
     setSubmitting(true)
     try {
       const res = await fetch('/api/billing/order', { method: 'POST' })
       const order = await res.json().catch(() => ({}))
+      if (res.status === 503 && order?.error === 'onetime_unavailable') {
+        setOnetimeServerDown(true)
+        showToast('subscribe.onetimeUnavailable')
+        setSubmitting(false)
+        return
+      }
       if (!res.ok || !order?.orderId) {
         showToast('adminUsers.actionFailed')
         setSubmitting(false)
@@ -236,21 +253,25 @@ function SubscribeContent() {
 
   // 살 수 없는 방식은 고를 수 없게 하고 이유를 그 자리에서 밝힌다
   // (눌러도 아무 일도 없는 버튼을 남기지 않는다).
+  // unavailableReason: 구매 제한과 별개로 결제 방식 자체를 아직 쓸 수 없는 이유(1개월권 준비 중).
   function payOption(
     value: PayType,
     title: string,
     desc: string,
-    block: ReturnType<typeof checkPurchaseBlock>,
-    notes: (string | null | undefined)[] = []
+    purchaseBlock: ReturnType<typeof checkPurchaseBlock>,
+    notes: (string | null | undefined)[] = [],
+    unavailableReason: string | null = null
   ) {
+    const block = !!purchaseBlock || !!unavailableReason
     const selected = payType === value && !block
     // 막혀 있으면 이유만 보여준다 — 못 고르는 방식에 "고르면 이렇게 된다"를 덧붙일 이유가 없다.
-    const reason = blockReason(block)
+    // 구매 제한에도 걸려 있으면 구매 제한 이유를 우선한다.
+    const reason = blockReason(purchaseBlock) ?? unavailableReason
     const lines = reason ? [reason] : notes.filter((n): n is string => !!n)
     return (
       <button
         onClick={() => { if (!block) setPayType(value) }}
-        disabled={!!block}
+        disabled={block}
         style={{
           display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%',
           textAlign: 'left', padding: '12px 14px', borderRadius: 10,
@@ -262,7 +283,7 @@ function SubscribeContent() {
         <input
           type="radio"
           checked={selected}
-          disabled={!!block}
+          disabled={block}
           onChange={() => { if (!block) setPayType(value) }}
           style={{ width: 15, height: 15, marginTop: 2, cursor: block ? 'default' : 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
         />
@@ -349,7 +370,14 @@ function SubscribeContent() {
                 // 기간이 남아 있으면 지금 결제되지 않는다 — 이 방식을 고를 때 가장 중요한 정보다.
                 [keepsCurrentPeriod ? t('subscribe.autoRenewFromDate', { date: expiresLabel }) : null]
               )}
-              {payOption('onetime', subscribe.onetime, `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`, blockOnetime)}
+              {payOption(
+                'onetime',
+                subscribe.onetime,
+                `${won(PRICE_MONTHLY)} · ${subscribe.onetimeNotice}`,
+                blockOnetime,
+                [],
+                onetimeAvailable ? null : t('subscribe.onetimeUnavailable')
+              )}
             </div>
           </>
         )}
@@ -389,7 +417,11 @@ function SubscribeContent() {
           </div>
         )}
 
-        <button style={canSubmit ? primaryBtn : disabledBtn} onClick={handleSubmit} disabled={submitting}>
+        {/* 고를 수 있는 결제 방식이 없으면(둘 다 막힘) 버튼을 비활성으로 둔다 — 이유는 각 옵션에 보인다. */}
+        <button
+          style={canSubmit ? primaryBtn : disabledBtn}
+          onClick={handleSubmit}
+          disabled={submitting || (mode === 'pay' && blockedNow)}>
           {submitting
             ? '···'
             : mode === 'trial'

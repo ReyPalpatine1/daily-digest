@@ -14,6 +14,8 @@ export type RefundTargetPayment = {
   createdAt: string
   // 토스 결제 취소 호출에 필요하다. 저장돼 있지 않을 수 있어 null을 허용한다.
   paymentKey: string | null
+  // 결제 종류(auto/onetime) — 취소할 때 어느 토스 계약의 시크릿을 쓸지 가른다.
+  kind: string | null
 }
 
 export type RefundEligibility =
@@ -63,7 +65,7 @@ export async function checkRefundEligibility(
   //    그 이전 결제는 청약철회 기간이 이미 지났으므로 애초에 대상이 아니다.
   const { data: paymentRow, error: paymentError } = await serviceClient
     .from('payments')
-    .select('id, amount, created_at, payment_key')
+    .select('id, amount, created_at, payment_key, kind')
     .eq('user_id', userId)
     .eq('status', 'done')
     .is('refunded_at', null)
@@ -84,6 +86,7 @@ export async function checkRefundEligibility(
     amount: (paymentRow.amount as number) ?? 0,
     createdAt: paymentRow.created_at as string,
     paymentKey: (paymentRow.payment_key as string | null) ?? null,
+    kind: (paymentRow.kind as string | null) ?? null,
   }
 
   // 2. 청약철회 기간(환불정책 제3조 5항).

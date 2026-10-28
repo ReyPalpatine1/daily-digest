@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
 import { checkRefundEligibility, REFUND_PERIOD_DAYS } from '@/lib/refund-eligibility'
 import { enforceChannelLimit, restoreDeliveryToEmail } from '@/lib/plan-sync'
+import { cancelTossPayment } from '@/lib/billing'
 
 // 사용자 환불 — 본인의 가장 최근 결제 1건.
 // 판정 기준은 lib/refund-eligibility.ts 한 곳에 있다(환불정책 제3조).
@@ -82,13 +83,59 @@ export async function POST() {
 
   // 2. 토스 결제 취소.
   //
-  // TODO: 토스 승인 후 연결 — cancelPayment(payment.paymentKey, '사용자 환불 요청').
-  //   지금은 실결제 0건이고 빌링 심사 중이라 검증할 수 없어 호출하지 않는다.
-  //
   // ★ 여기서 실패하면 아래 3~4를 실행하면 안 된다. 돈을 돌려주지 않은 채 계정만 내리면
   //   사용자는 결제한 기간도 잃고 환불도 못 받는다 — 이 기능에서 가장 나쁜 결과다.
-  //   연결할 때는 취소 호출을 try/catch로 감싸고, 실패 시 여기서 500으로 즉시 반환할 것
-  //   (계정 처리·refunded_at 기록에 도달하지 못하게 한다).
+  //   실패는 전부 여기서 즉시 반환한다(계정 처리·refunded_at 기록에 도달하지 못한다).
+  //   화면은 실패 응답을 받으면 기존 안내(profile.refundFailed)를 띄운다.
+  // ★ 시크릿은 결제 종류로 고른다: auto → 자동결제 계약, onetime → 일반결제 계약.
+  // ★ 서버 로그에는 토스 에러 code/message만 남긴다(paymentKey·시크릿 금지).
+  if (!payment.paymentKey || (payment.kind !== 'auto' && payment.kind !== 'onetime')) {
+    console.error('[billing/refund] 취소 불가(결제 정보 부족):', user.id, {
+      payment: payment.id,
+      hasPaymentKey: !!payment.paymentKey,
+      kind: payment.kind,
+    })
+    return NextResponse.json({ error: 'cancel_failed' }, { status: 500 })
+  }
+
+  const cancel = await cancelTossPayment({
+    paymentKey: payment.paymentKey,
+    kind: payment.kind,
+    reason: '사용자 환불 요청',
+    // 결제 행 기준 고정값 — 같은 결제의 재시도·중복 요청이 토스에서 한 번만 처리된다.
+    idempotencyKey: `refund_${payment.id}`,
+  })
+  if (!cancel.ok) {
+    console.error('[billing/refund] 토스 취소 실패:', user.id, {
+      payment: payment.id,
+      code: cancel.code,
+      message: cancel.message,
+    })
+    return NextResponse.json({ error: 'cancel_failed' }, { status: 502 })
+  }
+  if (cancel.alreadyCanceled) {
+    // 앞선 시도가 토스 취소까지는 마쳤는데 우리 쪽 처리 전에 끊긴 경우 — 성공으로 보고 이어간다.
+    console.warn('[billing/refund] 이미 토스에서 취소된 결제 — 계정 처리를 이어간다:', user.id, payment.id)
+  }
+
+  // 2-1. 이중 차감 방지 — 취소 직후 이 결제의 refunded_at을 다시 본다.
+  //      자격 판정(1) 이후 다른 요청이 같은 결제를 먼저 끝냈다면(refunded_at 기록됨)
+  //      돈은 이미 돌려줬고 계정도 처리됐으므로 여기서 멈춘다.
+  //      확인 자체가 실패하면 차감하지 않고 끊는다 — 돈은 돌려준 상태이고, 재시도하면
+  //      토스가 '이미 취소됨'으로 답해 이 지점부터 다시 이어진다.
+  const { data: fresh, error: freshError } = await serviceClient
+    .from('payments')
+    .select('refunded_at')
+    .eq('id', payment.id)
+    .single()
+  if (freshError || !fresh) {
+    console.error('[billing/refund] ⚠️ 환불 이력 재확인 실패(토스 취소는 완료):', user.id, payment.id, freshError?.message)
+    return NextResponse.json({ error: 'refund_check_failed' }, { status: 500 })
+  }
+  if (fresh.refunded_at) {
+    console.warn('[billing/refund] 이미 처리된 환불 — 계정 차감 생략:', user.id, payment.id)
+    return NextResponse.json({ ok: true })
+  }
 
   // 3. 계정 처리 — 이 결제가 부여한 30일을 이용 기간에서 뺀다(환불정책 제4조 4항).
   const { data: profile, error: profileError } = await serviceClient

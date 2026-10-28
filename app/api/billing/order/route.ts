@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
-import { PRICE_MONTHLY, ORDER_NAME, makeOrderId } from '@/lib/billing'
+import { PRICE_MONTHLY, ORDER_NAME, makeOrderId, isOnetimeAvailableOnServer } from '@/lib/billing'
 import { checkPurchaseBlock } from '@/lib/purchase-guard'
 
 // 1개월권(단건 결제) 주문번호 발급 — 결제창을 열기 "전에" 서버가 주문을 만들어 둔다.
@@ -21,6 +21,12 @@ export async function POST() {
   const user = await getAuthedUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // 1개월권(일반결제 계약) 키가 아직 없으면 주문을 만들지 않는다(payments pending도 남기지 않는다).
+  // 화면은 이 에러를 받으면 "준비 중" 안내를 띄운다.
+  if (!isOnetimeAvailableOnServer()) {
+    return NextResponse.json({ error: 'onetime_unavailable' }, { status: 503 })
   }
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
