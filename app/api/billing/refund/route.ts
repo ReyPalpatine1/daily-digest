@@ -1,26 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
-import { checkRefundEligibility, REFUND_PERIOD_DAYS } from '@/lib/refund-eligibility'
-import { enforceChannelLimit, restoreDeliveryToEmail } from '@/lib/plan-sync'
+import { checkRefundEligibility } from '@/lib/refund-eligibility'
+import { applyRefundToAccount } from '@/lib/refund-apply'
 import { cancelTossPayment } from '@/lib/billing'
 
 // 사용자 환불 — 본인의 가장 최근 결제 1건.
 // 판정 기준은 lib/refund-eligibility.ts 한 곳에 있다(환불정책 제3조).
 //
 // ★ payment_key는 어느 응답에도 담지 않는다. 화면에 필요한 건 자격 여부·금액·결제일뿐이다.
-
-const DAY_MS = 24 * 60 * 60 * 1000
-
-// 환불 후 남는 이용 기간(ISO). 이 결제가 부여한 30일을 만료일에서 빼고,
-// 그러고도 지금보다 미래면 그 시각을, 아니면 null(즉시 무료 전환)을 돌려준다.
-function refundedExpiresAt(planExpiresAt: string | null, nowMs: number): string | null {
-  const expiresMs = planExpiresAt ? Date.parse(planExpiresAt) : NaN
-  // 만료일이 없거나 깨져 있으면 남은 기간을 계산할 수 없다 — 차감 결과를 0으로 보아 내린다.
-  if (Number.isNaN(expiresMs)) return null
-  const reducedMs = expiresMs - REFUND_PERIOD_DAYS * DAY_MS
-  return reducedMs > nowMs ? new Date(reducedMs).toISOString() : null
-}
 
 // 자격 조회 — 화면이 버튼을 어떻게 그릴지(그리고 어떤 안내를 띄울지) 정하는 데만 쓴다.
 export async function GET() {
@@ -118,107 +106,28 @@ export async function POST() {
     console.warn('[billing/refund] 이미 토스에서 취소된 결제 — 계정 처리를 이어간다:', user.id, payment.id)
   }
 
-  // 2-1. 이중 차감 방지 — 취소 직후 이 결제의 refunded_at을 다시 본다.
-  //      자격 판정(1) 이후 다른 요청이 같은 결제를 먼저 끝냈다면(refunded_at 기록됨)
-  //      돈은 이미 돌려줬고 계정도 처리됐으므로 여기서 멈춘다.
-  //      확인 자체가 실패하면 차감하지 않고 끊는다 — 돈은 돌려준 상태이고, 재시도하면
-  //      토스가 '이미 취소됨'으로 답해 이 지점부터 다시 이어진다.
-  const { data: fresh, error: freshError } = await serviceClient
-    .from('payments')
-    .select('refunded_at')
-    .eq('id', payment.id)
-    .single()
-  if (freshError || !fresh) {
-    console.error('[billing/refund] ⚠️ 환불 이력 재확인 실패(토스 취소는 완료):', user.id, payment.id, freshError?.message)
-    return NextResponse.json({ error: 'refund_check_failed' }, { status: 500 })
+  // 3. 계정 처리 — 잠금(refunded_at) → 30일 차감 또는 free 전환 → 자동 갱신 해지 → 강등 정리.
+  //    상점관리자 취소 웹훅(/api/billing/webhook)과 같은 함수를 쓴다. 잠금이 먼저 걸리므로
+  //    이 요청 직후 같은 건의 웹훅이 와도 계정이 두 번 차감되지 않는다.
+  //    잠금 실패는 계정 무변경 — 재시도하면 토스가 '이미 취소됨'으로 답해 이 지점부터 다시 이어진다.
+  const applied = await applyRefundToAccount(serviceClient, {
+    paymentId: payment.id,
+    userId: user.id,
+    logTag: 'billing/refund',
+  })
+  if (!applied.ok) {
+    const error = applied.stage === 'lock'
+      ? 'refund_check_failed'
+      : applied.stage === 'profile' ? 'profile_failed' : 'update_failed'
+    return NextResponse.json({ error }, { status: 500 })
   }
-  if (fresh.refunded_at) {
-    console.warn('[billing/refund] 이미 처리된 환불 — 계정 차감 생략:', user.id, payment.id)
+  if (applied.alreadyApplied) {
     return NextResponse.json({ ok: true })
-  }
-
-  // 3. 계정 처리 — 이 결제가 부여한 30일을 이용 기간에서 뺀다(환불정책 제4조 4항).
-  const { data: profile, error: profileError } = await serviceClient
-    .from('profiles')
-    .select('plan, plan_status, plan_expires_at')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile) {
-    console.error('[billing/refund] 프로필 조회 실패:', user.id, profileError?.message)
-    return NextResponse.json({ error: 'profile_failed' }, { status: 500 })
-  }
-
-  const nowMs = Date.now()
-  // GET(확인창 안내)과 같은 함수로 계산한다 — 안내한 날짜와 실제 결과가 어긋나지 않게.
-  const expiresAfter = refundedExpiresAt((profile.plan_expires_at as string | null) ?? null, nowMs)
-
-  // 자동 갱신 중이었다면 함께 해지한다. 카드를 남기는 것은 기존 해지 기능과 같다 —
-  // 환불은 그 결제를 무르는 것이지 계정을 정리하는 것이 아니다.
-  const cancelAutoRenew = profile.plan_status === 'active'
-
-  // 차감하고도 기간이 남으면 Pro를 유지한다(1개월권을 이어 붙여 기간이 쌓인 경우).
-  const update: Record<string, unknown> = expiresAfter
-    ? {
-        plan_expires_at: expiresAfter,
-        ...(cancelAutoRenew ? { plan_status: 'onetime', cancel_at_period_end: false } : {}),
-      }
-    : {
-        plan: 'free',
-        plan_status: 'none',
-        plan_expires_at: null,
-        plan_changed_at: new Date().toISOString(),
-        ...(cancelAutoRenew ? { cancel_at_period_end: false } : {}),
-      }
-
-  const { error: updateError } = await serviceClient
-    .from('profiles')
-    .update(update)
-    .eq('id', user.id)
-
-  if (updateError) {
-    console.error('[billing/refund] 플랜 차감 실패:', user.id, updateError.message)
-    return NextResponse.json({ error: 'update_failed' }, { status: 500 })
-  }
-
-  // 3-1. 무료로 내려간 경우에만 강등 정리를 함께 한다.
-  //      지금까지 이 경로는 profiles만 고쳐 채널이 7개 모두 활성인 채 free로 남았다
-  //      (cron의 만료 정리는 "만료일이 지난 pro"를 찾으므로 이미 free인 계정은 영영 대상이 아니다).
-  //      기간이 남아 Pro가 유지되는 환불에서는 부르지 않는다 — 여전히 Pro이므로 채널을 잠그면 안 된다.
-  //
-  //      실패해도 환불 자체는 성공 처리한다 — 돈은 이미 처리된 상태라 되돌리면 더 나쁘다.
-  //      채널은 다음 syncUserPlan 호출(발송 경로)에서도 정리될 여지가 있으나,
-  //      로그로 남겨 수동 확인이 가능하게 한다.
-  if (!expiresAfter) {
-    try {
-      await enforceChannelLimit(user.id)
-      await restoreDeliveryToEmail(user.id)
-    } catch (e) {
-      console.error(
-        `[billing/refund] ⚠️ 무료 강등 정리 실패(플랜은 free로 내려감 — 채널/발송 수동 확인 필요): user=${user.id}:`,
-        e instanceof Error ? e.message : e,
-      )
-    }
-  }
-
-  // 4. 환불 이력 기록 — 같은 결제를 두 번 환불하지 못하게 막는 잠금이기도 하다.
-  //    여기서 실패해도 플랜은 이미 차감됐으므로 되돌리지 않고(되돌리면 돈과 기간이 어긋난다)
-  //    잠금이 안 걸린 상태를 눈에 띄게 남긴다.
-  const { error: markError } = await serviceClient
-    .from('payments')
-    .update({ refunded_at: new Date().toISOString() })
-    .eq('id', payment.id)
-
-  if (markError) {
-    console.error(
-      `[billing/refund] ⚠️ 환불 이력 기록 실패(플랜은 차감됨 — 재환불 잠금 없음): payment=${payment.id} user=${user.id}:`,
-      markError.message,
-    )
   }
 
   console.log(
     `[billing/refund] 환불 완료: user=${user.id} payment=${payment.id} amount=${payment.amount} ` +
-    `expiresAfter=${expiresAfter ?? 'free(즉시 종료)'}`,
+    `expiresAfter=${applied.expiresAfter ?? 'free(즉시 종료)'}`,
   )
 
   return NextResponse.json({ ok: true })
