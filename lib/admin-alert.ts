@@ -3,7 +3,7 @@
 // 알림 실패가 주 흐름을 막지 않도록 모든 경로 try-catch.
 // ⚠️ SUPABASE_SERVICE_KEY 사용 → 서버에서만 import.
 import { createClient } from '@supabase/supabase-js'
-import { sendAdminBillingIssueEmail, sendAdminBulkErrorEmail, sendAdminFeedbackEmail, sendAdminNewErrorsEmail, sendAdminShareReportEmail, type FailedItem, type DigestTrigger } from './mailer'
+import { sendAdminBillingIssueEmail, sendAdminBulkErrorEmail, sendAdminFeedbackEmail, sendAdminNewErrorsEmail, sendAdminServiceIssueEmail, sendAdminShareReportEmail, type FailedItem, type DigestTrigger } from './mailer'
 import { sendTelegramMessage } from './telegram'
 import { logErrorEvent } from './error-log'
 import { nowUtc } from './time'
@@ -374,5 +374,73 @@ export async function sendAdminBillingAlert(alert: BillingAlert): Promise<void> 
     }
   } catch (e) {
     console.error('[admin-alert] 결제 이상 알림 처리 예외:', e)
+  }
+}
+
+// Gemini 결제 오류 알림 간격 — 15분 cron마다 같은 장애를 알리지 않도록 24시간에 1번.
+const GEMINI_BILLING_ALERT_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+// Gemini 결제 오류(선불 잔액 소진 등)로 요약이 멈췄음을 관리자에게 알린다 — 24시간에 1번만.
+// ★ 워터마크: admin_alert_settings.last_gemini_billing_alert_at (sql/gemini_billing_alert.sql).
+//   "비어 있거나 24시간 지났을 때만 지금 시각으로 갱신"하는 조건부 UPDATE로 발송권을 선점한다.
+//   요약은 5개씩 병렬로 돌아 같은 실행 안에서도 동시에 여러 번 호출되므로, 조회 후 갱신이 아니라
+//   한 문장으로 선점해야 중복 발송이 없다. 선점(쓰기)에 실패하면(컬럼 미생성 등) 발송하지 않는다
+//   — 워터마크 없이 보내면 15분마다 도배된다.
+// detail은 호출부에서 API 키를 가린(redactSecrets) 원문이어야 한다.
+// 어떤 실패도 throw하지 않는다 (요약 주 흐름 보호).
+export async function sendAdminGeminiBillingAlert(detail: string): Promise<void> {
+  try {
+    const now = nowUtc()
+    const threshold = new Date(now.getTime() - GEMINI_BILLING_ALERT_INTERVAL_MS).toISOString()
+    const { data: claimed, error } = await getSupabase()
+      .from('admin_alert_settings')
+      .update({ last_gemini_billing_alert_at: now.toISOString() })
+      .eq('id', true)
+      .or(`last_gemini_billing_alert_at.is.null,last_gemini_billing_alert_at.lt."${threshold}"`)
+      .select('id')
+    if (error) {
+      console.error('[admin-alert] Gemini 결제 오류 알림 워터마크 선점 실패 → 발송 생략:', error.message)
+      return
+    }
+    if (!claimed?.length) {
+      console.log('[admin-alert] Gemini 결제 오류 알림 생략(최근 24시간 내 이미 알림)')
+      return
+    }
+
+    const alertSettings = await getAdminAlertSettings()
+    if (!alertSettings.notify_email && !alertSettings.notify_telegram) {
+      console.log('[admin-alert] 이메일/텔레그램 알림 모두 꺼짐 → Gemini 결제 오류 알림 발송 생략')
+      return
+    }
+
+    const headline = 'Gemini 결제 오류로 요약이 멈췄습니다'
+    const lines = [
+      'AI Studio 결제(선불 잔액)를 확인하세요.',
+      '해당 영상은 "요약 준비 중"으로 보류되며, 충전 후 다음 수집 주기에 자동으로 다시 요약됩니다.',
+      `원문: ${detail.slice(0, 500)}`,
+    ]
+
+    if (alertSettings.notify_email) {
+      try {
+        await sendAdminServiceIssueEmail(headline, lines)
+      } catch (e) {
+        console.error('[admin-alert] Gemini 결제 오류 이메일 알림 실패:', e)
+      }
+    }
+
+    if (alertSettings.notify_telegram) {
+      try {
+        const chatId = await findAdminTelegramChatId()
+        if (!chatId) {
+          console.log('[admin-alert] 관리자 telegram_chat_id 미연결 → Gemini 결제 오류 텔레그램 알림 skip')
+          return
+        }
+        await sendTelegramMessage(chatId, [`🔴 ${headline}`, ...lines].map(escapeTg).join('\n'))
+      } catch (e) {
+        console.error('[admin-alert] Gemini 결제 오류 텔레그램 알림 실패:', e)
+      }
+    }
+  } catch (e) {
+    console.error('[admin-alert] Gemini 결제 오류 알림 처리 예외:', e)
   }
 }

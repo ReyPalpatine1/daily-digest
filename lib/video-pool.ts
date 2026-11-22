@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { nowUtc } from './time'
 import { getTranscript, summarizeVideo } from './gemini'
 import { logErrorEvent } from './error-log'
+import { sendAdminGeminiBillingAlert } from './admin-alert'
 import type { Locale } from './i18n/translations'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
@@ -388,15 +389,34 @@ async function bumpSummaryAttempts(video: PendingVideo, cause: 'no_source' | 'te
   }
 }
 
+// Gemini 결제 오류(선불 잔액 소진 등) 보류 — 자막 크레딧 소진 보류와 같은 원칙.
+// 우리 쪽 사정이므로 summary_attempts를 올리지 않고(3회 상한에 닿아 temporary로 확정되면 충전 후에도
+// 재요약되지 않는다) transcript_checked도 건드리지 않는다. 'pending'이면 다음 주기에 다시 뽑히고,
+// 요약이 생기면 digest 라우트의 사후 갱신이 열람 기록까지 채운다.
+async function holdForGeminiBilling(video: PendingVideo, detail: string): Promise<void> {
+  const { error } = await supabase
+    .from('videos')
+    .update({
+      fail_reason: 'pending',
+      fail_detail: `Gemini 결제 오류(크레딧 소진) → 다음 주기 재시도: ${detail}`.slice(0, 500),
+    })
+    .eq('video_id', video.video_id)
+  if (error) console.error(`❌ 보류 상태 기록 실패 (${video.video_id}): ${error.message}`)
+  console.log(`⏸ Gemini 결제 오류 → 요약 보류, 다음 주기 재시도: ${video.video_id}`)
+}
+
 // 영상 1개 요약 → video_summaries upsert. 4b 수집·4c 폴백 공용.
-// 반환: stored=저장 성공 여부, transcriptExhausted=이번 호출에서 자막 API 크레딧 소진(429/402) 감지 여부.
+// 반환: stored=저장 성공 여부, transcriptExhausted=이번 호출에서 자막 API 크레딧 소진(429/402) 감지 여부,
+//   geminiBillingError=이번 호출에서 Gemini 결제 오류를 만났으면 그 원문(키 가림 처리됨).
 // options.skipTranscript=true 이거나 video.transcript_checked=true 이면 자막 API를 건너뛰고
 //   기존 video.description만으로 요약(소진 API를 더 두드리지 않음 / 자막 없음 확정 영상 재호출 방지).
-type StoreResult = { stored: boolean; transcriptExhausted: boolean }
+// options.geminiBillingError가 있으면(이번 실행에서 이미 결제 오류 감지) 자막·Gemini 모두 호출하지 않고
+//   바로 보류 처리한다 — 같은 결제 계정이라 다시 불러도 실패하고 자막 크레딧만 낭비된다.
+type StoreResult = { stored: boolean; transcriptExhausted: boolean; geminiBillingError?: string }
 async function summarizeAndStore(
   video: PendingVideo,
   locale: Locale = 'ko',
-  options?: { skipTranscript?: boolean }
+  options?: { skipTranscript?: boolean; geminiBillingError?: string }
 ): Promise<StoreResult> {
   // 라이브/예정 영상: 요약 시도 없이 skip. summary_attempts는 소모하지 않는다
   // (라이브 종료 후 일반 영상이 되면 다음 실행에서 정상 요약되도록).
@@ -432,6 +452,12 @@ async function summarizeAndStore(
       .update({ live_broadcast_content: 'none', fail_reason: null, fail_detail: null })
       .eq('video_id', video.video_id)
     console.log(`📺 라이브 종료 감지 → 일반 요약 진행 (${video.video_id})`)
+  }
+
+  // 이번 실행에서 이미 Gemini 결제 오류 감지 → 자막·Gemini 호출 없이 보류 (라이브 판정 뒤에 둬서 'live' 사유는 보존)
+  if (options?.geminiBillingError) {
+    await holdForGeminiBilling(video, options.geminiBillingError)
+    return { stored: false, transcriptExhausted: false, geminiBillingError: options.geminiBillingError }
   }
 
   // 자막 API 호출 여부 결정:
@@ -494,6 +520,13 @@ async function summarizeAndStore(
   // video.description이 빈 문자열('')이면 ??가 통과시켜 getTranscript가 가져온 설명을 못 씀 → trim 검사
   const desc = video.description?.trim() ? video.description : description
   const result = await summarizeVideo(null, video.title, transcript, desc, locale, { transcriptExhausted: exhausted })
+  // Gemini 결제 오류 → 실패 횟수 미집계 보류 + 관리자 알림(24시간 1회, 내부 try-catch)
+  if (result.failReason === 'billing') {
+    const detail = result.errorInfo ?? 'Gemini 결제 오류'
+    await holdForGeminiBilling(video, detail)
+    await sendAdminGeminiBillingAlert(detail)
+    return { stored: false, transcriptExhausted: exhausted, geminiBillingError: detail }
+  }
   // 일시적 실패(429/자막 실패 등)는 가짜 성공 객체로 돌아온다. 이걸 저장하면
   // 실패 문구가 공유 풀에 영구 캐시되어 모든 사용자가 영원히 실패본을 받는다.
   // → 저장하지 않으면 다음 주기/발송 폴백에서 자동 재시도됨 (단 상한까지만).
@@ -545,6 +578,9 @@ export async function summarizePendingVideos(deadlineTs?: number, locale: Locale
   // 이후 영상은 자막 API 호출을 건너뛰고 설명 기반으로만 처리 → 크레딧 폭탄 방지.
   // 다음 cron에선 다시 false로 시작(충전/유료 전환 대비).
   let transcriptExhaustedThisRun = false
+  // 같은 방식의 이번 실행 한정 Gemini 결제 오류 플래그(원문). 한 번 감지되면 남은 영상은
+  // Gemini·자막 API를 부르지 않고 바로 보류 처리한다. 다음 cron에선 다시 시도(충전 대비).
+  let geminiBillingErrorThisRun: string | undefined
   for (let i = 0; i < pending.length; i += SUMMARY_CONCURRENCY) {
     if (attempted >= maxSummaries) {
       console.log(`⏱ subrequest 상한(${maxSummaries}) 도달 → 나머지 ${pending.length - i}개는 다음 주기로 이월`)
@@ -556,14 +592,19 @@ export async function summarizePendingVideos(deadlineTs?: number, locale: Locale
     }
     const batch = pending.slice(i, i + SUMMARY_CONCURRENCY)
     const skipTranscript = transcriptExhaustedThisRun
+    const geminiBillingError = geminiBillingErrorThisRun
     await Promise.allSettled(batch.map(async v => {
       attempted++
-      const r = await summarizeAndStore(v, locale, { skipTranscript })
+      const r = await summarizeAndStore(v, locale, { skipTranscript, geminiBillingError })
       if (r.stored) done++
       if (r.transcriptExhausted) transcriptExhaustedThisRun = true
+      if (r.geminiBillingError) geminiBillingErrorThisRun = r.geminiBillingError
     }))
     if (transcriptExhaustedThisRun && !skipTranscript) {
       console.log(`⛔ 자막 API 크레딧 소진 감지 → 이후 영상은 설명 기반으로만 처리(이번 실행 한정)`)
+    }
+    if (geminiBillingErrorThisRun && !geminiBillingError) {
+      console.log(`💳 Gemini 결제 오류 감지 → 이후 영상은 호출 없이 보류 처리(이번 실행 한정)`)
     }
   }
   console.log(`🤖 요약 완료: ${done}개`)
@@ -660,8 +701,12 @@ export async function summarizeNow(videoIds: string[], locale: Locale = 'ko'): P
   if (!targets.length) return 0
 
   let done = 0
+  // 결제 오류 감지 후 남은 배치는 Gemini 호출 없이 보류 (summarizePendingVideos와 같은 이번 실행 한정 플래그)
+  let geminiBillingError: string | undefined
   await processInBatches(targets, SUMMARY_CONCURRENCY, async (video) => {
-    if ((await summarizeAndStore(video, locale)).stored) done++
+    const r = await summarizeAndStore(video, locale, { geminiBillingError })
+    if (r.stored) done++
+    if (r.geminiBillingError) geminiBillingError = r.geminiBillingError
   })
   return done
 }

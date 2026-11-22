@@ -603,6 +603,46 @@ export async function sendAdminBillingIssueEmail(
   }
 }
 
+// 관리자 외부 서비스 장애 알림(Gemini 결제 오류 등) — 운영자(관리자)에게만 발송되므로 한국어 고정.
+// 사용자 결제(토스) 이상 알림과 섞이지 않게 제목·발신명을 분리한다.
+export async function sendAdminServiceIssueEmail(
+  headline: string,
+  lines: string[]
+): Promise<void> {
+  const recipients = resolveAdminRecipients()
+  if (recipients.length === 0) {
+    console.log('⚠️ ADMIN_EMAILS/ADMIN_EMAIL 미설정 — 서비스 장애 알림 메일 발송 건너뜀')
+    return
+  }
+
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const mail = {
+    from: `"Daily Video Digest 장애 알림" <${process.env.MAIL_FROM}>`,
+    subject: `[장애] ${headline}`,
+    html: `
+      <div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <div style="background:#fff7f7;border:1px solid #ff4757;border-radius:12px;padding:24px">
+          <h1 style="font-size:20px;color:#b00000;margin:0 0 16px">${escapeHtml(headline)}</h1>
+          <div style="font-size:14px;color:#333;line-height:1.7">
+            ${lines.map(line => `<p style="margin:0 0 6px">${escapeHtml(line)}</p>`).join('')}
+          </div>
+        </div>
+      </div>
+    `,
+  }
+
+  // Cloudflare API는 단일 수신자 기준 — 수신자별 개별 발송, 하나 실패가 나머지를 막지 않게.
+  for (const to of recipients) {
+    try {
+      await sendViaCloudflare({ ...mail, to })
+    } catch (e) {
+      console.error(`관리자 서비스 장애 알림 메일 발송 실패 (${to}):`, e)
+    }
+  }
+}
+
 // 관리자 신규 오류 집계 알림 — 운영자(관리자)에게만 발송되므로 한국어 고정
 export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
   const recipients = resolveAdminRecipients()

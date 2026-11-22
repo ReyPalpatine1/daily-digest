@@ -115,21 +115,26 @@ async function markFirstDigest(userId: string) {
 // 발송 시점 스냅샷 보정 — digests는 발송 순간의 상태를 그대로 굳혀 두므로, 발송 뒤에
 // 요약이 만들어져도 열람 기록은 "요약 준비 중"인 채로 남는다. 안내를 보고 다시 들어온
 // 사용자가 영영 같은 화면을 보지 않도록, 보관 기간 안의 대기 항목만 훑어 채운다.
-// - 대상은 아직 결론이 나지 않은 사유뿐. 'temporary'·'no_source'는 재시도가 끝난 상태라 제외하고,
+// - 대상은 아직 결론이 나지 않은 사유(WAITING) + 이미 '제공 불가'로 확정된 사유(SETTLED).
+//   SETTLED('no_source'·'temporary')는 "풀에 요약이 생겼으면 채운다"만 한다 — 요약이 없으면 아무것도
+//   하지 않는다(만료 처리·사유 변경 없음). 확정 뒤에 요약이 생기는 경우가 있다: 2026-11 Gemini 결제
+//   오류로 temporary 확정된 영상을 SQL로 되살려 재요약했지만 열람 기록은 '제공 불가'로 굳어 있었다.
 //   'pro_only'는 요약이 있는데 플랜 때문에 잠근 것이라 절대 대상에 넣지 않는다(넣으면 무료에게 풀림).
 // - 이미 채워진 행(fail_reason IS NULL)은 조회 조건에서 빠지고, UPDATE에도 같은 조건을 걸어
 //   조회~갱신 사이에 채워진 행을 덮어쓰지 않는다.
 // 항목별 판정 순서:
-//   ① 공유 풀에 요약이 생김            → 채운다(플랜 게이트 통과 후)
-//   ② 요약 없음 + 요약 창(2일) 이내     → 그대로 둔다('요약 준비 중' 유지)
-//   ③ 요약 없음 + 요약 창 초과          → 'no_source'로 확정('요약 제공 불가'로 표시)
+//   ① 공유 풀에 요약이 생김            → 채운다(플랜 게이트 통과 후) — WAITING·SETTLED 공통
+//   ② 요약 없음 + 요약 창(2일) 이내     → 그대로 둔다('요약 준비 중' 유지) — WAITING만
+//   ③ 요약 없음 + 요약 창 초과          → 'no_source'로 확정('요약 제공 불가'로 표시) — WAITING만
 // ③이 필요한 이유: getVideosWithoutSummary가 published_at 기준 SUMMARY_LOOKBACK_DAYS
 // 이내만 요약 대상으로 뽑으므로, 그 창을 넘긴 영상은 영영 요약되지 않는다. 그런데도 화면은
 // "요약이 완료되면 반영됩니다"라고 계속 안내해 사용자가 오지 않을 것을 기다리게 된다.
 // 새 fail_reason 값을 만들지 않고 기존 'no_source'를 재사용한다 — 사용자에게 보이는 문구
 // 종류를 늘리지 않기 위함(화면 매핑상 '요약 제공 불가').
 // 실패는 전부 삼키고 건수만 돌려준다 — 발송 경로에 영향을 주지 않는다.
-const BACKFILL_TARGET_REASONS = ['pending', 'live', 'transcript_failed']
+const BACKFILL_WAITING_REASONS = ['pending', 'live', 'transcript_failed']
+const BACKFILL_SETTLED_REASONS = ['no_source', 'temporary']
+const BACKFILL_TARGET_REASONS = [...BACKFILL_WAITING_REASONS, ...BACKFILL_SETTLED_REASONS]
 
 type BackfillResult = {
   filled: number  // ① 요약이 생겨 채우거나 사유를 정정한 건수
@@ -190,6 +195,8 @@ async function backfillPendingDigests(
     for (const row of targets) {
       const s = summaries.get(row.video_id)
       if (!s) {
+        // 이미 확정된 항목은 요약이 없으면 건드리지 않는다.
+        if (BACKFILL_SETTLED_REASONS.includes(row.fail_reason)) continue
         // ②/③ — 요약이 아직 없다. 요약 창 안이면 그대로 두고, 넘겼으면 제공 불가로 확정한다.
         const pub = publishedAt.get(row.video_id) ?? row.published_at
         if (!pub) continue // 업로드 시각을 모르면 섣불리 확정하지 않는다
@@ -198,7 +205,7 @@ async function backfillPendingDigests(
           .from('digests')
           .update({ fail_reason: 'no_source', fail_detail: null })
           .eq('id', row.id)
-          .in('fail_reason', BACKFILL_TARGET_REASONS)
+          .in('fail_reason', BACKFILL_WAITING_REASONS)
           .select('id')
         if (expireError) {
           console.error(`[digest] 사후 확정 실패 (${row.video_id}): ${expireError.message}`)

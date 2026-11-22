@@ -29,7 +29,9 @@ export type SummaryResult = {
   model?: string // 요약에 사용한 모델명
   errorInfo?: string
   attempts?: number
-  failReason?: string // 실패 사유 코드 (no_source: 자막·설명 없음 → Gemini 미호출. 그 외 실패는 temporary로 간주)
+  // 실패 사유 코드 (no_source: 자막·설명 없음 → Gemini 미호출 / billing: Gemini 결제 오류(선불 잔액 소진 등)
+  // → 우리 쪽 사정이므로 실패 횟수에 넣지 않고 보류. 그 외 실패는 temporary로 간주)
+  failReason?: string
   failDetail?: string // 관리자 디버그용 세부 사유 (발송 경로에서 채워 전달)
 }
 
@@ -193,6 +195,8 @@ timeline의 time은 자막에 실제 등장한 [m:ss] 앵커 시각만 사용하
 JSON 응답 전체(모든 필드 합계, 공백·기호 포함)는 3200자를 절대 넘기지 마세요. 상한에 걸릴 것 같으면 위에서 지시한 summary 문장 수는 그대로 유지하되 각 문장을 더 간결하게 다듬어 맞추세요(문장 수를 줄이지 말 것). JSON은 반드시 완결된 형태로 끝내세요 — 중간에 잘린 JSON은 사용할 수 없습니다.`
 
   // 시도 순서: 기본 모델(재시도 2회) → 503 지속이면 폴백 모델 1회.
+  // 결제 오류(failReason 'billing')는 callGeminiModel이 'done'으로 즉시 종결 → 폴백 모델도 시도하지 않는다
+  // (같은 결제 계정이라 폴백도 실패하고 호출만 낭비).
   const plan: { model: string; maxRetries: number }[] = [
     { model: GEMINI_MODEL, maxRetries: 2 },
     { model: GEMINI_FALLBACK_MODEL, maxRetries: 1 },
@@ -227,6 +231,48 @@ function failureResult(model: string, errorInfo: string, attempts: number): Summ
     errorInfo,
     attempts,
   }
+}
+
+// 에러 원문에 API 키가 섞여 로그·DB·관리자 알림으로 새지 않도록 가린다.
+// (요청 URL이 ?key=... 형태라 네트워크 예외 메시지에 URL이 실려 오는 경우 대비)
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/([?&]key=)[^&\s"']+/gi, '$1***')
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, '***')
+}
+
+// Gemini 결제 오류 판별. 2026-11 AI Studio 선불 전환으로 잔액 0이 되자
+// "Your prepayment credits are depleted ..."가 402로(과거엔 429로도) 왔다.
+// - 402는 무조건 결제 오류.
+// - 그 외 상태코드는 메시지에 prepayment / credit / billing 이 있으면 결제 오류.
+//   단 일반 rate limit 429의 표준 문구 "please check your plan and billing details"는 제외한다
+//   — 분당 한도 초과까지 결제 오류로 보면 재시도·실패 집계(기존 동작)가 사라진다.
+function isGeminiBillingError(status: number, message: string): boolean {
+  if (status === 402) return true
+  const m = message.toLowerCase().replace(/plan and billing details/g, '')
+  return /prepayment|credit|billing/.test(m)
+}
+
+// 에러 응답 본문에서 사람이 읽는 메시지를 뽑는다 (JSON이 아니면 원문 텍스트 일부).
+async function readGeminiErrorMessage(res: Response): Promise<string> {
+  try {
+    const text = await res.clone().text()
+    try {
+      const data = JSON.parse(text)
+      const msg = data?.error?.message ?? data?.[0]?.error?.message
+      if (typeof msg === 'string' && msg) return msg
+    } catch { /* JSON 아님 → 원문 사용 */ }
+    return text.slice(0, 500)
+  } catch {
+    return ''
+  }
+}
+
+function billingFailure(model: string, status: number, message: string, attempt: number): ModelOutcome {
+  const statusLabel = status ? ` (HTTP ${status})` : ''
+  const detail = redactSecrets(`Gemini 결제 오류${statusLabel}: ${message}`).slice(0, 500)
+  console.log(`💳 ${detail} → 재시도·폴백 없이 종료`)
+  return { kind: 'done', result: { ...failureResult(model, detail, attempt), failReason: 'billing' } }
 }
 
 type ModelOutcome =
@@ -268,6 +314,12 @@ async function callGeminiModel(
         GEMINI_TIMEOUT_MS
       )
       console.log(`⏱ [gemini fetch] ${Date.now() - callStart}ms (model=${model}, status=${res.status}, attempt=${attempt})`)
+
+      // 결제 오류는 재시도·폴백해도 같은 결과 → 즉시 종료 (503/429 재시도보다 먼저 판정)
+      if (!res.ok && res.status !== 503) {
+        const errMsg = await readGeminiErrorMessage(res)
+        if (isGeminiBillingError(res.status, errMsg)) return billingFailure(model, res.status, errMsg, attempt)
+      }
 
       if (res.status === 503) {
         if (attempt < maxRetries) {
@@ -382,7 +434,9 @@ async function callGeminiModel(
         : parsed.timeline
       return { kind: 'done', result: { ...parsed, tldr, summary, keyPoints, timeline, summaryBasis, model, attempts: attempt } }
     } catch (e) {
-      const errorInfo = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e)
+      const errorInfo = redactSecrets(e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e))
+      // 200 응답 본문의 error로 결제 오류가 온 경우(상태코드로 못 거른 경우)도 즉시 종료
+      if (isGeminiBillingError(0, errorInfo)) return billingFailure(model, 0, errorInfo, attempt)
       const isRetryable = errorInfo.includes('503') || errorInfo.includes('429')
       if (attempt === maxRetries || !isRetryable) {
         console.log('❌ Gemini 요약 에러:', e)
