@@ -61,7 +61,8 @@ export default function OnboardingModal({ mode, t, onAgreed, onCloseTour, onToas
   async function cancelSignup() {
     await leave.run(async () => {
       try {
-        const res = await fetch('/api/account/delete', { method: 'POST' })
+        // 신규 계정만 지우는 전용 경로(기존 회원은 서버가 403 not_new_account로 거부).
+        const res = await fetch('/api/consent/decline', { method: 'POST' })
         if (!res.ok) throw new Error(`delete ${res.status}`)
         await supabase.auth.signOut()
         window.location.href = '/'
