@@ -26,6 +26,7 @@ import { TOAST_MS } from '@/lib/toast'
 import { SkeletonList } from '@/components/Skeleton'
 import ScrollTopButton from '@/components/ScrollTopButton'
 import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
+import PrivacyNoticeBanner from '@/components/PrivacyNoticeBanner'
 
 // 진행 중 버튼 표기 — "지금 바로 실행" 버튼의 비활성 처리와 동일 토큰.
 const pendingBtnStyle: React.CSSProperties = {
@@ -1371,6 +1372,9 @@ export default function Dashboard() {
       <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 28px', display: 'flex', flexDirection: 'column', flex: 1, width: '100%', boxSizing: 'border-box' }}>
 
         {/* 각 탭이 자체 헤더(타이틀+서브타이틀)를 갖는다. 공통 헤더는 제거. */}
+
+        {/* 개인정보처리방침 개정 공지(기간 한정·닫기 가능) — 탭 본문 위에 쌓인다(Pro 배너와 겹치지 않음). */}
+        {!initialLoading && <PrivacyNoticeBanner />}
 
         {/* 첫 진입 데이터 로딩 구간 — 헤더·탭 바는 그대로 두고 본문 자리에만 뼈대를 표시 */}
         {initialLoading && (

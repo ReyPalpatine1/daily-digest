@@ -4,6 +4,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { nowUtc } from './time'
 import { PERIOD_DAYS } from './billing'
+import { deleteBillingKey } from './billing-key-cleanup'
 
 // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
 // service client를 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
@@ -197,13 +198,25 @@ export async function syncUserPlan(
     }
 
     if (isExpired) {
-      await supabase
+      const { error: downgradeError } = await supabase
         .from('profiles')
         .update({ plan: 'free', plan_expires_at: null, plan_status: 'none', plan_changed_at: nowUtc().toISOString() })
         .eq('id', userId)
       await enforceChannelLimit(userId)
       await restoreDeliveryToEmail(userId)
       console.log(`📉 Plan 만료 강등: ${userId}`)
+      // 자동갱신 계정이 여기서 내려가면 자동갱신이 끝난 것이다 — 해지 예약 만료 또는
+      // 3회 실패(downgradeAwaitingRenewal). 빌링키를 지운다(개인정보처리방침 제1조 3항).
+      // 만료 전 해지 예약 계정은 위 isExpired 조건에서 걸러져 여기 오지 않는다.
+      // 강등 기록이 실패했으면 지우지 않는다(계정이 아직 자동갱신 상태일 수 있다).
+      if (profile.plan_status === 'active' && !downgradeError) {
+        await deleteBillingKey(
+          supabase,
+          userId,
+          'plan-sync',
+          profile.cancel_at_period_end ? '해지 후 만료' : '결제 실패로 무료 전환'
+        )
+      }
       return 'free'
     }
   }

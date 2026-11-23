@@ -17,6 +17,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { REFUND_PERIOD_DAYS } from './refund-eligibility'
 import { enforceChannelLimit, restoreDeliveryToEmail } from './plan-sync'
+import { deleteBillingKey } from './billing-key-cleanup'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -84,8 +85,8 @@ export async function applyRefundToAccount(
   const nowMs = Date.now()
   const expiresAfter = refundedExpiresAt((profile.plan_expires_at as string | null) ?? null, nowMs)
 
-  // 자동 갱신 중이었다면 함께 해지한다. 카드를 남기는 것은 기존 해지 기능과 같다 —
-  // 환불은 그 결제를 무르는 것이지 계정을 정리하는 것이 아니다.
+  // 자동 갱신 중이었다면 함께 해지한다. 자동갱신이 끝나므로 빌링키도 아래에서 지운다
+  // (개인정보처리방침 제1조 3항 — 환불로 자동갱신이 끝나는 때).
   const cancelAutoRenew = profile.plan_status === 'active'
 
   // 차감하고도 기간이 남으면 Pro를 유지한다(1개월권을 이어 붙여 기간이 쌓인 경우).
@@ -110,6 +111,11 @@ export async function applyRefundToAccount(
   if (updateError) {
     lockedButFailed('플랜 차감 실패', updateError.message)
     return { ok: false, stage: 'update' }
+  }
+
+  // 환불로 자동갱신이 해지됐으면 빌링키를 지운다. 실패해도 환불은 성공 처리한다(로그로 수동 정리).
+  if (cancelAutoRenew) {
+    await deleteBillingKey(serviceClient, userId, logTag, '환불로 자동갱신 해지')
   }
 
   // 3. 무료로 내려간 경우에만 강등 정리를 함께 한다.

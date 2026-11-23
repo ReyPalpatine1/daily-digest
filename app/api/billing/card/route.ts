@@ -6,8 +6,9 @@ import { getAuthedUser } from '@/lib/route-auth'
 // ★ billing_key는 어느 응답에도 담지 않는다. 화면에 필요한 건 표시명뿐이다.
 
 // 카드 표시명. 등록된 행이 있으면 플랜 상태와 무관하게 내려준다.
-// 자동 갱신을 해지했거나 환불한 뒤에도 카드는 DB에 그대로 남아 있으므로,
+// 해지 예약 후 만료일 전에는 카드가 DB에 남아 있으므로(해지 취소 시 재사용),
 // 이때 줄을 감추면 사용자는 카드가 지워진 줄 알고 삭제 버튼까지 사라져 지울 수도 없게 된다.
+// (자동갱신이 끝나면 lib/billing-key-cleanup.ts 경로로 행 자체가 지워진다)
 // "등록된 카드"는 결제된다는 뜻이 아니라 등록 사실만 말한다.
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
