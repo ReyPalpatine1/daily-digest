@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { archiveUserPayments } from '@/lib/payments-archive'
+import { revokeStoredTossBillingKey } from '@/lib/billing-key-cleanup'
 
 // 회원 탈퇴 — 계정과 개인 데이터를 삭제한다.
 // ⚠️ 공유 풀 테이블(videos, video_summaries, channel_fetch_state)은 다른 사용자가
@@ -73,6 +74,10 @@ export async function POST() {
       { status: 500 }
     )
   }
+
+  // 토스 쪽 빌링키 폐기 — billing_keys 행은 마지막 auth 삭제 때 CASCADE로 지워진다.
+  // 실패해도 throw하지 않고 로그만 남긴다(토스 호출 실패로 탈퇴가 중단되면 안 된다).
+  await revokeStoredTossBillingKey(serviceClient, userId, 'account/delete')
 
   // 개인 데이터 삭제 — 자식 → 부모 순서.
   // 각 테이블은 user_id 컬럼 보유 확인됨(profiles만 PK가 id).

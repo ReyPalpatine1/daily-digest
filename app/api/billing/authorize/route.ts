@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
 import { buildCardLabel } from '@/lib/toss-cards'
+import { revokeTossBillingKey } from '@/lib/billing-key-cleanup'
 
 // 토스 카드 등록(빌링키 발급) — 결제창에서 받은 authKey를 빌링키로 교환해 저장한다.
 // 이 라우트에서 실제 결제는 일어나지 않는다(카드 등록까지만).
@@ -100,6 +101,16 @@ export async function POST(req: Request) {
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
   const now = new Date().toISOString()
   const cardLabel = buildCardLabel(toss.card)
+
+  // 카드 변경이면 덮어쓰기 전 키를 기억해 둔다 — 새 키 저장이 끝난 뒤 토스에서 폐기한다.
+  // 조회 실패는 폐기만 건너뛴다(카드 등록 흐름은 그대로 진행).
+  const { data: previous } = await serviceClient
+    .from('billing_keys')
+    .select('billing_key')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  const previousBillingKey = (previous?.billing_key as string | null | undefined) ?? null
+
   const { error: upsertError } = await serviceClient
     .from('billing_keys')
     .upsert({
@@ -113,6 +124,12 @@ export async function POST(req: Request) {
   if (upsertError) {
     console.error('[billing/authorize] billing_keys 저장 실패:', user.id, upsertError.message)
     return NextResponse.json({ error: 'save_failed' }, { status: 500 })
+  }
+
+  // 덮어쓴 이전 키를 토스에서 폐기한다. 저장이 성공한 뒤에 부른다 — 먼저 폐기했다가 저장이 실패하면
+  // DB에 폐기된 키만 남아 다음 갱신이 실패한다. 폐기 실패는 로그만 남기고 등록은 성공 처리한다.
+  if (previousBillingKey && previousBillingKey !== toss.billingKey) {
+    await revokeTossBillingKey(previousBillingKey, user.id, 'billing/authorize')
   }
 
   console.log('[billing/authorize] 카드 등록 완료:', user.id)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
+import { revokeStoredTossBillingKey } from '@/lib/billing-key-cleanup'
 
 // 등록된 카드 조회 / 삭제 — 본인 것만.
 // ★ billing_key는 어느 응답에도 담지 않는다. 화면에 필요한 건 표시명뿐이다.
@@ -36,7 +37,7 @@ export async function GET() {
 // 갱신 대상(active)에서 빼고, 해지 예약 플래그도 되돌린다(해지 상태와 혼동되지 않게).
 // 남은 기간은 그대로 유지된다 — 이미 결제한 몫이다.
 //
-// 토스에 남은 빌링키는 따로 폐기 호출을 하지 않는다. 우리가 쓰지 않으면 결제가 일어나지 않는다.
+// DB 삭제 전에 토스 빌링키 삭제 API로 토스 쪽 키도 폐기한다. 토스 호출이 실패해도 DB 삭제는 진행한다.
 export async function DELETE() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_KEY!
@@ -47,6 +48,9 @@ export async function DELETE() {
   }
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey)
+
+  // 토스 쪽 빌링키 폐기 — 실패해도 throw하지 않고 아래 DB 삭제를 그대로 진행한다.
+  await revokeStoredTossBillingKey(serviceClient, user.id, 'billing/card')
 
   const { error: deleteError } = await serviceClient
     .from('billing_keys')
