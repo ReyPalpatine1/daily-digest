@@ -4,6 +4,7 @@ import { nowUtc, toZoned, dateKey, isSendTimePassed, isTooLateToSend } from '@/l
 import { tryStartScheduled } from '@/lib/send-guard'
 import { runTrialNotifications } from '@/lib/trial-notify'
 import { runRenewals } from '@/lib/billing-renew'
+import { runAdReconfirmNotices } from '@/lib/ad-consent'
 
 // Cloudflare Workers는 모듈 로드 시점엔 process.env가 비어 있고 "요청 처리 시점"에
 // 채워진다. 최상단에서 createClient를 호출하면 키가 undefined가 되어
@@ -67,6 +68,9 @@ export async function GET(req: Request) {
 
     // 자동 갱신 재결제 + 실패 대응(재시도·안내·강등) — 실패해도 다이제스트 발송을 막지 않는다
     try { await runRenewals() } catch (e) { console.error('[cron] 정기 갱신 실패(무시):', e) }
+
+    // 광고성 정보 수신 동의 2년 재확인 통지 — 선점 후 1회 발송. 실패해도 다이제스트 발송을 막지 않는다
+    try { await runAdReconfirmNotices() } catch (e) { console.error('[cron] 광고 동의 재확인 통지 실패(무시):', e) }
 
     const { data: allSettings, error } = await supabase
       .from('settings')

@@ -12,18 +12,29 @@ import {
   buildPassEndedHtml,
   buildRenewFailedHtml,
   buildSubEndedHtml,
+  buildAdConsentNoticeHtml,
+  adConsentNoticeSubject,
+  buildAdReconfirmHtml,
+  digestSubject,
+  formatEmailDate,
 } from './email-templates'
+import { getEmailAdsForUser } from './email-ads'
 
 // Cloudflare Email Sending REST API 발송.
 // SMTP(소켓)는 Workers의 global_fetch_strictly_public 제약으로 연결 불가라 HTTPS fetch 사용.
 // account_id는 공개값이라 상수, 토큰(CF_EMAIL_TOKEN)은 함수 내부에서 읽음(Cloudflare 호환).
 const CF_ACCOUNT_ID = 'd0c818cc564e1942b7bd8f65c6c53fcb'
-async function sendViaCloudflare(opts: { from: string; to: string; subject: string; html: string; text?: string }): Promise<void> {
+// headers: 사용자 정의 메일 헤더(Cloudflare Email Service의 허용 목록 헤더만 — List-Unsubscribe 등).
+//   허용되지 않은 헤더가 있으면 Cloudflare가 요청 전체를 거부하므로 함부로 추가하지 말 것.
+async function sendViaCloudflare(opts: { from: string; to: string; subject: string; html: string; text?: string; headers?: Record<string, string> }): Promise<void> {
   const token = process.env.CF_EMAIL_TOKEN
   const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/email/sending/send`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: opts.from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text ?? '' }),
+    body: JSON.stringify({
+      from: opts.from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text ?? '',
+      ...(opts.headers ? { headers: opts.headers } : {}),
+    }),
   })
   if (!res.ok) {
     const body = await res.text().catch(() => '')
@@ -57,7 +68,8 @@ const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
 // type='digest'만 센다)에 섞이지 않도록 별도 타입으로 기록한다.
 // 'preview'는 가입 직후 1회 미리보기, 'admin'은 관리자 수동 실행 — 둘 다 정기 발송
 // 중복 판정(hasDigestSentToday가 type='digest'만 셈)에서 빠져야 그날 정기 발송이 살아남는다.
-export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome' | 'preview' | 'admin'
+// 'ad_consent'=광고성 정보 수신 동의·철회 처리 결과 통지, 'ad_reconfirm'=2년 재확인 통지.
+export type EmailLogType = 'digest' | 'breaking' | 'error' | 'welcome' | 'preview' | 'admin' | 'ad_consent' | 'ad_reconfirm'
 
 // 발송 결과를 email_logs에 기록. 실패해도 메일 발송 흐름을 막지 않음.
 async function logEmailResult(
@@ -107,9 +119,9 @@ export async function sendDigestEmail(
   userName: string,
   items: DigestItem[],
   locale: string | null = 'ko',
+  // 광고 포함 판정에도 쓴다(lib/email-ads.ts getEmailAdsForUser — 무료 AND 광고 수신 동의).
+  // null이면(관리자 단건 발송 등) 광고 없음.
   userId: string | null = null,
-  // 기본값 true = 광고 없음. 무료 사용자임이 확실할 때만 false로 광고 노출.
-  isPro = true,
   // email_logs에 남길 타입. 기본 'digest'(정기 발송).
   // 'preview'=가입 직후 미리보기, 'admin'=관리자 수동 실행 — 둘 다 정기 발송 중복 판정에서 빠진다.
   logType: EmailLogType = 'digest'
@@ -122,12 +134,22 @@ export async function sendDigestEmail(
     day: 'numeric',
   })
 
+  // 광고 포함 여부 — 판정 실패·시크릿 없음은 광고 없이 보낸다(발송 자체는 막지 않는다).
+  const ads = await getEmailAdsForUser(userId)
+
   try {
     await sendViaCloudflare({
       from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
       to,
-      subject: et(lc, 'digest.subject', { date }),
-      html: buildDigestHtml(items, userName, lc, to, isPro),
+      subject: digestSubject(lc, date, !!ads),
+      html: buildDigestHtml(items, userName, lc, to, ads ? { unsubscribeUrl: ads.unsubscribeUrl } : null),
+      // 광고 메일에만 원클릭 수신거부 헤더(RFC 8058).
+      ...(ads ? {
+        headers: {
+          'List-Unsubscribe': `<${ads.oneClickUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      } : {}),
     })
     await logEmailResult(userId, to, logType, true)
   } catch (e) {
@@ -679,5 +701,51 @@ export async function sendAdminNewErrorsEmail(count: number): Promise<void> {
     } catch (e) {
       console.error(`관리자 신규 오류 알림 메일 발송 실패 (${to}):`, e)
     }
+  }
+}
+
+// 광고성 정보 수신 동의·철회 처리 결과 통지 메일. 광고·"(광고)" 표기 없음. email_logs 'ad_consent'.
+export async function sendAdConsentNoticeEmail(
+  to: string,
+  kind: 'agree' | 'withdraw',
+  processedAt: Date,
+  locale: string | null = 'ko',
+  userId: string | null = null
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  try {
+    await sendViaCloudflare({
+      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+      to,
+      subject: adConsentNoticeSubject(lc, kind),
+      html: buildAdConsentNoticeHtml(lc, kind, formatEmailDate(processedAt, lc)),
+    })
+    await logEmailResult(userId, to, 'ad_consent', true)
+  } catch (e) {
+    await logEmailResult(userId, to, 'ad_consent', false, String(e))
+    throw e
+  }
+}
+
+// 광고성 정보 수신 동의 2년 재확인 통지 메일. 광고·"(광고)" 표기 없음. email_logs 'ad_reconfirm'.
+export async function sendAdReconfirmEmail(
+  to: string,
+  consentedAt: Date,
+  unsubscribeUrl: string,
+  locale: string | null = 'ko',
+  userId: string | null = null
+): Promise<void> {
+  const lc = normalizeLocale(locale)
+  try {
+    await sendViaCloudflare({
+      from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
+      to,
+      subject: et(lc, 'adReconfirm.subject'),
+      html: buildAdReconfirmHtml(lc, formatEmailDate(consentedAt, lc), unsubscribeUrl),
+    })
+    await logEmailResult(userId, to, 'ad_reconfirm', true)
+  } catch (e) {
+    await logEmailResult(userId, to, 'ad_reconfirm', false, String(e))
+    throw e
   }
 }

@@ -4,7 +4,7 @@
 import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
 import { youtubeDeepLink } from '@/lib/video-time'
-import { EMAIL_ADS_ENABLED, partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
+import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
 import { boldMarkersToHtml, splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 
@@ -32,6 +32,11 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://dailyvideodigest.co
 
 function dateLocaleCode(locale: EmailLocale): string {
   return ({ ko: 'ko-KR', en: 'en-US', zh: 'zh-CN', ja: 'ja-JP' } as Record<EmailLocale, string>)[locale] ?? 'en-US'
+}
+
+// 메일 본문 날짜 표기(KST, 회원 언어) — 처리 일자·동의 일자 표기에도 쓴다.
+export function formatEmailDate(date: Date, locale: EmailLocale): string {
+  return formatDate(date, locale)
 }
 
 function formatDate(date: Date, locale: EmailLocale): string {
@@ -290,13 +295,33 @@ function partnerBlock(locale: EmailLocale, banner: PartnerBanner): string {
     </div>`
 }
 
+// 광고 포함 메일 옵션 — 판정은 lib/ad-consent.ts(getEmailAdsForUser) 한 곳에서만 한다
+// (무료 회원 AND 광고성 정보 수신 동의). null/생략 = 광고 없음(누락 시 안전).
+export type EmailAds = {
+  // 본문 [수신 거부] 링크(로그인 불필요 서명 링크 페이지)
+  unsubscribeUrl: string
+}
+
+// 다이제스트 메일 제목 — 광고 포함 메일은 맨 앞에 법정 표기 "(광고)"를 붙인다(언어 무관 필수).
+export function digestSubject(locale: EmailLocale, date: string, withAds: boolean): string {
+  const base = et(locale, 'digest.subject', { date })
+  return withAds ? `${et(locale, 'digest.adSubjectPrefix')}${base}` : base
+}
+
+// 광고 포함 메일 하단(푸터 위) 전송자·수신거부 안내 문단.
+function adNoticeBlock(locale: EmailLocale, unsubscribeUrl: string): string {
+  const link = `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#525252;text-decoration:underline;">${escapeHtml(et(locale, 'digest.adUnsubscribe'))}</a>`
+  const text = escapeHtml(et(locale, 'digest.adNotice')).replace('{link}', link)
+  return `
+    <div style="font-size:11px;color:#71717A;line-height:1.7;margin-top:16px;padding:0 4px;">${text}</div>`
+}
+
 export function buildDigestHtml(
   items: EmailDigestItem[],
   userName: string,
   locale: EmailLocale = 'ko',
   email?: string,
-  // 기본값 true = 광고 없음. 호출부가 무료임을 명시했을 때만 광고 노출(누락 시 안전).
-  isPro = true
+  ads: EmailAds | null = null
 ): string {
   const date = formatDate(new Date(), locale)
   const header = `
@@ -324,9 +349,9 @@ export function buildDigestHtml(
     : `<div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;color:#A1A1AA;font-size:13px;">${et(locale, 'digest.noVideos')}</div>`
   // 광고 로테이션: KST 날짜의 일(day of month)이 짝수면 Pro 배너, 홀수면 제휴 슬롯.
   const kstDay = toZoned(nowUtc()).day
-  // EMAIL_ADS_ENABLED가 false면 Pro 여부와 무관하게 광고 없음(lib/ads.ts 참고).
-  const ad = (isPro || !EMAIL_ADS_ENABLED) ? '' : (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay)))
-  return shell(et(locale, 'digest.subject', { date }), locale, header + body + ad, footerBlock(locale, email))
+  const ad = ads ? (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay))) : ''
+  const notice = ads ? adNoticeBlock(locale, ads.unsubscribeUrl) : ''
+  return shell(digestSubject(locale, date, !!ads), locale, header + body + ad + notice, footerBlock(locale, email))
 }
 
 export function buildBreakingHtml(
@@ -445,6 +470,47 @@ export function buildSubEndedHtml(locale: EmailLocale = 'ko'): string {
       </a>
     </div>`
   return shell(et(locale, 'subEnded.subject'), locale, inner, footerBlock(locale))
+}
+
+// 광고성 정보 수신 동의·철회 처리 결과 통지 메일(정보통신망법 제50조 제8항). 광고·"(광고)" 표기 없음.
+// date는 호출부에서 회원 언어로 포맷한 처리 일자.
+export function adConsentNoticeSubject(locale: EmailLocale, kind: 'agree' | 'withdraw'): string {
+  return et(locale, kind === 'agree' ? 'adConsent.subjectAgree' : 'adConsent.subjectWithdraw')
+}
+
+export function buildAdConsentNoticeHtml(locale: EmailLocale, kind: 'agree' | 'withdraw', date: string): string {
+  const agree = kind === 'agree'
+  const line = (text: string) => `<div style="font-size:13px;color:#3f3f46;line-height:1.8;">${escapeHtml(text)}</div>`
+  const inner = `
+    <div style="background:#FFFFFF;border-radius:10px;padding:28px 24px;border:1px solid #E5E5E5;">
+      <div style="font-size:14px;color:#0A0A0A;line-height:1.7;margin-bottom:14px;">${escapeHtml(et(locale, agree ? 'adConsent.introAgree' : 'adConsent.introWithdraw'))}</div>
+      <div style="background:#F4F4F5;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
+        ${line(et(locale, 'adConsent.sender'))}
+        ${line(et(locale, 'adConsent.processedDate', { date }))}
+        ${line(et(locale, agree ? 'adConsent.actionAgree' : 'adConsent.actionWithdraw'))}
+      </div>
+      ${agree ? '' : `<div style="font-size:13px;color:#71717A;line-height:1.7;margin-bottom:8px;">${escapeHtml(et(locale, 'adConsent.withdrawChannelNote'))}</div>`}
+      <div style="font-size:13px;color:#71717A;line-height:1.7;">${escapeHtml(et(locale, 'adConsent.settingsNote'))}</div>
+    </div>`
+  return shell(adConsentNoticeSubject(locale, kind), locale, inner, footerBlock(locale))
+}
+
+// 광고성 정보 수신 동의 2년 재확인 통지 메일(정보통신망법 시행령 제62조의3). 광고·"(광고)" 표기 없음.
+export function buildAdReconfirmHtml(locale: EmailLocale, consentDate: string, unsubscribeUrl: string): string {
+  const line = (text: string) => `<div style="font-size:13px;color:#3f3f46;line-height:1.8;">${escapeHtml(text)}</div>`
+  const inner = `
+    <div style="background:#FFFFFF;border-radius:10px;padding:28px 24px;border:1px solid #E5E5E5;">
+      <div style="font-size:14px;color:#0A0A0A;line-height:1.7;margin-bottom:14px;">${escapeHtml(et(locale, 'adReconfirm.intro', { consentDate }))}</div>
+      <div style="background:#F4F4F5;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
+        ${line(et(locale, 'adReconfirm.sender'))}
+        ${line(et(locale, 'adReconfirm.consentDate', { consentDate }))}
+      </div>
+      <div style="font-size:13px;color:#71717A;line-height:1.7;margin-bottom:14px;">${escapeHtml(et(locale, 'adReconfirm.outro'))}</div>
+      <a href="${escapeHtml(unsubscribeUrl)}" style="display:inline-block;padding:10px 18px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;">
+        ${escapeHtml(et(locale, 'digest.adUnsubscribe'))}
+      </a>
+    </div>`
+  return shell(et(locale, 'adReconfirm.subject'), locale, inner, footerBlock(locale))
 }
 // 미리보기 전용 — 시스템 알림 메일 모양
 export function buildErrorPreviewHtml(locale: EmailLocale = 'ko'): string {

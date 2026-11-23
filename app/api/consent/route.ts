@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
 import { TERMS_VERSION } from '@/lib/consent'
 import { sendWelcomeEmail } from '@/lib/mailer'
+import { afterAdConsentChanged } from '@/lib/ad-consent'
 
 // 첫 로그인 동의 기록 — 대시보드 동의 팝업(OnboardingModal)에서 호출한다.
 // body { ads: boolean }
@@ -43,7 +44,8 @@ export async function POST(req: Request) {
 
   // === 동의 기록 (최초 1회) ===
   if (!profile.terms_agreed_at) {
-    const now = new Date().toISOString()
+    const nowDate = new Date()
+    const now = nowDate.toISOString()
     const update: Record<string, unknown> = {
       terms_agreed_at: now,
       age_confirmed_at: now,
@@ -52,17 +54,25 @@ export async function POST(req: Request) {
     }
     if (ads) update.ad_consent_at = now
     // 동시 제출 대비 — 아직 비어 있을 때만 기록한다(먼저 들어온 요청 하나만 반영).
-    const { error: updateError } = await serviceClient
+    const { data: recorded, error: updateError } = await serviceClient
       .from('profiles')
       .update(update)
       .eq('id', user.id)
       .is('terms_agreed_at', null)
+      .select('id')
     if (updateError) {
       console.error('[consent] 동의 기록 실패:', user.id, updateError.message)
       return NextResponse.json({ error: 'server_error' }, { status: 500 })
     }
-    // TODO(3단계): 광고성 정보 수신 동의 처리 결과 통지 메일 발송 + 동의 시 채널 1개 보너스.
-    //   지금은 동의 여부·시각만 기록한다.
+    // 광고성 정보 수신에 동의했고 이 요청이 기록했으면: 무료 채널 한도 6 즉시 적용 + 동의 처리 결과 통지 메일.
+    // (후속 처리 실패는 로그만 — 가입 동의 성공은 유지)
+    if (ads && recorded && recorded.length > 0) {
+      try {
+        await afterAdConsentChanged(serviceClient, user.id, true, nowDate, 'consent')
+      } catch (e) {
+        console.error('[consent] 광고 동의 후속 처리 실패:', user.id, e instanceof Error ? e.message : e)
+      }
+    }
   }
 
   // === 환영 메일 (welcome_sent_at 선점 후 1회) ===

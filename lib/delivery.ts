@@ -55,7 +55,8 @@ export async function deliverDigest(
   }
 
   // email / 준비중 채널(whatsapp·line·kakao) / 주소 미설정 → 이메일 폴백
-  await sendDigestEmail(settings.email, userName, items, locale, userId, isPro, logType)
+  // 광고 포함 여부는 sendDigestEmail 안에서 userId로 판정한다(lib/email-ads.ts).
+  await sendDigestEmail(settings.email, userName, items, locale, userId, logType)
 }
 
 export async function deliverBreaking(

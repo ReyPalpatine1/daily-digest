@@ -179,8 +179,7 @@ export async function POST(request: Request) {
         },
       ],
       'ko',
-      null,   // userId — 개인 발송 통계에 잡히지 않게
-      true,   // isPro — 광고 없이
+      null,   // userId — 개인 발송 통계에 잡히지 않게 + 광고 판정(getEmailAdsForUser) 대상 아님 → 광고 없음
       'admin' // logType
     )
   } catch (e) {

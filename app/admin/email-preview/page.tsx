@@ -16,6 +16,9 @@ import {
   buildPassEndedHtml,
   buildRenewFailedHtml,
   buildSubEndedHtml,
+  buildAdConsentNoticeHtml,
+  buildAdReconfirmHtml,
+  formatEmailDate,
   dummyDigestItems,
   dummyBreakingItem,
   type EmailLocale,
@@ -26,6 +29,7 @@ type EmailType =
   | 'digest' | 'breaking' | 'error' | 'welcome'
   | 'trialEnding' | 'trialEnded' | 'passEnding' | 'passEnded'
   | 'renewFailed' | 'subEnded'
+  | 'adConsentAgree' | 'adConsentWithdraw' | 'adReconfirm'
 
 export default function EmailPreviewPage() {
   const router = useRouter()
@@ -33,8 +37,9 @@ export default function EmailPreviewPage() {
   const [ready, setReady] = useState(false)
   const [emailLocale, setEmailLocale] = useState<EmailLocale>('ko')
   const [type, setType] = useState<EmailType>('digest')
-  // 광고는 무료 사용자에게만 붙는다 — 실제 발송물과 같게 보려면 플랜을 골라야 한다.
-  const [plan, setPlan] = useState<'free' | 'pro'>('free')
+  // 광고는 "무료 회원 AND 광고성 정보 수신 동의"에게만 붙는다(lib/email-ads.ts) —
+  // 실제 발송물과 같게 보려면 Free(광고 없음) / Free+광고 동의 / Pro 중에서 고른다.
+  const [plan, setPlan] = useState<'free' | 'free_ads' | 'pro'>('free')
   // 푸터의 수신 주소 줄은 email 인자가 있을 때만 렌더된다 → 로그인한 관리자 주소를 넘긴다.
   const [adminEmail, setAdminEmail] = useState<string | undefined>(undefined)
 
@@ -66,7 +71,15 @@ export default function EmailPreviewPage() {
   const html = ((): string => {
     switch (type) {
       case 'digest':
-        return buildDigestHtml(dummyDigestItems(emailLocale, plan === 'pro' ? 'pro' : 'free'), 'Daily Video Digest', emailLocale, adminEmail, plan === 'pro')
+        // 광고 포함 미리보기의 수신거부 링크는 더미(실제 서명 링크는 서버에서만 만든다).
+        return buildDigestHtml(dummyDigestItems(emailLocale, plan === 'pro' ? 'pro' : 'free'), 'Daily Video Digest', emailLocale, adminEmail,
+          plan === 'free_ads' ? { unsubscribeUrl: '#' } : null)
+      case 'adConsentAgree':
+        return buildAdConsentNoticeHtml(emailLocale, 'agree', formatEmailDate(nowUtc(), emailLocale))
+      case 'adConsentWithdraw':
+        return buildAdConsentNoticeHtml(emailLocale, 'withdraw', formatEmailDate(nowUtc(), emailLocale))
+      case 'adReconfirm':
+        return buildAdReconfirmHtml(emailLocale, formatEmailDate(new Date(nowUtc().getTime() - 2 * 365 * 24 * 60 * 60 * 1000), emailLocale), '#')
       case 'breaking':
         return buildBreakingHtml(dummyBreakingItem(emailLocale), 'Daily Video Digest', emailLocale, adminEmail)
       case 'welcome':
@@ -100,6 +113,9 @@ export default function EmailPreviewPage() {
     { key: 'passEnded', label: '1개월권 만료' },
     { key: 'renewFailed', label: '갱신 결제 실패' },
     { key: 'subEnded', label: '구독 종료' },
+    { key: 'adConsentAgree', label: '광고 동의 통지' },
+    { key: 'adConsentWithdraw', label: '광고 철회 통지' },
+    { key: 'adReconfirm', label: '광고 동의 2년 재확인' },
   ]
 
   const segBtn = (active: boolean): React.CSSProperties => ({
@@ -138,9 +154,9 @@ export default function EmailPreviewPage() {
           {/* 플랜 토글 — 다이제스트에만 영향(광고 슬롯). 다른 메일엔 광고가 없어 숨긴다. */}
           {type === 'digest' && (
             <div style={{ display: 'inline-flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 3 }}>
-              {(['free', 'pro'] as const).map(p => (
+              {(['free', 'free_ads', 'pro'] as const).map(p => (
                 <button key={p} onClick={() => setPlan(p)} style={segBtn(plan === p)}>
-                  {p === 'pro' ? 'Pro' : 'Free'}
+                  {p === 'pro' ? 'Pro' : p === 'free_ads' ? 'Free · 광고 포함' : 'Free'}
                 </button>
               ))}
             </div>

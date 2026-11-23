@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { nowUtc } from './time'
 import { PERIOD_DAYS } from './billing'
 import { deleteBillingKey } from './billing-key-cleanup'
+import { freeChannelLimit } from './channel-limit'
 
 // Cloudflare Workers는 모듈 로드 시점에 process.env가 비어 있으므로(요청 처리 시점에 채워짐)
 // service client를 최상단이 아니라 첫 사용 시점에 lazy 생성한다.
@@ -28,27 +29,38 @@ const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
   },
 })
 
-export const FREE_ACTIVE_LIMIT = 5
+// 무료 한도는 lib/channel-limit.ts(freeChannelLimit) 하나로 계산한다 — 광고성 정보 수신 동의 시 +1.
+// Free 상태에서 호출: 오래된 순으로 한도만큼 활성, 나머지 비활성 (기존 채널은 삭제하지 않음).
+// 강등·환불·관리자 해제·광고 동의 철회(한도 축소)·재동의(한도 확대 → 같은 순서로 재활성화)에서 공통 사용.
+// 반환: 이번 호출로 비활성 상태가 된 채널 수(호출부가 화면 갱신 여부를 판단할 때 쓴다).
+export async function enforceChannelLimit(userId: string): Promise<number> {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('ad_consent')
+    .eq('id', userId)
+    .maybeSingle()
+  const limit = freeChannelLimit(profile?.ad_consent)
 
-// Free로 강등 시: 오래된 5개만 활성, 나머지 비활성 (기존 채널은 삭제하지 않음)
-export async function enforceChannelLimit(userId: string): Promise<void> {
   const { data: channels } = await supabase
     .from('channels')
-    .select('id')
+    .select('id, is_active')
     .eq('user_id', userId)
     .order('created_at', { ascending: true }) // 오래된 순
 
-  if (!channels) return
+  if (!channels) return 0
 
-  if (channels.length > FREE_ACTIVE_LIMIT) {
-    const keepActive = channels.slice(0, FREE_ACTIVE_LIMIT).map(c => c.id) // 앞 5개
-    const deactivate = channels.slice(FREE_ACTIVE_LIMIT).map(c => c.id)    // 나머지
+  if (channels.length > limit) {
+    const keepActive = channels.slice(0, limit).map(c => c.id) // 앞 limit개
+    const deactivateRows = channels.slice(limit)                // 나머지
+    const newlyDeactivated = deactivateRows.filter(c => c.is_active !== false).length
 
     await supabase.from('channels').update({ is_active: true }).in('id', keepActive)
-    await supabase.from('channels').update({ is_active: false }).in('id', deactivate)
+    await supabase.from('channels').update({ is_active: false }).in('id', deactivateRows.map(c => c.id))
+    return newlyDeactivated
   } else {
-    // 5개 이하면 전부 활성
+    // 한도 이하면 전부 활성
     await supabase.from('channels').update({ is_active: true }).eq('user_id', userId)
+    return 0
   }
 }
 

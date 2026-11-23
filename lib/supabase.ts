@@ -52,6 +52,11 @@ export type Profile = {
   // 첫 로그인 동의(이용약관·개인정보처리방침·만 14세 이상) 시각. 비어 있으면 대시보드 동의 팝업 표시
   // (sql/consent.sql). 기록은 /api/consent에서 서버 시각으로만 한다.
   terms_agreed_at: string | null
+  // 광고성 정보 수신 동의(sql/consent.sql). 무료 회원 메일 광고·채널 +1 보너스의 기준.
+  // 변경은 서버(/api/ad-consent·/api/unsubscribe·/api/consent)에서만 한다.
+  ad_consent: boolean
+  ad_consent_at: string | null
+  ad_withdrawn_at: string | null
 }
 
 // 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)

@@ -1,9 +1,5 @@
 // 제휴 광고 링크 상수. 서버(email-templates, ad-click 라우트)와 클라이언트 모두에서 사용 가능.
 // 향후 카테고리별 링크는 이 맵에 키를 추가한다 — 지금은 default(골드박스)만.
-// 광고성 정보 수신 동의 기능 배포 전까지 메일 광고 중지(정보통신망법 제50조). 동의 기능 배포 시
-// 이 상수 대신 '동의한 무료 회원' 조건으로 교체한다.
-export const EMAIL_ADS_ENABLED = false
-
 export const PARTNER_LINKS: Record<string, string> = {
   default: 'https://link.coupang.com/a/fqcYgp1Ike', // 골드박스(상시)
   banner: 'https://link.coupang.com/a/fq9z7BzDz2', // 골드박스 배너(HTML 태그형)

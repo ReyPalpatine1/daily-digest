@@ -15,6 +15,8 @@ export default function robots(): MetadataRoute.Robots {
         '/subscribe',
         '/admin',
         '/feedback',
+        // 광고 수신거부 서명 링크 페이지 — 회원별 토큰이 붙는 주소라 색인 대상이 아니다(페이지에도 noindex).
+        '/unsubscribe',
         '/api/',
       ],
     },

@@ -2,10 +2,9 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { normalizeChannelUrl } from '@/lib/channel-url'
-import { resolveChannelId, canonicalChannelUrl } from '@/lib/youtube'
+import { resolveChannel, channelTitleById, canonicalChannelUrl } from '@/lib/youtube'
+import { freeChannelLimit } from '@/lib/channel-limit'
 import { consentRequiredResponse } from '@/lib/consent'
-
-const FREE_CHANNEL_LIMIT = 5
 
 // 서버 측 Pro 판정 — DB(profiles)의 plan/plan_expires_at만 따른다(관리자 예외 없음, lib/supabase.ts checkIsPro와 같은 원칙)
 function isProPlan(plan: string | null | undefined, planExpiresAt: string | null | undefined): boolean {
@@ -58,9 +57,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
   const url = (body.url ?? '').trim()
-  const alias = (body.alias ?? '').trim()
-  if (!url || !alias) {
-    return NextResponse.json({ error: 'url과 alias가 필요합니다' }, { status: 400 })
+  // 별칭은 선택 — 비어 있으면 주소 해석 때 받은 채널 제목을 쓴다.
+  const aliasInput = (body.alias ?? '').trim()
+  if (!url) {
+    return NextResponse.json({ error: 'url이 필요합니다' }, { status: 400 })
   }
 
   // === 기존 채널 조회 (중복 체크 + 개수 제한에 함께 사용) ===
@@ -74,26 +74,29 @@ export async function POST(request: Request) {
   // 주소 해석(YouTube API 호출)보다 먼저 끊는다 — 어차피 추가할 수 없는 요청에 할당량을 쓰지 않는다.
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan, plan_expires_at')
+    .select('plan, plan_expires_at, ad_consent')
     .eq('id', user.id)
     .single()
 
   const isPro = isProPlan(profile?.plan, profile?.plan_expires_at)
   const activeCount = existingChannels.filter(ch => ch.is_active !== false).length
+  // 무료 한도 = 5 + 광고성 정보 수신 동의 시 1 (lib/channel-limit.ts)
+  const limit = freeChannelLimit(profile?.ad_consent)
 
-  if (!isPro && activeCount >= FREE_CHANNEL_LIMIT) {
+  if (!isPro && activeCount >= limit) {
     return NextResponse.json(
-      { error: '무료 플랜은 최대 5개까지 추가 가능합니다.', code: 'CHANNEL_LIMIT' },
+      { error: `무료 플랜은 최대 ${limit}개까지 추가 가능합니다.`, code: 'CHANNEL_LIMIT', limit },
       { status: 403 }
     )
   }
 
   // === 입력 주소 → 채널 ID 확정 (채널·@핸들·영상·쇼츠·라이브 주소) ===
   // 해석 실패면 채널을 만들지 않는다(영상 없는 채널로 남는 것 방지).
-  const channelId = await resolveChannelId(url, user.id)
-  if (!channelId) {
+  const resolved = await resolveChannel(url, user.id)
+  if (!resolved) {
     return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })
   }
+  const channelId = resolved.channelId
   const canonicalUrl = canonicalChannelUrl(channelId)
 
   // === 중복 채널 방지 ===
@@ -108,6 +111,16 @@ export async function POST(request: Request) {
       { error: '이미 추가된 채널입니다.', code: 'CHANNEL_DUPLICATE' },
       { status: 409 }
     )
+  }
+
+  // === 채널 이름 — 입력값 우선, 비어 있으면 해석 응답의 채널 제목 ===
+  // /channel/UC... 주소는 해석에 API를 쓰지 않아 제목이 없다 → 이때만 제목 조회 1회.
+  let alias = aliasInput
+  if (!alias) {
+    alias = resolved.title ?? (await channelTitleById(channelId, user.id)) ?? ''
+  }
+  if (!alias) {
+    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })
   }
 
   // === 채널 추가 (RLS 적용된 사용자 컨텍스트로 삽입) ===

@@ -22,6 +22,7 @@ import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 import { usePending } from '@/lib/use-pending'
+import { freeChannelLimit } from '@/lib/channel-limit'
 import { TOAST_MS } from '@/lib/toast'
 import { SkeletonList } from '@/components/Skeleton'
 import ScrollTopButton from '@/components/ScrollTopButton'
@@ -294,8 +295,8 @@ export default function Dashboard() {
   // --- Phase 3: 채널 탭 검색 상태 ---
   const [channelSearch, setChannelSearch] = useState('')
   const [showChannelSearch, setShowChannelSearch] = useState(false)
-  // Free 한도 (Pro는 한도 없음 → 렌더에서 '무제한' 처리)
-  const channelLimit = 5
+  // Free 한도 = 5 + 광고성 정보 수신 동의 시 1 (lib/channel-limit.ts). Pro는 한도 없음 → 렌더에서 '무제한' 처리
+  const channelLimit = freeChannelLimit(profile?.ad_consent)
   const retentionDays = isPro ? 30 : 7
   // 보관 기간 판정은 서버 쿼리(historyCutoffIso)로 옮겼다 — 화면에서 다시 자르지 않는다.
   // 이중으로 걸면 서버가 준 페이지가 화면에서 또 사라져 "더 보기"가 헛돌았다.
@@ -364,6 +365,9 @@ export default function Dashboard() {
             sub_ended_notified_at: null,
             // 신규 가입자는 아직 동의 전 — 동의 팝업이 뜬다.
             terms_agreed_at: null,
+            ad_consent: false,
+            ad_consent_at: null,
+            ad_withdrawn_at: null,
           }
           setProfile(loadedProfile)
           // 기본 설정 자동 생성
@@ -795,10 +799,7 @@ export default function Dashboard() {
       showPreviewToast(t('alerts.needChannelUrl'))
       return
     }
-    if (!newChannel.alias.trim()) {
-      showPreviewToast(t('alerts.needChannelAlias'))
-      return
-    }
+    // 채널 이름은 선택 — 비워 두면 서버가 유튜브 채널명을 넣는다.
     // 중복 판정은 서버에 맡긴다 — 입력 주소(영상·핸들 등)를 채널 ID로 해석한 뒤에야 정확히 비교할 수 있다.
     // Free 사용자 채널 수 제한 (활성 채널 기준, 프론트 1차 체크)
     if (!isPro && activeChannelCount >= channelLimit) {
@@ -929,6 +930,48 @@ export default function Dashboard() {
     const merged = { ...settings, ...updated, user_id: user.id }
     await supabase.from('settings').upsert(merged)
     loadData(user.id)
+  }
+
+  // 광고성 정보 수신 동의 토글 — 확인창 없이 즉시 처리(철회를 막는 단계를 두지 않는다).
+  // 낙관적 반영 후 실패하면 원래 값으로 되돌린다. 처리 중 재클릭은 무시한다.
+  const adConsentBusyRef = useRef(false)
+  async function toggleAdConsent() {
+    if (!profile || adConsentBusyRef.current) return
+    adConsentBusyRef.current = true
+    const prev = profile
+    const next = !profile.ad_consent
+    const optimisticAt = new Date().toISOString()
+    setProfile(p => (p ? {
+      ...p,
+      ad_consent: next,
+      ...(next ? { ad_consent_at: optimisticAt } : { ad_withdrawn_at: optimisticAt }),
+    } : p))
+    try {
+      const res = await fetch('/api/ad-consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consent: next }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.success) throw new Error(`ad-consent ${res.status}`)
+      // 서버 처리 시각으로 맞춘다(바뀌지 않았으면 기존 값 유지).
+      if (data.changed && typeof data.processedAt === 'string') {
+        setProfile(p => (p ? {
+          ...p,
+          ad_consent: next,
+          ...(next ? { ad_consent_at: data.processedAt } : { ad_withdrawn_at: data.processedAt }),
+        } : p))
+      }
+      showPreviewToast(t(next ? 'schedule.adConsentOnToast' : 'schedule.adConsentOffToast'))
+      // 철회로 채널이 비활성화됐거나, 재동의로 다시 활성화됐을 수 있다 → 채널 목록을 새로 읽는다.
+      if (user && (data.deactivatedChannels > 0 || next)) loadData(user.id)
+    } catch (e) {
+      console.error('[dashboard] 광고 수신 동의 변경 실패:', e)
+      setProfile(prev)
+      showPreviewToast(t('schedule.adConsentFailed'))
+    } finally {
+      adConsentBusyRef.current = false
+    }
   }
 
   async function addKeyword() {
@@ -1670,7 +1713,7 @@ export default function Dashboard() {
                         onChange={e => setNewChannel({ ...newChannel, alias: e.target.value })}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                        placeholder={t('common.displayName')}
+                        placeholder={t('channels.aliasAutoPlaceholder')}
                         style={inputStyle} />
                     </div>
                     <div>
@@ -2377,6 +2420,47 @@ export default function Dashboard() {
                     공용 sectionSubtitle은 다른 카드들이 이 여백에 의존하므로 건드리지 않는다. */}
                 <div style={{ ...sectionSubtitle, marginBottom: 0 }}>{t('schedule.notifyEmptyDesc')}</div>
               </div>
+
+              {/* 광고성 정보 수신 동의 — 속보 알림과 같은 36×20 토글. 확인창 없이 즉시 처리. */}
+              {profile && (
+                <div style={cardStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={sectionTitle}>{t('schedule.adConsent')}</div>
+                    <div onClick={toggleAdConsent}
+                      role="switch"
+                      aria-checked={profile.ad_consent}
+                      aria-label={t('schedule.adConsent')}
+                      style={{
+                        width: 36, height: 20, borderRadius: 999,
+                        background: profile.ad_consent ? 'var(--accent)' : 'var(--bg-subtle)',
+                        border: '0.5px solid var(--border)',
+                        position: 'relative', cursor: 'pointer',
+                        transition: 'background 0.2s', flexShrink: 0,
+                      }}>
+                      <div style={{
+                        position: 'absolute', top: 2, left: profile.ad_consent ? 18 : 2,
+                        width: 14, height: 14, borderRadius: '50%',
+                        background: profile.ad_consent ? 'var(--bg-card)' : 'var(--text-tertiary)',
+                        transition: 'left 0.2s',
+                      }} />
+                    </div>
+                  </div>
+                  <div style={{ ...sectionSubtitle, marginBottom: 0 }}>{t('schedule.adConsentDesc')}</div>
+                  {isPro && (
+                    <div style={{ ...sectionSubtitle, marginBottom: 0, marginTop: 4 }}>{t('schedule.adConsentProNote')}</div>
+                  )}
+                  {(() => {
+                    const at = profile.ad_consent ? profile.ad_consent_at : profile.ad_withdrawn_at
+                    if (!at) return null
+                    const date = new Date(at).toLocaleDateString(dateLocale, { year: 'numeric', month: 'long', day: 'numeric' })
+                    return (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+                        {t(profile.ad_consent ? 'schedule.adConsentOnDate' : 'schedule.adConsentOffDate', { date })}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
 
               {/* 속보 키워드 */}
               <div style={{ ...cardStyle, opacity: isPro ? 1 : 0.85 }}>
@@ -3110,7 +3194,7 @@ export default function Dashboard() {
           confirmLabel={t('nav.proUpgrade')}
           onConfirm={() => { setShowChannelLimit(false); router.push('/pricing') }}
           onCancel={() => setShowChannelLimit(false)}>
-          <ModalText>{t('alerts.channelLimitLine')}</ModalText>
+          <ModalText>{t('alerts.channelLimitLine', { n: channelLimit })}</ModalText>
         </ConfirmModal>
       )}
       {channelToDelete && (
