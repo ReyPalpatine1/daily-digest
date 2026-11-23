@@ -309,3 +309,7 @@ button, a, [onclick], div[role="button"], span[onclick], div[onClick] {
 .modal-text + .modal-text {
   margin-top: 6px;
 }
+
+/* 대시보드 채널 이름 링크 — 색·굵기는 인라인 그대로, 밑줄은 hover 때만 */
+.channel-name-link { text-decoration: none; }
+.channel-name-link:hover { text-decoration: underline; }

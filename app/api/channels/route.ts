@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { normalizeChannelUrl } from '@/lib/channel-url'
+import { resolveChannelId, canonicalChannelUrl } from '@/lib/youtube'
 import { consentRequiredResponse } from '@/lib/consent'
 
 const FREE_CHANNEL_LIMIT = 5
@@ -65,20 +66,12 @@ export async function POST(request: Request) {
   // === 기존 채널 조회 (중복 체크 + 개수 제한에 함께 사용) ===
   const { data: existing } = await supabase
     .from('channels')
-    .select('url, is_active')
+    .select('url, channel_id, is_active')
     .eq('user_id', user.id)
   const existingChannels = existing ?? []
 
-  // === 중복 채널 방지 (정규화 URL 기준) ===
-  const normalizedNew = normalizeChannelUrl(url)
-  if (existingChannels.some(ch => normalizeChannelUrl(ch.url) === normalizedNew)) {
-    return NextResponse.json(
-      { error: '이미 추가된 채널입니다.', code: 'CHANNEL_DUPLICATE' },
-      { status: 409 }
-    )
-  }
-
   // === Free 사용자 채널 수 제한 (활성 채널 기준) ===
+  // 주소 해석(YouTube API 호출)보다 먼저 끊는다 — 어차피 추가할 수 없는 요청에 할당량을 쓰지 않는다.
   const { data: profile } = await supabase
     .from('profiles')
     .select('plan, plan_expires_at')
@@ -95,12 +88,35 @@ export async function POST(request: Request) {
     )
   }
 
+  // === 입력 주소 → 채널 ID 확정 (채널·@핸들·영상·쇼츠·라이브 주소) ===
+  // 해석 실패면 채널을 만들지 않는다(영상 없는 채널로 남는 것 방지).
+  const channelId = await resolveChannelId(url, user.id)
+  if (!channelId) {
+    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })
+  }
+  const canonicalUrl = canonicalChannelUrl(channelId)
+
+  // === 중복 채널 방지 ===
+  // channel_id 기준. channel_id가 아직 없는 기존 행은 정규화 url을 정식 주소와 비교한다.
+  const normalizedCanonical = normalizeChannelUrl(canonicalUrl)
+  if (existingChannels.some(ch =>
+    ch.channel_id
+      ? ch.channel_id === channelId
+      : normalizeChannelUrl(ch.url) === normalizedCanonical
+  )) {
+    return NextResponse.json(
+      { error: '이미 추가된 채널입니다.', code: 'CHANNEL_DUPLICATE' },
+      { status: 409 }
+    )
+  }
+
   // === 채널 추가 (RLS 적용된 사용자 컨텍스트로 삽입) ===
   const { data: inserted, error: insertError } = await supabase
     .from('channels')
     .insert({
       user_id: user.id,
-      url,
+      url: canonicalUrl,
+      channel_id: channelId,
       alias,
       emoji: body.emoji ?? '📺',
       category_id: body.category_id || null,

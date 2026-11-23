@@ -294,6 +294,7 @@ export const translations = {
       channelLimitLine: '무료 플랜은 채널을 최대 5개까지 추가할 수 있습니다.',
       channelAddFailed: '채널 추가에 실패했습니다. 잠시 후 다시 시도해 주세요.',
       channelDuplicate: '이미 추가된 채널입니다.',
+      invalidChannelUrl: "유튜브 채널 또는 영상 주소를 확인해 주세요.",
       confirmDeleteChannel: '{name} 채널을 삭제하시겠습니까?',
       confirmDeleteCategory: '{name} 카테고리를 삭제하시겠습니까?',
       deleteCategoryLine: '포함된 채널은 삭제되지 않고 미분류로 이동됩니다.',
@@ -687,7 +688,7 @@ export const translations = {
       canceledTitle: '결제를 취소했습니다.',
       canceledDesc: '언제든지 다시 결제할 수 있습니다.',
     },
-    // 첫 로그인 동의·둘러보기 팝업(components/OnboardingModal.tsx)
+    // 첫 로그인 동의 팝업(components/OnboardingModal.tsx)
     onboarding: {
       consentTitle: "서비스 이용 동의",
       consentIntro: "Daily Video Digest를 이용하려면 아래 항목에 동의해 주세요.",
@@ -708,15 +709,6 @@ export const translations = {
       leaveConfirm: "가입 취소",
       agreeFailed: "동의 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
       leaveFailed: "가입 취소 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
-      tour1Title: "채널 추가",
-      tour1Body: "구독할 유튜브 채널 주소를 붙여넣으면, 새 영상이 올라올 때마다 AI 요약을 만들어 드립니다.",
-      tour2Title: "받을 시간과 방법",
-      tour2Body: "발송 설정에서 매일 받을 시간과 받는 이메일을 정할 수 있습니다. 요약은 정해진 시간에 한 통으로 모아 보내 드립니다.",
-      tour3Title: "열람 기록",
-      tour3Body: "받은 요약은 대시보드의 열람 기록에서 다시 볼 수 있습니다. 관심 있는 영상만 골라 바로 시청할 수 있습니다.",
-      skip: "건너뛰기",
-      next: "다음",
-      goAddChannel: "채널 추가하러 가기",
     },
     trialPopup: {
       endingTitle: 'Pro 체험이 곧 종료됩니다.',
@@ -1193,6 +1185,7 @@ export const translations = {
       channelLimitLine: 'The Free plan allows up to 5 channels.',
       channelAddFailed: 'Failed to add the channel. Please try again shortly.',
       channelDuplicate: 'This channel has already been added.',
+      invalidChannelUrl: "Please check the YouTube channel or video address.",
       confirmDeleteChannel: 'Delete the channel "{name}"?',
       confirmDeleteCategory: 'Delete the category "{name}"?',
       deleteCategoryLine: 'Channels inside will be kept and moved to Uncategorized.',
@@ -1577,7 +1570,7 @@ export const translations = {
       canceledTitle: 'Payment was canceled.',
       canceledDesc: 'You can pay again anytime.',
     },
-    // 첫 로그인 동의·둘러보기 팝업(components/OnboardingModal.tsx)
+    // 첫 로그인 동의 팝업(components/OnboardingModal.tsx)
     onboarding: {
       consentTitle: "Before you get started",
       consentIntro: "Please agree to the following to use Daily Video Digest.",
@@ -1598,15 +1591,6 @@ export const translations = {
       leaveConfirm: "Cancel sign-up",
       agreeFailed: "Something went wrong while processing your consent. Please try again later.",
       leaveFailed: "Something went wrong while canceling your sign-up. Please try again later.",
-      tour1Title: "Add channels",
-      tour1Body: "Paste the address of a YouTube channel you follow, and we will create an AI summary whenever a new video is posted.",
-      tour2Title: "Delivery time and method",
-      tour2Body: "In Schedule, you can choose what time you receive your summaries each day and which email address to use. Summaries are bundled into one email at your chosen time.",
-      tour3Title: "History",
-      tour3Body: "You can revisit the summaries you have received in History on the dashboard, and watch only the videos that interest you.",
-      skip: "Skip",
-      next: "Next",
-      goAddChannel: "Add a channel",
     },
     trialPopup: {
       endingTitle: 'Your Pro trial is ending soon.',
@@ -2082,6 +2066,7 @@ export const translations = {
       channelLimitLine: '免费方案最多支持 5 个频道。',
       channelAddFailed: '添加频道失败，请稍后重试。',
       channelDuplicate: '该频道已添加。',
+      invalidChannelUrl: "请检查 YouTube 频道或视频地址。",
       confirmDeleteChannel: '删除频道“{name}”？',
       confirmDeleteCategory: '删除分类“{name}”？',
       deleteCategoryLine: '其中的频道将保留并移至未分类。',
@@ -2463,7 +2448,7 @@ export const translations = {
       canceledTitle: '已取消支付。',
       canceledDesc: '您可以随时重新支付。',
     },
-    // 첫 로그인 동의·둘러보기 팝업(components/OnboardingModal.tsx)
+    // 첫 로그인 동의 팝업(components/OnboardingModal.tsx)
     onboarding: {
       consentTitle: "使用服务前的同意",
       consentIntro: "使用 Daily Video Digest 前，请同意以下事项。",
@@ -2484,15 +2469,6 @@ export const translations = {
       leaveConfirm: "取消注册",
       agreeFailed: "处理同意时发生错误，请稍后重试。",
       leaveFailed: "取消注册时发生错误，请稍后重试。",
-      tour1Title: "添加频道",
-      tour1Body: "粘贴您想订阅的 YouTube 频道地址，每当有新视频发布时，我们都会为您生成 AI 摘要。",
-      tour2Title: "接收时间与方式",
-      tour2Body: "您可以在发送设置中指定每天接收摘要的时间和接收邮箱。摘要将在指定时间合并为一封邮件发送。",
-      tour3Title: "历史记录",
-      tour3Body: "已收到的摘要可在控制面板的历史记录中随时查看，并可只挑选感兴趣的视频立即观看。",
-      skip: "跳过",
-      next: "下一步",
-      goAddChannel: "去添加频道",
     },
     trialPopup: {
       endingTitle: 'Pro 试用即将结束。',
@@ -2968,6 +2944,7 @@ export const translations = {
       channelLimitLine: '無料プランは最大5チャンネルまでです。',
       channelAddFailed: 'チャンネルの追加に失敗しました。しばらくして再度お試しください。',
       channelDuplicate: 'このチャンネルはすでに追加されています。',
+      invalidChannelUrl: "YouTubeチャンネルまたは動画のアドレスをご確認ください。",
       confirmDeleteChannel: 'チャンネル「{name}」を削除しますか？',
       confirmDeleteCategory: 'カテゴリ「{name}」を削除しますか？',
       deleteCategoryLine: '中のチャンネルは保持され、未分類に移動します。',
@@ -3349,7 +3326,7 @@ export const translations = {
       canceledTitle: 'お支払いをキャンセルしました。',
       canceledDesc: 'いつでも再度お支払いいただけます。',
     },
-    // 첫 로그인 동의·둘러보기 팝업(components/OnboardingModal.tsx)
+    // 첫 로그인 동의 팝업(components/OnboardingModal.tsx)
     onboarding: {
       consentTitle: "ご利用前の同意",
       consentIntro: "Daily Video Digestをご利用いただくには、以下の項目に同意してください。",
@@ -3370,15 +3347,6 @@ export const translations = {
       leaveConfirm: "登録をキャンセル",
       agreeFailed: "同意の処理中にエラーが発生しました。しばらくしてからもう一度お試しください。",
       leaveFailed: "登録のキャンセル中にエラーが発生しました。しばらくしてからもう一度お試しください。",
-      tour1Title: "チャンネルを追加",
-      tour1Body: "購読したいYouTubeチャンネルのアドレスを貼り付けると、新しい動画が投稿されるたびにAI要約を作成します。",
-      tour2Title: "受け取る時間と方法",
-      tour2Body: "配信設定で、毎日受け取る時間と受信するメールアドレスを指定できます。要約は指定した時間に1通にまとめてお送りします。",
-      tour3Title: "履歴",
-      tour3Body: "受け取った要約はダッシュボードの履歴でいつでも確認できます。気になる動画だけを選んですぐに視聴できます。",
-      skip: "スキップ",
-      next: "次へ",
-      goAddChannel: "チャンネルを追加する",
     },
     trialPopup: {
       endingTitle: 'Proトライアルはまもなく終了します。',

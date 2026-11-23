@@ -4,7 +4,6 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, checkIsPro } from '@/lib/supabase'
 import type { Category, Channel, Settings, Digest, Profile } from '@/lib/supabase'
-import { normalizeChannelUrl } from '@/lib/channel-url'
 import { recordSignupRef } from '@/lib/signup-ref'
 import { captureShareIntent, readShareIntent, clearShareIntent } from '@/lib/share-intent'
 import { useTranslation } from '@/lib/i18n/useTranslation'
@@ -273,8 +272,6 @@ export default function Dashboard() {
   // Pro 체험 종료 안내 팝업(전날 ending / 당일 ended). 메일 발송 플래그(notified)가 있고
   // 팝업 확인(seen) 전이면 노출. Profile 타입에 없는 플래그 4종은 프로필 원본 행에서 따로 보관.
   const [trialPopup, setTrialPopup] = useState<'ending' | 'ended' | null>(null)
-  // 첫 로그인 둘러보기(동의 직후, 채널 0개일 때만). 동의 단계 표시는 profile.terms_agreed_at으로 판정한다.
-  const [showTour, setShowTour] = useState(false)
   const [trialFlags, setTrialFlags] = useState<{
     trial_ending_notified_at: string | null
     trial_ended_notified_at: string | null
@@ -483,23 +480,23 @@ export default function Dashboard() {
   // 첫 진입 시 도움말 팝업 자동 노출 (settings 로드 후, 마운트당 1회).
   // help_seen===false 일 때만. 닫아도(체크 안 했으면) 같은 세션엔 다시 안 띄움.
   const helpAutoShownRef = useRef(false)
-  // 동의 전(동의 팝업 표시 중)에는 띄우지 않고, 동의 후 다시 판정한다.
-  // 이번 진입에서 둘러보기가 떴다면 도움말은 띄우지 않는다(신규 안내 중복 방지 — 다음 진입에 판정).
+  // 동의 전(동의 팝업 표시 중)에는 띄우지 않는다. 동의에 성공하면 profile.terms_agreed_at이 채워져
+  // 이 effect가 다시 돌고, help_seen===false(신규)면 그때 도움말이 뜬다 — 순서: 동의 → 도움말.
   useEffect(() => {
-    if (!profile || !profile.terms_agreed_at || showTour) return
+    if (!profile || !profile.terms_agreed_at) return
     if (settings && !helpAutoShownRef.current && settings.help_seen === false) {
       helpAutoShownRef.current = true
       setShowHelp(true)
     }
-  }, [settings, profile, showTour])
+  }, [settings, profile])
 
   // 체험 종료 안내 팝업 자동 노출 (프로필·설정 로드 후 1회).
   // 도움말 팝업이 뜨는 조건(help_seen===false)이면 이번 진입엔 띄우지 않음(동시 노출 방지).
   const trialPopupCheckedRef = useRef(false)
   useEffect(() => {
     if (trialPopupCheckedRef.current || !profile || !trialFlags || !settings) return
-    // 동의 전에는 띄우지 않는다(동의 팝업 우선). 동의·둘러보기가 끝난 뒤 다시 판정한다.
-    if (!profile.terms_agreed_at || showTour) return
+    // 동의 전에는 띄우지 않는다(동의 팝업 우선). 동의 후 다시 판정한다.
+    if (!profile.terms_agreed_at) return
     trialPopupCheckedRef.current = true
     if (settings.help_seen === false) return
     if (trialFlags.trial_ended_notified_at != null && trialFlags.trial_ended_popup_seen_at == null) {
@@ -510,7 +507,7 @@ export default function Dashboard() {
     ) {
       setTrialPopup('ending')
     }
-  }, [profile, trialFlags, settings, showTour])
+  }, [profile, trialFlags, settings])
 
   // 텔레그램 연결 완료 감지 → 폴링 중단
   useEffect(() => {
@@ -802,12 +799,7 @@ export default function Dashboard() {
       showPreviewToast(t('alerts.needChannelAlias'))
       return
     }
-    // 중복 채널 방지 (정규화 URL 기준)
-    const normalizedNew = normalizeChannelUrl(newChannel.url)
-    if (channels.some(ch => normalizeChannelUrl(ch.url) === normalizedNew)) {
-      showPreviewToast(t('alerts.channelDuplicate'))
-      return
-    }
+    // 중복 판정은 서버에 맡긴다 — 입력 주소(영상·핸들 등)를 채널 ID로 해석한 뒤에야 정확히 비교할 수 있다.
     // Free 사용자 채널 수 제한 (활성 채널 기준, 프론트 1차 체크)
     if (!isPro && activeChannelCount >= channelLimit) {
       promptChannelLimit()
@@ -830,6 +822,8 @@ export default function Dashboard() {
         promptChannelLimit()
       } else if (res.status === 409 && err.code === 'CHANNEL_DUPLICATE') {
         showPreviewToast(t('alerts.channelDuplicate'))
+      } else if (res.status === 400 && err.error === 'invalid_channel_url') {
+        showPreviewToast(t('alerts.invalidChannelUrl'))
       } else {
         showPreviewToast(t('alerts.channelAddFailed'))
       }
@@ -1967,12 +1961,20 @@ export default function Dashboard() {
                           background: dotColor, flexShrink: 0,
                         }} />
                         <span style={{ fontSize: 15, flexShrink: 0 }}>{ch.emoji}</span>
-                        <span style={{
-                          fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                          maxWidth: isMobile ? 100 : 220,
-                          flexShrink: 0,
-                        }}>{ch.alias}</span>
+                        {/* 채널 이름 → 유튜브 채널(새 탭). 색·굵기는 그대로, hover 밑줄만(.channel-name-link).
+                            행 클릭(잠금 안내)과 겹치지 않도록 이름에서 전파를 끊는다. */}
+                        <a
+                          href={ch.channel_id ? `https://www.youtube.com/channel/${ch.channel_id}` : ch.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="channel-name-link"
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            maxWidth: isMobile ? 100 : 220,
+                            flexShrink: 0,
+                          }}>{ch.alias}</a>
                         {isLocked && (
                           <span style={{
                             fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
@@ -3057,24 +3059,12 @@ export default function Dashboard() {
         <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} isPro={isPro} onClose={closeHelp} />
       )}
 
-      {/* 첫 로그인 동의(필수) → 채널 0개면 둘러보기 3장. 동의 전에는 다른 자동 팝업을 띄우지 않는다. */}
-      {!initialLoading && profile && (!profile.terms_agreed_at || showTour) && (
+      {/* 첫 로그인 동의(필수). 떠 있는 동안 도움말·체험 종료 팝업은 띄우지 않는다(동의 → 도움말 순). */}
+      {!initialLoading && profile && !profile.terms_agreed_at && (
         <OnboardingModal
-          mode={!profile.terms_agreed_at ? 'consent' : 'tour'}
           t={t}
           onAgreed={() => {
             setProfile(p => (p ? { ...p, terms_agreed_at: new Date().toISOString() } : p))
-            if (channels.length === 0) {
-              helpAutoShownRef.current = true
-              setShowTour(true)
-            }
-          }}
-          onCloseTour={(addChannel) => {
-            setShowTour(false)
-            if (addChannel) {
-              setActiveTab('channels')
-              setShowAddChannel(true)
-            }
           }}
           onToast={showPreviewToast}
         />

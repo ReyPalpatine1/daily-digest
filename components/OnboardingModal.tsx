@@ -1,9 +1,8 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-// 설치된 lucide-react 1.x에는 브랜드 아이콘(Youtube)이 없어 유튜브 재생 버튼 모양의 SquarePlay로 대신한다.
-import { ShieldCheck, SquarePlay, Mail, History } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { usePending } from '@/lib/use-pending'
 import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
@@ -11,35 +10,23 @@ import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
 type Props = {
-  // consent: 첫 로그인 동의(바깥 클릭·ESC로 닫히지 않음) / tour: 동의 직후 둘러보기 3장
-  mode: 'consent' | 'tour'
   t: TFn
-  // POST /api/consent 성공 — 다음 단계(둘러보기 또는 닫기)는 호출부가 정한다.
+  // POST /api/consent 성공 — 다음 안내(기존 도움말 팝업)는 호출부가 정한다.
   onAgreed: () => void
-  // 둘러보기 종료. addChannel=true면 마지막 장의 [채널 추가하러 가기].
-  onCloseTour: (addChannel: boolean) => void
   // 오류 안내는 대시보드의 기존 하단 토스트로.
   onToast: (message: string) => void
 }
 
-// 첫 로그인 동의·둘러보기 팝업. 틀은 TrialPopup(자동으로 뜨는 큰 가운데 정렬 알림창)과 같다.
-export default function OnboardingModal({ mode, t, onAgreed, onCloseTour, onToast }: Props) {
+// 첫 로그인 동의 팝업. 틀은 TrialPopup(자동으로 뜨는 큰 가운데 정렬 알림창)과 같다.
+// 바깥 클릭·ESC로 닫히지 않는다. 동의 후 안내는 기존 도움말 팝업(HelpPopup)이 맡는다.
+export default function OnboardingModal({ t, onAgreed, onToast }: Props) {
   const [agreeTerms, setAgreeTerms] = useState(false)
   const [agreeAge, setAgreeAge] = useState(false)
   // 선택 항목은 미리 체크하지 않는다.
   const [agreeAds, setAgreeAds] = useState(false)
   const [showLeave, setShowLeave] = useState(false)
-  const [slide, setSlide] = useState(0)
   const agree = usePending()
   const leave = usePending()
-
-  // 둘러보기 단계만 ESC로 닫힌다(동의 단계는 닫히지 않는다).
-  useEffect(() => {
-    if (mode !== 'tour') return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseTour(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [mode, onCloseTour])
 
   async function submitConsent() {
     await agree.run(async () => {
@@ -75,12 +62,6 @@ export default function OnboardingModal({ mode, t, onAgreed, onCloseTour, onToas
   }
 
   // === 스타일 (TrialPopup·ConfirmModal과 같은 버튼 크기·색) ===
-  const subBtn: CSSProperties = {
-    padding: '8px 14px', borderRadius: 8,
-    border: '0.5px solid var(--border)', background: 'var(--bg-card)',
-    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
-    cursor: 'pointer', fontFamily: 'inherit',
-  }
   const mainBtn: CSSProperties = {
     padding: '8px 14px', borderRadius: 8, border: 'none',
     background: 'var(--text-primary)', color: 'var(--bg-card)',
@@ -113,19 +94,11 @@ export default function OnboardingModal({ mode, t, onAgreed, onCloseTour, onToas
     })
   }
 
-  const tourSlides = [
-    { Icon: SquarePlay, title: t('onboarding.tour1Title'), body: t('onboarding.tour1Body') },
-    { Icon: Mail, title: t('onboarding.tour2Title'), body: t('onboarding.tour2Body') },
-    { Icon: History, title: t('onboarding.tour3Title'), body: t('onboarding.tour3Body') },
-  ]
-  const current = tourSlides[slide] ?? tourSlides[0]
-  const HeaderIcon = mode === 'consent' ? ShieldCheck : current.Icon
   const requiredOk = agreeTerms && agreeAge
 
   return (
     <>
       <div
-        onClick={() => { if (mode === 'tour') onCloseTour(false) }}
         style={{
           position: 'fixed', inset: 0, zIndex: 200,
           background: 'rgba(0,0,0,0.5)',
@@ -153,132 +126,92 @@ export default function OnboardingModal({ mode, t, onAgreed, onCloseTour, onToas
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--text-secondary)', marginBottom: 16,
           }}>
-            <HeaderIcon size={26} />
+            <ShieldCheck size={26} />
           </div>
 
-          {mode === 'consent' ? (
-            <>
-              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-                {t('onboarding.consentTitle')}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 18 }}>
-                {t('onboarding.consentIntro')}
-              </div>
+          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
+            {t('onboarding.consentTitle')}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 18 }}>
+            {t('onboarding.consentIntro')}
+          </div>
 
-              {/* 필수 ①② — TrialPopup 목록 박스와 같은 회색 박스, 줄 사이 0.5px 구분선 */}
-              <div style={{
-                textAlign: 'left', background: 'var(--bg-subtle)',
-                border: '0.5px solid var(--border)', borderRadius: 8,
-                padding: '4px 14px', marginBottom: 10,
+          {/* 필수 ①② — TrialPopup 목록 박스와 같은 회색 박스, 줄 사이 0.5px 구분선 */}
+          <div style={{
+            textAlign: 'left', background: 'var(--bg-subtle)',
+            border: '0.5px solid var(--border)', borderRadius: 8,
+            padding: '4px 14px', marginBottom: 10,
+          }}>
+            <label style={{ ...checkRow, padding: '10px 0' }}>
+              <input type="checkbox" checked={agreeTerms}
+                onChange={e => setAgreeTerms(e.target.checked)} style={checkbox} />
+              <span>{renderTermsLabel()}</span>
+            </label>
+            <div style={{ borderTop: '0.5px solid var(--border)' }} />
+            <div style={{ padding: '10px 0' }}>
+              <label style={checkRow}>
+                <input type="checkbox" checked={agreeAge}
+                  onChange={e => setAgreeAge(e.target.checked)} style={checkbox} />
+                <span>{t('onboarding.agreeAge')}</span>
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6, paddingLeft: textIndent, marginTop: 2 }}>
+                {t('onboarding.agreeAgeNote')}
+              </div>
+            </div>
+          </div>
+
+          {/* 선택 ③ — 테두리만 있는 별도 묶음 */}
+          <div style={{
+            textAlign: 'left', border: '0.5px solid var(--border)', borderRadius: 8,
+            padding: '10px 14px', marginBottom: 20,
+          }}>
+            <label style={checkRow}>
+              <input type="checkbox" checked={agreeAds}
+                onChange={e => setAgreeAds(e.target.checked)} style={checkbox} />
+              <span>{t('onboarding.agreeAds')}</span>
+            </label>
+            <div style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+              lineHeight: 1.6, paddingLeft: textIndent, marginTop: 4,
+            }}>
+              {t('onboarding.adsBenefit')}
+            </div>
+            <div style={{ paddingLeft: textIndent, marginTop: 4 }}>
+              {[t('onboarding.adsNote1'), t('onboarding.adsNote2'), t('onboarding.adsNote3')].map((line, i) => (
+                <div key={i} style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+                  {'· '}{line}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <button
+              type="button"
+              onClick={submitConsent}
+              disabled={!requiredOk || agree.pending}
+              style={{
+                ...mainBtn,
+                cursor: !requiredOk || agree.pending ? 'default' : 'pointer',
+                opacity: !requiredOk || agree.pending ? 0.5 : 1,
               }}>
-                <label style={{ ...checkRow, padding: '10px 0' }}>
-                  <input type="checkbox" checked={agreeTerms}
-                    onChange={e => setAgreeTerms(e.target.checked)} style={checkbox} />
-                  <span>{renderTermsLabel()}</span>
-                </label>
-                <div style={{ borderTop: '0.5px solid var(--border)' }} />
-                <div style={{ padding: '10px 0' }}>
-                  <label style={checkRow}>
-                    <input type="checkbox" checked={agreeAge}
-                      onChange={e => setAgreeAge(e.target.checked)} style={checkbox} />
-                    <span>{t('onboarding.agreeAge')}</span>
-                  </label>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6, paddingLeft: textIndent, marginTop: 2 }}>
-                    {t('onboarding.agreeAgeNote')}
-                  </div>
-                </div>
-              </div>
+              {agree.pending ? t('common.processing') : t('onboarding.agreeStart')}
+            </button>
+          </div>
 
-              {/* 선택 ③ — 테두리만 있는 별도 묶음 */}
-              <div style={{
-                textAlign: 'left', border: '0.5px solid var(--border)', borderRadius: 8,
-                padding: '10px 14px', marginBottom: 20,
+          <div style={{ marginTop: 14 }}>
+            <button
+              type="button"
+              onClick={() => setShowLeave(true)}
+              disabled={agree.pending}
+              style={{
+                background: 'transparent', border: 'none', padding: 0,
+                fontSize: 12, color: 'var(--text-muted)', fontFamily: 'inherit',
+                cursor: 'pointer', textDecoration: 'underline',
               }}>
-                <label style={checkRow}>
-                  <input type="checkbox" checked={agreeAds}
-                    onChange={e => setAgreeAds(e.target.checked)} style={checkbox} />
-                  <span>{t('onboarding.agreeAds')}</span>
-                </label>
-                <div style={{
-                  fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
-                  lineHeight: 1.6, paddingLeft: textIndent, marginTop: 4,
-                }}>
-                  {t('onboarding.adsBenefit')}
-                </div>
-                <div style={{ paddingLeft: textIndent, marginTop: 4 }}>
-                  {[t('onboarding.adsNote1'), t('onboarding.adsNote2'), t('onboarding.adsNote3')].map((line, i) => (
-                    <div key={i} style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
-                      {'· '}{line}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <button
-                  type="button"
-                  onClick={submitConsent}
-                  disabled={!requiredOk || agree.pending}
-                  style={{
-                    ...mainBtn,
-                    cursor: !requiredOk || agree.pending ? 'default' : 'pointer',
-                    opacity: !requiredOk || agree.pending ? 0.5 : 1,
-                  }}>
-                  {agree.pending ? t('common.processing') : t('onboarding.agreeStart')}
-                </button>
-              </div>
-
-              <div style={{ marginTop: 14 }}>
-                <button
-                  type="button"
-                  onClick={() => setShowLeave(true)}
-                  disabled={agree.pending}
-                  style={{
-                    background: 'transparent', border: 'none', padding: 0,
-                    fontSize: 12, color: 'var(--text-muted)', fontFamily: 'inherit',
-                    cursor: 'pointer', textDecoration: 'underline',
-                  }}>
-                  {t('onboarding.leave')}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-                {current.title}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 18 }}>
-                {current.body}
-              </div>
-
-              {/* 진행 점 3개 — 현재 장만 primary */}
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 20 }}>
-                {tourSlides.map((_, i) => (
-                  <span key={i} style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: i === slide ? 'var(--text-primary)' : 'var(--border)',
-                  }} />
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                {slide < tourSlides.length - 1 ? (
-                  <>
-                    <button type="button" onClick={() => onCloseTour(false)} style={subBtn}>
-                      {t('onboarding.skip')}
-                    </button>
-                    <button type="button" onClick={() => setSlide(s => s + 1)} style={mainBtn}>
-                      {t('onboarding.next')}
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" onClick={() => onCloseTour(true)} style={mainBtn}>
-                    {t('onboarding.goAddChannel')}
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+              {t('onboarding.leave')}
+            </button>
+          </div>
         </div>
       </div>
 
