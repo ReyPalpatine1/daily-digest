@@ -1,0 +1,298 @@
+'use client'
+
+import { Fragment, useEffect, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+// 설치된 lucide-react 1.x에는 브랜드 아이콘(Youtube)이 없어 유튜브 재생 버튼 모양의 SquarePlay로 대신한다.
+import { ShieldCheck, SquarePlay, Mail, History } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { usePending } from '@/lib/use-pending'
+import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
+
+type TFn = (key: string, params?: Record<string, string | number>) => string
+
+type Props = {
+  // consent: 첫 로그인 동의(바깥 클릭·ESC로 닫히지 않음) / tour: 동의 직후 둘러보기 3장
+  mode: 'consent' | 'tour'
+  t: TFn
+  // POST /api/consent 성공 — 다음 단계(둘러보기 또는 닫기)는 호출부가 정한다.
+  onAgreed: () => void
+  // 둘러보기 종료. addChannel=true면 마지막 장의 [채널 추가하러 가기].
+  onCloseTour: (addChannel: boolean) => void
+  // 오류 안내는 대시보드의 기존 하단 토스트로.
+  onToast: (message: string) => void
+}
+
+// 첫 로그인 동의·둘러보기 팝업. 틀은 TrialPopup(자동으로 뜨는 큰 가운데 정렬 알림창)과 같다.
+export default function OnboardingModal({ mode, t, onAgreed, onCloseTour, onToast }: Props) {
+  const [agreeTerms, setAgreeTerms] = useState(false)
+  const [agreeAge, setAgreeAge] = useState(false)
+  // 선택 항목은 미리 체크하지 않는다.
+  const [agreeAds, setAgreeAds] = useState(false)
+  const [showLeave, setShowLeave] = useState(false)
+  const [slide, setSlide] = useState(0)
+  const agree = usePending()
+  const leave = usePending()
+
+  // 둘러보기 단계만 ESC로 닫힌다(동의 단계는 닫히지 않는다).
+  useEffect(() => {
+    if (mode !== 'tour') return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseTour(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mode, onCloseTour])
+
+  async function submitConsent() {
+    await agree.run(async () => {
+      try {
+        const res = await fetch('/api/consent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ads: agreeAds }),
+        })
+        if (!res.ok) throw new Error(`consent ${res.status}`)
+        onAgreed()
+      } catch (e) {
+        console.error('[OnboardingModal] 동의 실패:', e)
+        onToast(t('onboarding.agreeFailed'))
+      }
+    })
+  }
+
+  async function cancelSignup() {
+    await leave.run(async () => {
+      try {
+        const res = await fetch('/api/account/delete', { method: 'POST' })
+        if (!res.ok) throw new Error(`delete ${res.status}`)
+        await supabase.auth.signOut()
+        window.location.href = '/'
+      } catch (e) {
+        console.error('[OnboardingModal] 가입 취소 실패:', e)
+        setShowLeave(false)
+        onToast(t('onboarding.leaveFailed'))
+      }
+    })
+  }
+
+  // === 스타일 (TrialPopup·ConfirmModal과 같은 버튼 크기·색) ===
+  const subBtn: CSSProperties = {
+    padding: '8px 14px', borderRadius: 8,
+    border: '0.5px solid var(--border)', background: 'var(--bg-card)',
+    color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
+    cursor: 'pointer', fontFamily: 'inherit',
+  }
+  const mainBtn: CSSProperties = {
+    padding: '8px 14px', borderRadius: 8, border: 'none',
+    background: 'var(--text-primary)', color: 'var(--bg-card)',
+    fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+  }
+  const checkbox: CSSProperties = {
+    width: 14, height: 14, margin: '3px 0 0', flexShrink: 0,
+    accentColor: 'var(--text-primary)', cursor: 'pointer',
+  }
+  const checkRow: CSSProperties = {
+    display: 'flex', alignItems: 'flex-start', gap: 8,
+    fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6, cursor: 'pointer',
+  }
+  // 체크박스(14) + 간격(8) — 글자 시작선
+  const textIndent = 22
+  const docLink: CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'underline' }
+
+  // "{terms}"·"{privacy}" 자리에 새 탭 링크를 끼운다.
+  function renderTermsLabel(): ReactNode {
+    return t('onboarding.agreeTerms').split(/(\{terms\}|\{privacy\})/).map((part, i) => {
+      if (part === '{terms}') {
+        return <a key={i} href="/terms" target="_blank" rel="noopener noreferrer" style={docLink}
+          onClick={e => e.stopPropagation()}>{t('onboarding.termsLink')}</a>
+      }
+      if (part === '{privacy}') {
+        return <a key={i} href="/privacy" target="_blank" rel="noopener noreferrer" style={docLink}
+          onClick={e => e.stopPropagation()}>{t('onboarding.privacyLink')}</a>
+      }
+      return <Fragment key={i}>{part}</Fragment>
+    })
+  }
+
+  const tourSlides = [
+    { Icon: SquarePlay, title: t('onboarding.tour1Title'), body: t('onboarding.tour1Body') },
+    { Icon: Mail, title: t('onboarding.tour2Title'), body: t('onboarding.tour2Body') },
+    { Icon: History, title: t('onboarding.tour3Title'), body: t('onboarding.tour3Body') },
+  ]
+  const current = tourSlides[slide] ?? tourSlides[0]
+  const HeaderIcon = mode === 'consent' ? ShieldCheck : current.Icon
+  const requiredOk = agreeTerms && agreeAge
+
+  return (
+    <>
+      <div
+        onClick={() => { if (mode === 'tour') onCloseTour(false) }}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 14,
+        }}>
+        <div
+          onClick={e => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          style={{
+            width: '100%', maxWidth: 400,
+            maxHeight: 'calc(100dvh - 28px)', overflowY: 'auto',
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 14,
+            padding: '28px 24px',
+            boxSizing: 'border-box',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
+            textAlign: 'center',
+          }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: '50%',
+            background: 'var(--bg-subtle)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--text-secondary)', marginBottom: 16,
+          }}>
+            <HeaderIcon size={26} />
+          </div>
+
+          {mode === 'consent' ? (
+            <>
+              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
+                {t('onboarding.consentTitle')}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 18 }}>
+                {t('onboarding.consentIntro')}
+              </div>
+
+              {/* 필수 ①② — TrialPopup 목록 박스와 같은 회색 박스, 줄 사이 0.5px 구분선 */}
+              <div style={{
+                textAlign: 'left', background: 'var(--bg-subtle)',
+                border: '0.5px solid var(--border)', borderRadius: 8,
+                padding: '4px 14px', marginBottom: 10,
+              }}>
+                <label style={{ ...checkRow, padding: '10px 0' }}>
+                  <input type="checkbox" checked={agreeTerms}
+                    onChange={e => setAgreeTerms(e.target.checked)} style={checkbox} />
+                  <span>{renderTermsLabel()}</span>
+                </label>
+                <div style={{ borderTop: '0.5px solid var(--border)' }} />
+                <div style={{ padding: '10px 0' }}>
+                  <label style={checkRow}>
+                    <input type="checkbox" checked={agreeAge}
+                      onChange={e => setAgreeAge(e.target.checked)} style={checkbox} />
+                    <span>{t('onboarding.agreeAge')}</span>
+                  </label>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6, paddingLeft: textIndent, marginTop: 2 }}>
+                    {t('onboarding.agreeAgeNote')}
+                  </div>
+                </div>
+              </div>
+
+              {/* 선택 ③ — 테두리만 있는 별도 묶음 */}
+              <div style={{
+                textAlign: 'left', border: '0.5px solid var(--border)', borderRadius: 8,
+                padding: '10px 14px', marginBottom: 20,
+              }}>
+                <label style={checkRow}>
+                  <input type="checkbox" checked={agreeAds}
+                    onChange={e => setAgreeAds(e.target.checked)} style={checkbox} />
+                  <span>{t('onboarding.agreeAds')}</span>
+                </label>
+                <div style={{
+                  fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+                  lineHeight: 1.6, paddingLeft: textIndent, marginTop: 4,
+                }}>
+                  {t('onboarding.adsBenefit')}
+                </div>
+                <div style={{ paddingLeft: textIndent, marginTop: 4 }}>
+                  {[t('onboarding.adsNote1'), t('onboarding.adsNote2'), t('onboarding.adsNote3')].map((line, i) => (
+                    <div key={i} style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+                      {'· '}{line}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  onClick={submitConsent}
+                  disabled={!requiredOk || agree.pending}
+                  style={{
+                    ...mainBtn,
+                    cursor: !requiredOk || agree.pending ? 'default' : 'pointer',
+                    opacity: !requiredOk || agree.pending ? 0.5 : 1,
+                  }}>
+                  {agree.pending ? t('common.processing') : t('onboarding.agreeStart')}
+                </button>
+              </div>
+
+              <div style={{ marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowLeave(true)}
+                  disabled={agree.pending}
+                  style={{
+                    background: 'transparent', border: 'none', padding: 0,
+                    fontSize: 12, color: 'var(--text-muted)', fontFamily: 'inherit',
+                    cursor: 'pointer', textDecoration: 'underline',
+                  }}>
+                  {t('onboarding.leave')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
+                {current.title}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 18 }}>
+                {current.body}
+              </div>
+
+              {/* 진행 점 3개 — 현재 장만 primary */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 20 }}>
+                {tourSlides.map((_, i) => (
+                  <span key={i} style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: i === slide ? 'var(--text-primary)' : 'var(--border)',
+                  }} />
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                {slide < tourSlides.length - 1 ? (
+                  <>
+                    <button type="button" onClick={() => onCloseTour(false)} style={subBtn}>
+                      {t('onboarding.skip')}
+                    </button>
+                    <button type="button" onClick={() => setSlide(s => s + 1)} style={mainBtn}>
+                      {t('onboarding.next')}
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => onCloseTour(true)} style={mainBtn}>
+                    {t('onboarding.goAddChannel')}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 동의하지 않고 나가기 → 가입 취소 확인 */}
+      {showLeave && (
+        <ConfirmModal
+          title={t('onboarding.leaveTitle')}
+          cancelLabel={t('common.close')}
+          confirmLabel={leave.pending ? t('common.processing') : t('onboarding.leaveConfirm')}
+          busy={leave.pending}
+          onConfirm={cancelSignup}
+          onCancel={() => setShowLeave(false)}>
+          <ModalText>{t('onboarding.leaveBody')}</ModalText>
+        </ConfirmModal>
+      )}
+    </>
+  )
+}

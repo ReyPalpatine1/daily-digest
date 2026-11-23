@@ -49,6 +49,9 @@ export type Profile = {
   // 3회 실패 강등 후 종료 안내를 보낸 시각. renew_notified_at(1차 실패 안내)과 용도가 다르다
   // — 한 컬럼을 같이 쓰던 시절엔 1차 안내를 받은 계정에 종료 안내가 영영 나가지 않았다.
   sub_ended_notified_at: string | null
+  // 첫 로그인 동의(이용약관·개인정보처리방침·만 14세 이상) 시각. 비어 있으면 대시보드 동의 팝업 표시
+  // (sql/consent.sql). 기록은 /api/consent에서 서버 시각으로만 한다.
+  terms_agreed_at: string | null
 }
 
 // 사용자의 실제 Pro 여부 판정 (VIP = 무기한 Pro, Pro = 만료일 확인)

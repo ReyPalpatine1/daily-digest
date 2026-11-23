@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
+import { consentRequiredResponse } from '@/lib/consent'
 import { buildCardLabel } from '@/lib/toss-cards'
 import { revokeTossBillingKey } from '@/lib/billing-key-cleanup'
 
@@ -34,6 +35,10 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // 첫 로그인 동의(이용약관·만 14세 이상) 전에는 막는다.
+  const consentBlock = await consentRequiredResponse(user.id)
+  if (consentBlock) return consentBlock
 
   const body = await req.json().catch(() => null) as { authKey?: string; customerKey?: string } | null
   const authKey = body?.authKey

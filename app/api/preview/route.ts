@@ -17,6 +17,7 @@ import { isDescriptionBasedSummary, isTranscriptFailedSummary } from '@/lib/summ
 import { et, type EmailLocale } from '@/lib/i18n/email-translations'
 import { failReasonTranslationKeys } from '@/lib/email-templates'
 import { getAuthedUser } from '@/lib/route-auth'
+import { consentRequiredResponse } from '@/lib/consent'
 
 // 가입 직후 "미리보기" — 구독 채널의 최신 영상 3개를 지금 요약해 열람 기록에만 저장한다.
 // 메일 발송·send_log·속보 발송은 일절 하지 않는다(정기 발송 경로와 완전 분리).
@@ -65,6 +66,10 @@ export async function POST() {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // 첫 로그인 동의(이용약관·만 14세 이상) 전에는 막는다.
+  const consentBlock = await consentRequiredResponse(user.id)
+  if (consentBlock) return consentBlock
 
   // 선점(preview_used_at) 되돌리기 — 요약 0건·예외 시 사용자가 기회를 잃지 않도록.
   const releaseClaim = async () => {

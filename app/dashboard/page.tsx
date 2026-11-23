@@ -14,6 +14,7 @@ import { UpgradeButton } from '@/components/UpgradeButton'
 import { LanguageSubmenu } from '@/components/LanguageSubmenu'
 import HelpPopup from '@/components/HelpPopup'
 import TrialPopup from '@/components/TrialPopup'
+import OnboardingModal from '@/components/OnboardingModal'
 import { AppHeader } from '@/components/AppHeader'
 import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
@@ -272,6 +273,8 @@ export default function Dashboard() {
   // Pro 체험 종료 안내 팝업(전날 ending / 당일 ended). 메일 발송 플래그(notified)가 있고
   // 팝업 확인(seen) 전이면 노출. Profile 타입에 없는 플래그 4종은 프로필 원본 행에서 따로 보관.
   const [trialPopup, setTrialPopup] = useState<'ending' | 'ended' | null>(null)
+  // 첫 로그인 둘러보기(동의 직후, 채널 0개일 때만). 동의 단계 표시는 profile.terms_agreed_at으로 판정한다.
+  const [showTour, setShowTour] = useState(false)
   const [trialFlags, setTrialFlags] = useState<{
     trial_ending_notified_at: string | null
     trial_ended_notified_at: string | null
@@ -362,6 +365,8 @@ export default function Dashboard() {
             renew_fail_count: 0,
             renew_notified_at: null,
             sub_ended_notified_at: null,
+            // 신규 가입자는 아직 동의 전 — 동의 팝업이 뜬다.
+            terms_agreed_at: null,
           }
           setProfile(loadedProfile)
           // 기본 설정 자동 생성
@@ -478,18 +483,23 @@ export default function Dashboard() {
   // 첫 진입 시 도움말 팝업 자동 노출 (settings 로드 후, 마운트당 1회).
   // help_seen===false 일 때만. 닫아도(체크 안 했으면) 같은 세션엔 다시 안 띄움.
   const helpAutoShownRef = useRef(false)
+  // 동의 전(동의 팝업 표시 중)에는 띄우지 않고, 동의 후 다시 판정한다.
+  // 이번 진입에서 둘러보기가 떴다면 도움말은 띄우지 않는다(신규 안내 중복 방지 — 다음 진입에 판정).
   useEffect(() => {
+    if (!profile || !profile.terms_agreed_at || showTour) return
     if (settings && !helpAutoShownRef.current && settings.help_seen === false) {
       helpAutoShownRef.current = true
       setShowHelp(true)
     }
-  }, [settings])
+  }, [settings, profile, showTour])
 
   // 체험 종료 안내 팝업 자동 노출 (프로필·설정 로드 후 1회).
   // 도움말 팝업이 뜨는 조건(help_seen===false)이면 이번 진입엔 띄우지 않음(동시 노출 방지).
   const trialPopupCheckedRef = useRef(false)
   useEffect(() => {
     if (trialPopupCheckedRef.current || !profile || !trialFlags || !settings) return
+    // 동의 전에는 띄우지 않는다(동의 팝업 우선). 동의·둘러보기가 끝난 뒤 다시 판정한다.
+    if (!profile.terms_agreed_at || showTour) return
     trialPopupCheckedRef.current = true
     if (settings.help_seen === false) return
     if (trialFlags.trial_ended_notified_at != null && trialFlags.trial_ended_popup_seen_at == null) {
@@ -500,7 +510,7 @@ export default function Dashboard() {
     ) {
       setTrialPopup('ending')
     }
-  }, [profile, trialFlags, settings])
+  }, [profile, trialFlags, settings, showTour])
 
   // 텔레그램 연결 완료 감지 → 폴링 중단
   useEffect(() => {
@@ -3047,6 +3057,29 @@ export default function Dashboard() {
         <HelpPopup t={t} isMobile={isMobile} initialDontShow={settings?.help_seen ?? false} isPro={isPro} onClose={closeHelp} />
       )}
 
+      {/* 첫 로그인 동의(필수) → 채널 0개면 둘러보기 3장. 동의 전에는 다른 자동 팝업을 띄우지 않는다. */}
+      {!initialLoading && profile && (!profile.terms_agreed_at || showTour) && (
+        <OnboardingModal
+          mode={!profile.terms_agreed_at ? 'consent' : 'tour'}
+          t={t}
+          onAgreed={() => {
+            setProfile(p => (p ? { ...p, terms_agreed_at: new Date().toISOString() } : p))
+            if (channels.length === 0) {
+              helpAutoShownRef.current = true
+              setShowTour(true)
+            }
+          }}
+          onCloseTour={(addChannel) => {
+            setShowTour(false)
+            if (addChannel) {
+              setActiveTab('channels')
+              setShowAddChannel(true)
+            }
+          }}
+          onToast={showPreviewToast}
+        />
+      )}
+
       {/* Pro 체험·1개월권 종료 안내 팝업 (전날 ending / 당일 ended) */}
       {trialPopup && (
         <TrialPopup
@@ -3113,7 +3146,8 @@ export default function Dashboard() {
       {previewToast && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
+          // 동의 팝업(zIndex 200) 위에서도 오류 안내가 가려지지 않도록 팝업보다 위에 둔다.
+          zIndex: 210, background: 'var(--text-primary)', color: 'var(--bg-card)',
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)',
           pointerEvents: 'none',

@@ -57,8 +57,7 @@ export default function Home() {
     { channel: t('landing.item4.channel'), title: t('landing.item4.title'), summary: t('landing.item4.summary') },
   ]
 
-  // 동의 문구 링크 / 푸터 링크 (내부 페이지 → 일반 앵커, 흑백·CSS 변수)
-  const consentLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'underline' }
+  // 푸터 링크 (내부 페이지 → 일반 앵커, 흑백·CSS 변수)
   const footerLinkStyle: React.CSSProperties = { color: 'var(--text-secondary)', textDecoration: 'none' }
 
   return (
@@ -178,14 +177,6 @@ export default function Home() {
                 {googleSvg}
                 {t('landing.cta')}
               </button>
-              {/* 동의 문구 (로그인 진입 버튼 바로 아래) */}
-              <p style={{ maxWidth: 340, margin: '14px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
-                {t('landing.consentNotice').split(/(\{terms\}|\{privacy\})/).map((part, i) => {
-                  if (part === '{terms}') return <a key={i} href="/terms" style={consentLinkStyle}>{t('settings.terms')}</a>
-                  if (part === '{privacy}') return <a key={i} href="/privacy" style={consentLinkStyle}>{t('settings.privacy')}</a>
-                  return <span key={i}>{part}</span>
-                })}
-              </p>
             </div>
           </div>
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { normalizeChannelUrl } from '@/lib/channel-url'
+import { consentRequiredResponse } from '@/lib/consent'
 
 const FREE_CHANNEL_LIMIT = 5
 
@@ -43,6 +44,10 @@ export async function POST(request: Request) {
   if (userError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // 첫 로그인 동의(이용약관·만 14세 이상) 전에는 막는다.
+  const consentBlock = await consentRequiredResponse(user.id)
+  if (consentBlock) return consentBlock
 
   // === 입력 파싱 ===
   let body: { url?: string; alias?: string; emoji?: string; category_id?: string | null }

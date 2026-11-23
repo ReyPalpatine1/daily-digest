@@ -80,6 +80,8 @@ export default function ProfilePage() {
         .single()
       if (cancelled) return
 
+      // 첫 로그인 동의 전이면 대시보드(동의 팝업)로 보낸다. 프로필이 아직 없는 계정도 대시보드에서 만들어진다.
+      if (!(profileRow as Profile | null)?.terms_agreed_at) { router.replace('/dashboard'); return }
       setProfile(profileRow as Profile | null)
 
       // 도움말 팝업 체크박스 초기값(help_seen)만 로드 (대시보드와 동일 컬럼).

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthedUser } from '@/lib/route-auth'
+import { consentRequiredResponse } from '@/lib/consent'
 import { PRICE_MONTHLY, ORDER_NAME, makeOrderId, isOnetimeAvailableOnServer } from '@/lib/billing'
 import { checkPurchaseBlock } from '@/lib/purchase-guard'
 
@@ -22,6 +23,10 @@ export async function POST() {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // 첫 로그인 동의(이용약관·만 14세 이상) 전에는 막는다.
+  const consentBlock = await consentRequiredResponse(user.id)
+  if (consentBlock) return consentBlock
 
   // 1개월권(일반결제 계약) 키가 아직 없으면 주문을 만들지 않는다(payments pending도 남기지 않는다).
   // 화면은 이 에러를 받으면 "준비 중" 안내를 띄운다.
