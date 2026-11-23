@@ -130,7 +130,7 @@ export const TERMS_ZH = `生效日期：2026-07-14
 
 附则：本条款自 2026-07-14 起施行。`
 
-export const PRIVACY_KO = `시행일: 2026-12-01
+export const PRIVACY_KO = `시행일: 2026-11-24
 
 Daily Video Digest(이하 "서비스")를 운영하는 솔로옵스(이하 "회사")는 개인정보 보호법 등 관련 법령을 준수하며 다음 처리방침을 둡니다.
 
@@ -165,11 +165,11 @@ Daily Video Digest(이하 "서비스")를 운영하는 솔로옵스(이하 "회�
 
 본 방침은 한국어를 정본으로 하며, 번역본과 한국어본의 해석이 다른 경우 한국어본이 우선합니다.
 
-부칙: 본 방침은 2026-07-14부터 시행합니다. 개정 방침은 2026-12-01부터 시행합니다(유료 결제 시 수집 항목 구체화, 결제대행사 위탁 내용 정정). 개정 전 방침은 아래 링크에서 확인할 수 있습니다.`
+부칙: 본 방침은 2026-07-14부터 시행합니다. 개정 2026-11-24.`
 
 // 개인정보처리방침 영어판 (참고 번역 — 정본은 PRIVACY_KO).
 // 시행일은 한국어판과 동일한 2026-07-14. LegalPage 가 'Article N(...)' 서식을 굵게 처리한다.
-export const PRIVACY_EN = `Effective date: 2026-12-01
+export const PRIVACY_EN = `Effective date: 2026-11-24
 
 SoloOps (the "Company"), which operates Daily Video Digest (the "Service"), complies with the Personal Information Protection Act (개인정보 보호법) and other applicable laws, and establishes the following Privacy Policy.
 
@@ -204,9 +204,9 @@ Article 11 (Duty to Notify) Where the Company amends this Privacy Policy, it wil
 
 The Korean version of this Privacy Policy is the authoritative text; in the event of any discrepancy in interpretation between a translated version and the Korean version, the Korean version prevails. This English version is provided as a reference translation.
 
-Addendum: This Privacy Policy took effect on 2026-07-14. The amended Privacy Policy takes effect on 2026-12-01 (specification of the items collected upon paid payment, and correction of the outsourcing details for the payment gateway). The previous version is available via the link below.`
+Addendum: This Privacy Policy takes effect on 2026-07-14. Amended on 2026-11-24.`
 
-export const PRIVACY_JA = `施行日：2026-12-01
+export const PRIVACY_JA = `施行日：2026-11-24
 
 Daily Video Digest（以下「本サービス」）を運営するSoloOps（솔로옵스、以下「当社」）は、韓国「個人情報保護法」（개인정보 보호법）その他の関係法令を遵守し、次のとおりプライバシーポリシーを定めます。
 
@@ -241,9 +241,9 @@ Daily Video Digest（以下「本サービス」）を運営するSoloOps（솔�
 
 本ポリシーは韓国語版を正本とし、翻訳版と韓国語版の解釈が異なる場合は韓国語版が優先します。この日本語版は参考翻訳として提供するものです。
 
-附則：本ポリシーは2026-07-14から施行します。改正後の本ポリシーは2026-12-01から施行します（有料決済時の収集項目の具体化、決済代行会社への委託内容の訂正）。改正前のポリシーは下記のリンクからご確認いただけます。`
+附則：本ポリシーは2026-07-14から施行します。2026-11-24改正。`
 
-export const PRIVACY_ZH = `生效日期：2026-12-01
+export const PRIVACY_ZH = `生效日期：2026-11-24
 
 运营 Daily Video Digest（以下简称"本服务"）的 SoloOps（솔로옵스，以下简称"本公司"）遵守韩国《个人信息保护法》（개인정보 보호법）等相关法律法规，制定如下隐私政策。
 
@@ -278,157 +278,7 @@ export const PRIVACY_ZH = `生效日期：2026-12-01
 
 本政策以韩文版为正本，译本与韩文版解释不一致时，以韩文版为准。本中文版仅作为参考译文提供。
 
-附则：本政策自 2026-07-14 起施行。修订后的本政策自 2026-12-01 起施行（具体列明付费付款时的收集项目，更正对支付代理机构的委托内容）。修订前的政策可通过下方链接查看。`
-
-// ─── 개정 전 개인정보처리방침(2026-07-14 시행) 보관본 — 한 글자도 바꾸지 말 것 ───
-// /privacy?version=2026-07-14 로 열린다(components/LegalPage.tsx).
-export const PRIVACY_KO_20260714 = `시행일: 2026-07-14
-
-Daily Video Digest(이하 "서비스")를 운영하는 솔로옵스(이하 "회사")는 개인정보 보호법 등 관련 법령을 준수하며 다음 처리방침을 둡니다.
-
-제1조(수집 항목) 1. Google 로그인: 이름, 이메일, 프로필 식별자. 2. 서비스 이용 과정 수집·생성: 구독 채널 정보(URL·별칭·카테고리 등), 발송 설정(수신 이메일·발송시간·속보 키워드·발송수단), 메신저 연동 식별자(예: 텔레그램 chat ID), 요약 발송 기록·이용 기록, 결제·이용권 상태(플랜 등급·이용기간), 가입 경로 정보(공유 링크를 통해 가입한 경우 해당 공유 링크 식별자). 3. 결제 시(도입 시): 결제대행사(PG)를 통한 결제 관련 정보. 회사는 카드번호 등 결제정보를 직접 저장하지 않습니다. 4. 서비스 이용 과정에서 자동 생성·수집되는 항목: IP 주소, 브라우저 정보(User-Agent), 쿠키 등 자동 수집 장치를 통해 수집되는 정보, 접속 일시 및 서비스 이용 기록, 부정 이용 기록. 회사는 공유 페이지 조회, 공유 콘텐츠 신고, 광고 배너 클릭의 기록에 대하여 IP 주소를 일방향 해시값으로 변환하여 저장하며, 원본 IP 주소는 저장하지 않습니다. 다만 호스팅·보안 인프라 제공자의 처리 과정에서 IP 주소가 처리·기록될 수 있습니다. 5. 공유 콘텐츠 신고 접수 시: 신고 사유, 신고 상세 내용(이용자가 입력한 경우), 신고 접수 시점의 공유 메모 원문. 6. 의견 보내기 이용 시: 평가, 의견 유형, 의견 내용, 이용 언어.
-
-제2조(이용 목적) 회원 식별·인증, AI 요약 생성·발송, 이용 기록 관리·열람 제공, 유료 결제·이용권 관리·정산, 문의 응대·공지, 서비스 개선·부정 이용 방지, 공유 콘텐츠 신고의 접수·처리 및 반복 위반 확인, 공유 조회수·광고 클릭의 중복 집계 방지.
-
-제3조(보유 및 이용기간) 1. 원칙적으로 탈퇴 시 지체 없이 파기. 2. 요약 발송 기록(digests)은 최대 30일 보관 후 자동 삭제. 3. 법령상 보존: 계약·청약철회 기록 5년, 대금결제·재화공급 기록 5년, 소비자 불만·분쟁처리 기록 3년(이상 전자상거래법), 로그인 기록 3개월(통신비밀보호법). 회원 탈퇴 시 결제 기록 중 주문번호·결제 식별번호, 금액·통화, 결제·환불 일시, 상품 구분, 결제수단 유형, 이메일 주소는 회원 계정과의 연결을 끊은 상태로 다른 개인정보와 분리하여 보관하며, 결제일로부터 5년이 지나면 자동으로 파기합니다. 이 경우 탈퇴 후에도 이메일 주소가 보관됩니다. 4. Pro 체험 이용 이력(이메일의 일방향 해시값, 소셜 로그인 플랫폼 식별자, 사용 시점)은 중복 체험 방지 목적으로 회원 탈퇴 후에도 서비스 종료 시까지 보존됩니다. 5. 공유 페이지 조회 기록(방문자 식별 해시 포함)은 중복 조회 집계 방지 목적으로 수집 후 24시간 이내에 자동 삭제됩니다. 6. 공유 콘텐츠 신고 기록(신고 내용, 신고 접수 시점의 공유 메모 원문, 신고자 식별 해시)은 신고 처리 및 반복 위반 확인 목적으로 접수일로부터 1년간 보관 후 파기합니다. 7. 광고 배너 클릭 기록 중 방문자 식별 해시 및 브라우저 정보는 수집일로부터 90일이 지나면 삭제하며, 식별 정보가 제거된 클릭 통계(광고 위치, 유입 화면, 클릭 일시)는 광고 성과 분석을 위하여 보관합니다. 8. 의견 보내기로 제출된 의견은 서비스 개선 목적으로 접수일로부터 1년간 보관 후 파기하며, 회원 탈퇴 시에는 회원 계정과의 연결을 끊은 상태로 보관합니다.
-
-제4조(제3자 제공) 회사는 목적 범위를 초과하여 제3자에게 제공하지 않습니다. 다만 법령 근거 또는 수사기관의 적법한 요청은 예외입니다.
-
-제5조(처리 위탁) 회사는 다음과 같이 위탁합니다(위탁 목적 범위 내 처리): Google LLC(소셜 로그인 인증, YouTube 영상 정보 조회, AI 요약(Gemini) — 이름·이메일·프로필 식별자·요약 대상 영상 정보), Supabase Inc.(DB·인증 인프라 — 계정·서비스 이용 정보), Cloudflare Inc.(호스팅·실행 인프라, 이메일 발송 처리, 데이터 백업 보관 — 서비스 이용 관련 정보·수신 이메일 주소·발송 콘텐츠), TranscriptAPI·Supadata(영상 자막 추출 — 요약 대상 영상 식별자만 전달되며 이용자 개인정보는 포함되지 않음), Telegram(메신저 알림 발송(연동 시) — 텔레그램 식별자·발송 콘텐츠), 토스페이먼츠 주식회사(유료 결제 처리(도입 시) — 결제 관련 정보).
-
-제6조(개인정보의 국외 이전) 회사는 서비스 제공에 필요한 처리 위탁·보관을 위하여 다음과 같이 개인정보를 국외로 이전하며, 개인정보 보호법 제28조의8 제1항 제3호에 따라 본 처리방침을 통해 이를 공개합니다. 이전 일시·방법은 모두 '서비스 이용 시점에 정보통신망을 통한 수시 전송'입니다.
-1. Google LLC(미국) — 이전 항목: 이름·이메일·프로필 식별자, 요약 대상 영상 정보 / 목적: 소셜 로그인 인증 및 AI 요약 생성 / 보유기간: 회원 탈퇴 또는 위탁 계약 종료 시까지 / 문의: privacy.google.com
-2. Supabase, Inc.(미국) — 이전 항목: 계정 정보 및 서비스 이용 기록 일체 / 목적: 데이터베이스·인증 인프라 운영 / 보유기간: 회원 탈퇴 또는 위탁 계약 종료 시까지 / 문의: supabase.com/privacy
-3. Cloudflare, Inc.(미국) — 이전 항목: IP 주소, 서비스 이용 기록, 수신 이메일 주소 및 발송 콘텐츠, 데이터 백업본 / 목적: 호스팅·보안, 이메일 발송 처리, 백업 보관 / 보유기간: 회원 탈퇴 또는 위탁 계약 종료 시까지(백업본은 백업 보존 기간까지) / 문의: cloudflare.com/privacypolicy
-4. Telegram(아랍에미리트) — 이전 항목: 텔레그램 chat ID 및 발송 콘텐츠(메신저 연동 시에 한함) / 목적: 메신저 알림 발송 / 보유기간: 연동 해제 또는 회원 탈퇴 시까지 / 문의: telegram.org/privacy
-이용자는 개인정보의 국외 이전을 원하지 않는 경우 회원 탈퇴 등으로 서비스 이용을 중단할 수 있으며, 이 경우 서비스 제공이 불가능합니다.
-
-제7조(이용자의 권리) 1. 언제든 개인정보 조회·수정 가능, 서비스 내 설정·탈퇴로 삭제 요청 가능. 2. 처리 정지 요구 가능(이 경우 서비스 이용 제한 가능). 3. 권리 행사는 서비스 내 기능 또는 개인정보 보호책임자에게 요청.
-
-제8조(파기) 1. 보유기간 경과·목적 달성 등 불필요 시 지체 없이 파기. 2. 전자적 파일은 복구 불가한 방법으로 삭제.
-
-제9조(안전성 확보 조치) 접근 권한 관리, 전송 구간 암호화, 인증 기반 접근 통제 등.
-
-제9조의2(개인정보 자동 수집 장치의 설치·운영 및 거부) 1. 회사는 로그인 상태 유지 등 서비스 제공을 위하여 쿠키(cookie) 및 브라우저 로컬 스토리지를 사용합니다. 2. 이용자는 웹 브라우저 설정을 통해 쿠키 저장을 허용·확인·거부할 수 있습니다. 다만 쿠키 등의 저장을 거부하는 경우 로그인이 필요한 서비스의 이용이 불가능할 수 있습니다. 3. 회사는 무료 플랜 화면의 광고 배너, 공유 페이지의 YouTube 영상 재생 기능 등 제3자가 제공하는 콘텐츠를 서비스 화면에 포함하고 있으며, 이 과정에서 해당 제3자가 이용자의 브라우저에 자체 쿠키 등을 설치하거나 이를 통해 정보를 수집할 수 있습니다. 회사는 해당 쿠키를 읽거나 그 정보에 접근할 수 없으며, 이에 대한 처리는 각 제3자의 개인정보처리방침에 따릅니다. 해당 제3자는 다음과 같습니다. ① 광고 배너: 쿠팡 파트너스(쿠팡 주식회사) ② YouTube 영상 재생: Google LLC. 4. 이용자는 제2항의 브라우저 설정을 통하여 제3항의 제3자 쿠키 저장도 거부할 수 있습니다. 이 경우 광고 표시나 영상 재생이 제한될 수 있으나, 그 밖의 서비스 이용에는 지장이 없습니다.
-
-제10조(개인정보 보호책임자 및 고충처리) 1. 개인정보 보호책임자: 김해솔(대표), 연락처: support@dailyvideodigest.com. 2. 개인정보 열람·정정·삭제·처리정지 청구 접수 및 고충처리 부서: 고객지원(운영), 연락처: support@dailyvideodigest.com. 3. 이용자는 개인정보 침해에 대한 신고나 상담이 필요한 경우 다음 기관에 문의할 수 있습니다. 개인정보분쟁조정위원회 1833-6972(www.kopico.go.kr), 개인정보침해신고센터 (국번없이) 118(privacy.kisa.or.kr), 대검찰청 (국번없이) 1301(www.spo.go.kr), 경찰청 (국번없이) 182.
-
-제11조(고지 의무) 회사는 본 방침을 변경하는 경우 변경 사유 및 적용일자를 명시하여 적용일 최소 7일 전부터 서비스 내 공지로 고지합니다. 다만 수집 항목·이용 목적의 변경 등 이용자 권리에 중대한 변경이 있는 경우에는 최소 30일 전에 고지합니다.
-
-본 방침은 한국어를 정본으로 하며, 번역본과 한국어본의 해석이 다른 경우 한국어본이 우선합니다.
-
-부칙: 본 방침은 2026-07-14부터 시행합니다.`
-
-export const PRIVACY_EN_20260714 = `Effective date: 2026-07-14
-
-SoloOps (the "Company"), which operates Daily Video Digest (the "Service"), complies with the Personal Information Protection Act (개인정보 보호법) and other applicable laws, and establishes the following Privacy Policy.
-
-Article 1 (Categories of Personal Information Collected) 1. Google sign-in: name, email address, profile identifier. 2. Collected or generated in the course of using the Service: subscribed channel information (URL, alias, category, etc.), delivery settings (recipient email address, delivery time, breaking-news keywords, delivery method), messenger integration identifiers (e.g., Telegram chat ID), summary delivery records and usage records, payment and subscription status (plan tier, subscription period), and sign-up route information (where the user signed up through a share link, the identifier of that share link). 3. Upon payment (once introduced): payment-related information processed through a payment gateway (PG). The Company does not directly store payment credentials such as card numbers. 4. Automatically generated or collected in the course of using the Service: IP address, browser information (User-Agent), information collected through automatic collection tools such as cookies, access date and time, service usage records, and records of abusive use. For records of shared-page views, reports on shared content, and advertisement banner clicks, the Company converts the IP address into a one-way hash value and stores only that value; the original IP address is not stored. However, IP addresses may be processed and logged by the Company's hosting and security infrastructure providers. 5. When a report on shared content is received: the reason for the report, the details of the report (where entered by the user), and the original text of the shared note at the time the report was received. 6. When using the feedback feature: rating, feedback type, feedback content, and language used.
-
-Article 2 (Purposes of Use) Member identification and authentication; generation and delivery of AI summaries; management of usage records and provision of access to them; processing of paid transactions, management of subscriptions and settlement; responding to inquiries and providing notices; service improvement and prevention of abusive use; receipt and handling of reports on shared content and verification of repeated violations; and prevention of duplicate counting of shared-page views and advertisement clicks.
-
-Article 3 (Retention and Use Period) 1. As a rule, personal information is destroyed without delay upon withdrawal of membership. 2. Summary delivery records (digests) are retained for up to 30 days and then automatically deleted. 3. Retention required by law: records on contracts and withdrawal of subscription, 5 years; records on payment and the supply of goods, 5 years; records on consumer complaints and dispute resolution, 3 years (each under the Act on the Consumer Protection in Electronic Commerce, Etc. (전자상거래법)); log-in records, 3 months (Protection of Communications Secrets Act (통신비밀보호법)). Upon withdrawal of membership, the following items of the payment records — order number and payment identifier, amount and currency, date and time of payment and refund, product type, payment method type, and email address — are stored separately from other personal information with the link to the member account removed, and are automatically destroyed once 5 years have elapsed from the date of payment. In this case, the email address is retained even after withdrawal. 4. Pro trial usage history (a one-way hash value of the email address, the social login platform identifier, and the time of use) is retained for the purpose of preventing duplicate trials, and is preserved even after withdrawal of membership until the Service is discontinued. 5. Shared-page view records (including the visitor identification hash) are automatically deleted within 24 hours of collection, for the purpose of preventing duplicate view counting. 6. Records of reports on shared content (the contents of the report, the original text of the shared note at the time the report was received, and the reporter identification hash) are retained for one year from the date of receipt for the purpose of handling reports and verifying repeated violations, and are then destroyed. 7. Among advertisement banner click records, the visitor identification hash and browser information are deleted once 90 days have elapsed from the date of collection; click statistics from which identifying information has been removed (advertisement placement, referring screen, click date and time) are retained for the analysis of advertising performance. 8. Feedback submitted through the feedback feature is retained for one year from the date of receipt for the purpose of improving the Service and is then destroyed; upon withdrawal of membership, it is retained with the link to the member account removed.
-
-Article 4 (Provision to Third Parties) The Company does not provide personal information to third parties beyond the scope of the stated purposes. Exceptions apply where there is a statutory basis or a lawful request from an investigative agency.
-
-Article 5 (Outsourcing of Processing) The Company outsources processing as follows (processing is limited to the scope of the outsourced purpose): Google LLC (social login authentication, retrieval of YouTube video information, AI summarization (Gemini) — name, email address, profile identifier, and information on the videos to be summarized), Supabase Inc. (database and authentication infrastructure — account and service usage information), Cloudflare Inc. (hosting and execution infrastructure, email delivery processing, and storage of data backups — service usage information, recipient email addresses, and delivered content), TranscriptAPI and Supadata (extraction of video transcripts — only the identifier of the video to be summarized is transmitted; no personal information of users is included), Telegram (delivery of messenger notifications, where integrated — Telegram identifier and delivered content), and Toss Payments Inc. (processing of paid transactions, once introduced — payment-related information).
-
-Article 6 (Cross-Border Transfer of Personal Information) For the outsourced processing and storage necessary to provide the Service, the Company transfers personal information overseas as set out below, and discloses such transfers through this Privacy Policy pursuant to Article 28-8(1)3 of the Personal Information Protection Act (개인정보 보호법). In every case, the time and method of transfer are "transmission from time to time over an information and communications network at the time the Service is used."
-1. Google LLC (United States) — Items transferred: name, email address, profile identifier, and information on the videos to be summarized / Purpose: social login authentication and generation of AI summaries / Retention period: until withdrawal of membership or termination of the outsourcing agreement / Contact: privacy.google.com
-2. Supabase, Inc. (United States) — Items transferred: account information and all service usage records / Purpose: operation of database and authentication infrastructure / Retention period: until withdrawal of membership or termination of the outsourcing agreement / Contact: supabase.com/privacy
-3. Cloudflare, Inc. (United States) — Items transferred: IP address, service usage records, recipient email addresses and delivered content, and data backups / Purpose: hosting and security, email delivery processing, and backup storage / Retention period: until withdrawal of membership or termination of the outsourcing agreement (backups, until the end of the backup retention period) / Contact: cloudflare.com/privacypolicy
-4. Telegram (United Arab Emirates) — Items transferred: Telegram chat ID and delivered content (only where messenger integration is used) / Purpose: delivery of messenger notifications / Retention period: until the integration is disconnected or membership is withdrawn / Contact: telegram.org/privacy
-A user who does not wish to have personal information transferred overseas may discontinue use of the Service, for example by withdrawing membership; in that case the Service cannot be provided.
-
-Article 7 (Rights of Users) 1. Users may access and correct their personal information at any time, and may request deletion through the settings within the Service or by withdrawing membership. 2. Users may request suspension of processing (in which case use of the Service may be restricted). 3. These rights may be exercised through the functions provided within the Service or by contacting the Chief Privacy Officer.
-
-Article 8 (Destruction) 1. Personal information is destroyed without delay once it is no longer necessary, such as where the retention period has elapsed or the purpose of processing has been achieved. 2. Electronic files are deleted by a method that renders them unrecoverable.
-
-Article 9 (Security Measures) Management of access privileges, encryption of data in transit, authentication-based access control, and similar measures.
-
-Article 9-2 (Installation, Operation and Refusal of Automatic Personal Information Collection Tools) 1. The Company uses cookies and browser local storage in order to provide the Service, including maintaining the signed-in state. 2. Users may allow, review, or refuse the storage of cookies through their web browser settings. However, if the storage of cookies and similar items is refused, services that require signing in may become unavailable. 3. The Company includes third-party content on the Service screens, such as advertisement banners on free-plan screens and the YouTube video playback feature on share pages. In the course of this, those third parties may set their own cookies in the user's browser or collect information through them. The Company cannot read those cookies or access that information, and such processing is governed by the privacy policy of each third party. The third parties concerned are as follows: (i) advertisement banners: Coupang Partners (Coupang Corp.); (ii) YouTube video playback: Google LLC. 4. Users may also refuse the storage of the third-party cookies referred to in paragraph 3 through the browser settings described in paragraph 2. In that case, the display of advertisements or the playback of videos may be limited, but there is no impediment to the use of other parts of the Service.
-
-Article 10 (Chief Privacy Officer and Grievance Handling) 1. Chief Privacy Officer: Haesol Kim (Representative), contact: support@dailyvideodigest.com. 2. Department receiving requests for access, correction, deletion, or suspension of processing of personal information, and handling grievances: Customer Support (Operations), contact: support@dailyvideodigest.com. 3. Users who need to report or seek advice on an infringement of personal information may contact the following organizations (telephone numbers are for calls within Korea): Personal Information Dispute Mediation Committee (개인정보분쟁조정위원회), 1833-6972 (www.kopico.go.kr); Personal Information Infringement Report Center (개인정보침해신고센터), 118 (privacy.kisa.or.kr); Supreme Prosecutors' Office (대검찰청), 1301 (www.spo.go.kr); Korean National Police Agency (경찰청), 182.
-
-Article 11 (Duty to Notify) Where the Company amends this Privacy Policy, it will state the reason for the amendment and the effective date and give notice within the Service at least 7 days before the effective date. However, where there is a material change affecting users' rights, such as a change to the categories of information collected or the purposes of use, notice will be given at least 30 days in advance.
-
-The Korean version of this Privacy Policy is the authoritative text; in the event of any discrepancy in interpretation between a translated version and the Korean version, the Korean version prevails. This English version is provided as a reference translation.
-
-Addendum: This Privacy Policy takes effect on 2026-07-14.`
-
-export const PRIVACY_JA_20260714 = `施行日：2026-07-14
-
-Daily Video Digest（以下「本サービス」）を運営するSoloOps（솔로옵스、以下「当社」）は、韓国「個人情報保護法」（개인정보 보호법）その他の関係法令を遵守し、次のとおりプライバシーポリシーを定めます。
-
-第1条（収集する項目）1. Googleログイン：氏名、メールアドレス、プロフィール識別子。2. 本サービスの利用過程で収集・生成される項目：購読チャンネル情報（URL・別名・カテゴリー等）、配信設定（受信メールアドレス・配信時刻・速報キーワード・配信手段）、メッセンジャー連携識別子（例：Telegram chat ID）、要約の配信記録・利用記録、決済・利用権の状態（プラン区分・利用期間）、登録経路情報（共有リンクを通じて登録した場合、当該共有リンクの識別子）。3. 決済時（導入時）：決済代行会社（PG）を通じた決済関連情報。当社はカード番号等の決済情報を直接保存しません。4. 本サービスの利用過程で自動的に生成・収集される項目：IPアドレス、ブラウザ情報（User-Agent）、Cookie等の自動収集装置により収集される情報、アクセス日時およびサービス利用記録、不正利用記録。当社は、共有ページの閲覧、共有コンテンツの通報、広告バナーのクリックの記録について、IPアドレスを一方向ハッシュ値に変換して保存し、元のIPアドレスは保存しません。ただし、ホスティング・セキュリティ基盤の提供者による処理の過程でIPアドレスが処理・記録される場合があります。5. 共有コンテンツの通報受付時：通報理由、通報の詳細内容（利用者が入力した場合）、通報受付時点の共有メモの原文。6. 意見送信機能の利用時：評価、意見の種類、意見の内容、利用言語。
-
-第2条（利用目的）会員の識別・認証、AI要約の生成・配信、利用記録の管理・閲覧提供、有料決済・利用権の管理・精算、お問い合わせ対応・お知らせ、サービスの改善・不正利用の防止、共有コンテンツに関する通報の受付・処理および繰り返しの違反の確認、共有ページ閲覧数・広告クリックの重複集計の防止。
-
-第3条（保有および利用期間）1. 原則として、退会時に遅滞なく破棄します。2. 要約の配信記録（digests）は最大30日間保管した後、自動的に削除します。3. 法令上の保存：契約・申込みの撤回に関する記録5年、代金決済・財貨等の供給に関する記録5年、消費者の苦情・紛争処理に関する記録3年（以上、韓国「電子商取引等における消費者保護に関する法律」（전자상거래법））、ログイン記録3か月（韓国「通信秘密保護法」（통신비밀보호법））。退会時、決済記録のうち注文番号・決済識別番号、金額・通貨、決済・返金日時、商品区分、決済手段の種類、メールアドレスは、会員アカウントとの紐付けを解除した状態で他の個人情報と分離して保管し、決済日から5年が経過すると自動的に破棄します。この場合、退会後もメールアドレスが保管されます。4. Pro体験の利用履歴（メールアドレスの一方向ハッシュ値、ソーシャルログインのプラットフォーム識別子、利用時点）は、重複体験の防止を目的として、退会後もサービス終了時まで保存します。5. 共有ページの閲覧記録（訪問者識別ハッシュを含む）は、閲覧数の重複集計を防止する目的で、収集後24時間以内に自動的に削除します。6. 共有コンテンツの通報記録（通報内容、通報受付時点の共有メモの原文、通報者識別ハッシュ）は、通報の処理および繰り返しの違反の確認を目的として、受付日から1年間保管した後に破棄します。7. 広告バナーのクリック記録のうち訪問者識別ハッシュおよびブラウザ情報は、収集日から90日が経過した時点で削除し、識別情報を除去したクリック統計（広告の掲載位置、流入画面、クリック日時）は広告成果の分析のために保管します。8. 意見送信機能により提出された意見は、サービス改善を目的として受付日から1年間保管した後に破棄し、退会時には会員アカウントとの紐付けを解除した状態で保管します。
-
-第4条（第三者への提供）当社は、利用目的の範囲を超えて個人情報を第三者に提供しません。ただし、法令に根拠がある場合または捜査機関から適法な要請があった場合は例外とします。
-
-第5条（処理の委託）当社は、次のとおり処理を委託しています（委託目的の範囲内で処理）：Google LLC（ソーシャルログイン認証、YouTube動画情報の照会、AI要約（Gemini）— 氏名・メールアドレス・プロフィール識別子・要約対象の動画情報）、Supabase Inc.（データベース・認証基盤 — アカウント・サービス利用情報）、Cloudflare Inc.（ホスティング・実行基盤、メール配信処理、データバックアップの保管 — サービス利用関連情報・受信メールアドレス・配信コンテンツ）、TranscriptAPI・Supadata（動画字幕の抽出 — 要約対象の動画識別子のみが伝達され、利用者の個人情報は含まれません）、Telegram（メッセンジャー通知の配信（連携時）— Telegram識別子・配信コンテンツ）、Toss Payments株式会社（有料決済の処理（導入時）— 決済関連情報）。
-
-第6条（個人情報の国外移転）当社は、本サービスの提供に必要な処理の委託・保管のため、次のとおり個人情報を国外に移転し、韓国「個人情報保護法」第28条の8第1項第3号に基づき、本ポリシーを通じてこれを公開します。移転の日時・方法はいずれも「本サービス利用時に情報通信網を通じて随時送信」です。
-1. Google LLC（米国）— 移転項目：氏名・メールアドレス・プロフィール識別子、要約対象の動画情報／目的：ソーシャルログイン認証およびAI要約の生成／保有期間：退会または委託契約終了時まで／お問い合わせ：privacy.google.com
-2. Supabase, Inc.（米国）— 移転項目：アカウント情報およびサービス利用記録一式／目的：データベース・認証基盤の運用／保有期間：退会または委託契約終了時まで／お問い合わせ：supabase.com/privacy
-3. Cloudflare, Inc.（米国）— 移転項目：IPアドレス、サービス利用記録、受信メールアドレスおよび配信コンテンツ、データバックアップ／目的：ホスティング・セキュリティ、メール配信処理、バックアップの保管／保有期間：退会または委託契約終了時まで（バックアップはバックアップ保存期間まで）／お問い合わせ：cloudflare.com/privacypolicy
-4. Telegram（アラブ首長国連邦）— 移転項目：Telegram chat IDおよび配信コンテンツ（メッセンジャー連携時に限る）／目的：メッセンジャー通知の配信／保有期間：連携解除または退会時まで／お問い合わせ：telegram.org/privacy
-個人情報の国外移転を希望しない利用者は、退会等により本サービスの利用を中止することができます。この場合、本サービスを提供することはできません。
-
-第7条（利用者の権利）1. 利用者はいつでも個人情報の照会・修正ができ、本サービス内の設定または退会により削除を請求できます。2. 処理の停止を求めることができます（この場合、本サービスの利用が制限されることがあります）。3. 権利の行使は、本サービス内の機能または個人情報保護責任者への請求により行うことができます。
-
-第8条（破棄）1. 保有期間の経過、目的の達成等により不要となった個人情報は、遅滞なく破棄します。2. 電子ファイルは復元できない方法で削除します。
-
-第9条（安全性確保措置）アクセス権限の管理、通信区間の暗号化、認証に基づくアクセス制御等。
-
-第9条の2（個人情報自動収集装置の設置・運用および拒否）1. 当社は、ログイン状態の維持等、本サービスの提供のためにCookieおよびブラウザのローカルストレージを使用します。2. 利用者は、ウェブブラウザの設定によりCookieの保存を許可・確認・拒否することができます。ただし、Cookie等の保存を拒否した場合、ログインが必要なサービスを利用できなくなることがあります。3. 当社は、無料プラン画面の広告バナー、共有ページのYouTube動画再生機能等、第三者が提供するコンテンツを本サービスの画面に含めており、その過程で当該第三者が利用者のブラウザに独自のCookie等を設置し、またはそれを通じて情報を収集することがあります。当社は当該Cookieを読み取ることも、その情報にアクセスすることもできず、その取扱いは各第三者のプライバシーポリシーに従います。該当する第三者は次のとおりです。① 広告バナー：Coupang Partners（Coupang Corp.）② YouTube動画再生：Google LLC。4. 利用者は、第2項のブラウザ設定により、第3項の第三者Cookieの保存も拒否することができます。この場合、広告の表示や動画の再生が制限されることがありますが、その他の本サービスの利用に支障はありません。
-
-第10条（個人情報保護責任者および苦情処理）1. 個人情報保護責任者：キム・ヘソル（김해솔、代表）、連絡先：support@dailyvideodigest.com。2. 個人情報の閲覧・訂正・削除・処理停止の請求受付および苦情処理部署：カスタマーサポート（運営）、連絡先：support@dailyvideodigest.com。3. 利用者は、個人情報の侵害に関する申告や相談が必要な場合、次の機関にお問い合わせいただけます（電話番号はいずれも韓国国内用です）。個人情報紛争調停委員会（개인정보분쟁조정위원회）1833-6972（www.kopico.go.kr）、個人情報侵害申告センター（개인정보침해신고센터）118（privacy.kisa.or.kr）、大検察庁（대검찰청）1301（www.spo.go.kr）、警察庁（경찰청）182。
-
-第11条（通知義務）当社は、本ポリシーを変更する場合、変更の理由および適用日を明示し、適用日の少なくとも7日前から本サービス内のお知らせにより通知します。ただし、収集項目・利用目的の変更等、利用者の権利に重大な変更がある場合は、少なくとも30日前に通知します。
-
-本ポリシーは韓国語版を正本とし、翻訳版と韓国語版の解釈が異なる場合は韓国語版が優先します。この日本語版は参考翻訳として提供するものです。
-
-附則：本ポリシーは2026-07-14から施行します。`
-
-export const PRIVACY_ZH_20260714 = `生效日期：2026-07-14
-
-运营 Daily Video Digest（以下简称"本服务"）的 SoloOps（솔로옵스，以下简称"本公司"）遵守韩国《个人信息保护法》（개인정보 보호법）等相关法律法规，制定如下隐私政策。
-
-第1条（收集的项目）1. Google 登录：姓名、电子邮件地址、个人资料标识符。2. 在使用本服务过程中收集或生成的项目：订阅频道信息（URL、别名、分类等）、发送设置（接收邮箱、发送时间、快讯关键词、发送方式）、即时通讯关联标识符（例如 Telegram chat ID）、摘要发送记录及使用记录、付款及使用权状态（方案等级、使用期限）、注册来源信息（通过分享链接注册的，该分享链接的标识符）。3. 付款时（上线后）：通过支付代理机构（PG）处理的付款相关信息。本公司不直接存储银行卡号等支付信息。4. 在使用本服务过程中自动生成或收集的项目：IP 地址、浏览器信息（User-Agent）、通过 Cookie 等自动收集装置收集的信息、访问时间及服务使用记录、不当使用记录。对于分享页面浏览、分享内容举报及广告横幅点击的记录，本公司将 IP 地址转换为单向哈希值后保存，不保存原始 IP 地址。但在托管及安全基础设施提供者的处理过程中，IP 地址可能被处理或记录。5. 受理分享内容举报时：举报理由、举报详情（用户填写的情况下）、受理举报时分享备注的原文。6. 使用意见反馈功能时：评分、意见类型、意见内容、使用语言。
-
-第2条（使用目的）会员识别与认证；AI 摘要的生成与发送；使用记录的管理及查阅；付费付款、使用权管理及结算；咨询答复及公告；服务改进及防止不当使用；分享内容举报的受理、处理及重复违规的核实；防止分享浏览次数及广告点击的重复统计。
-
-第3条（保存及使用期限）1. 原则上，于会员注销时立即销毁。2. 摘要发送记录（digests）最多保存 30 天后自动删除。3. 依法保存：合同及撤销申请记录 5 年，货款支付及商品供应记录 5 年，消费者投诉及纠纷处理记录 3 年（以上依据韩国《电子商务等消费者保护法》（전자상거래법）），登录记录 3 个月（韩国《通信秘密保护法》（통신비밀보호법））。会员注销时，付款记录中的订单号及付款识别号、金额及币种、付款及退款时间、商品类别、付款方式类型、电子邮件地址，将在解除与会员账户关联的状态下与其他个人信息分开保存，并自付款之日起满 5 年后自动销毁。在此情况下，注销后电子邮件地址仍将被保存。4. Pro 体验使用记录（电子邮件地址的单向哈希值、社交登录平台标识符、使用时间）以防止重复体验为目的，在会员注销后仍保存至服务终止时。5. 分享页面浏览记录（包括访客识别哈希）以防止浏览次数重复统计为目的，在收集后 24 小时内自动删除。6. 分享内容举报记录（举报内容、受理举报时分享备注的原文、举报者识别哈希）以处理举报及核实重复违规为目的，自受理之日起保存 1 年后销毁。7. 广告横幅点击记录中的访客识别哈希及浏览器信息，自收集之日起满 90 天后删除；已去除识别信息的点击统计（广告位置、来源页面、点击时间）为分析广告效果而保存。8. 通过意见反馈功能提交的意见以改进服务为目的，自受理之日起保存 1 年后销毁；会员注销时，在解除与会员账户关联的状态下保存。
-
-第4条（向第三方提供）本公司不会超出使用目的范围向第三方提供个人信息。但有法律依据或侦查机关依法提出要求的情形除外。
-
-第5条（委托处理）本公司委托处理如下（在委托目的范围内处理）：Google LLC（社交登录认证、YouTube 视频信息查询、AI 摘要（Gemini）— 姓名、电子邮件地址、个人资料标识符、摘要对象视频信息），Supabase Inc.（数据库及认证基础设施 — 账户及服务使用信息），Cloudflare Inc.（托管及运行基础设施、邮件发送处理、数据备份保管 — 服务使用相关信息、接收邮箱地址、发送内容），TranscriptAPI、Supadata（视频字幕提取 — 仅传递摘要对象视频的标识符，不包含用户个人信息），Telegram（即时通讯通知发送（关联时）— Telegram 标识符、发送内容），Toss Payments 株式会社（付费付款处理（上线后）— 付款相关信息）。
-
-第6条（个人信息的跨境转移）本公司为提供本服务所需的委托处理及保管，按如下方式将个人信息转移至境外，并依据韩国《个人信息保护法》第28条之8第1款第3项，通过本政策予以公开。转移时间及方式均为"使用本服务时通过信息通信网络随时传输"。
-1. Google LLC（美国）— 转移项目：姓名、电子邮件地址、个人资料标识符、摘要对象视频信息／目的：社交登录认证及 AI 摘要生成／保存期限：至会员注销或委托合同终止时／咨询：privacy.google.com
-2. Supabase, Inc.（美国）— 转移项目：账户信息及全部服务使用记录／目的：运营数据库及认证基础设施／保存期限：至会员注销或委托合同终止时／咨询：supabase.com/privacy
-3. Cloudflare, Inc.（美国）— 转移项目：IP 地址、服务使用记录、接收邮箱地址及发送内容、数据备份／目的：托管与安全、邮件发送处理、备份保管／保存期限：至会员注销或委托合同终止时（备份至备份保存期限届满时）／咨询：cloudflare.com/privacypolicy
-4. Telegram（阿拉伯联合酋长国）— 转移项目：Telegram chat ID 及发送内容（仅限关联即时通讯时）／目的：发送即时通讯通知／保存期限：至解除关联或会员注销时／咨询：telegram.org/privacy
-不希望个人信息被转移至境外的用户，可通过注销会员等方式停止使用本服务；在此情况下，本公司将无法提供服务。
-
-第7条（用户的权利）1. 用户可随时查询、修改个人信息，并可通过本服务内的设置或注销会员申请删除。2. 用户可要求停止处理（在此情况下，本服务的使用可能受到限制）。3. 上述权利可通过本服务内的功能或向个人信息保护负责人提出申请来行使。
-
-第8条（销毁）1. 在保存期限届满、目的已实现等不再需要的情况下，立即销毁个人信息。2. 电子文件以无法恢复的方式删除。
-
-第9条（安全保障措施）访问权限管理、传输区段加密、基于认证的访问控制等。
-
-第9条之二（个人信息自动收集装置的设置、运营及拒绝）1. 本公司为维持登录状态等提供本服务之需，使用 Cookie 及浏览器本地存储。2. 用户可通过网页浏览器设置允许、查看或拒绝 Cookie 的存储。但拒绝存储 Cookie 等的，可能无法使用需要登录的服务。3. 本公司在本服务页面中包含免费方案页面的广告横幅、分享页面的 YouTube 视频播放功能等由第三方提供的内容，在此过程中，相关第三方可能在用户的浏览器中设置其自有 Cookie 等，或通过其收集信息。本公司无法读取该等 Cookie，也无法访问相关信息，其处理适用各第三方的隐私政策。相关第三方如下：① 广告横幅：Coupang Partners（Coupang Corp.）② YouTube 视频播放：Google LLC。4. 用户也可通过第2款所述的浏览器设置拒绝存储第3款所述的第三方 Cookie。在此情况下，广告展示或视频播放可能受到限制，但不影响本服务其他部分的使用。
-
-第10条（个人信息保护负责人及投诉处理）1. 个人信息保护负责人：Haesol Kim（김해솔，代表），联系方式：support@dailyvideodigest.com。2. 受理个人信息查阅、更正、删除、停止处理请求及处理投诉的部门：客户支持（运营），联系方式：support@dailyvideodigest.com。3. 用户如需就个人信息侵害进行举报或咨询，可联系以下机构（电话号码均为韩国境内号码）：个人信息纠纷调解委员会（개인정보분쟁조정위원회）1833-6972（www.kopico.go.kr）、个人信息侵害举报中心（개인정보침해신고센터）118（privacy.kisa.or.kr）、大检察厅（대검찰청）1301（www.spo.go.kr）、警察厅（경찰청）182。
-
-第11条（告知义务）本公司变更本政策时，将注明变更理由及适用日期，并至少于适用日期 7 天前起通过本服务内公告予以告知。但收集项目、使用目的变更等对用户权利有重大影响的变更，将至少提前 30 天告知。
-
-本政策以韩文版为正本，译本与韩文版解释不一致时，以韩文版为准。本中文版仅作为参考译文提供。
-
-附则：本政策自 2026-07-14 起施行。`
+附则：本政策自 2026-07-14 起施行。2026-11-24 修订。`
 
 export const REFUND_KO = `시행일: 2026-07-14
 

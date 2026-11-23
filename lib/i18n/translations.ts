@@ -79,12 +79,6 @@ export const translations = {
       cta: '자세히 보기 →',
       ctaShort: '자세히 →',
     },
-    // 개인정보처리방침 개정 공지(2026-12-01 시행) — 노출 기간은 lib/legal/privacy-schedule.ts.
-    privacyNotice: {
-      message: '개인정보처리방침이 2026년 12월 1일부터 변경됩니다. 유료 결제 시 보관하는 정보를 구체적으로 적었으며, 수집 범위와 이용 목적은 달라지지 않습니다.',
-      cta: '자세히 보기',
-      close: '닫기',
-    },
     ads: {
       label: '광고',
       close: '광고 닫기',
@@ -960,12 +954,6 @@ export const translations = {
       cta: 'Learn more →',
       ctaShort: 'More →',
     },
-    // 개인정보처리방침 개정 공지(2026-12-01 시행) — 노출 기간은 lib/legal/privacy-schedule.ts.
-    privacyNotice: {
-      message: 'Our Privacy Policy will change on December 1, 2026. We have specified the information retained upon paid payment; the scope of collection and purposes of use are unchanged.',
-      cta: 'Learn more',
-      close: 'Close',
-    },
     ads: {
       label: 'AD',
       close: 'Close ad',
@@ -1824,12 +1812,6 @@ export const translations = {
       cta: '了解更多 →',
       ctaShort: '更多 →',
     },
-    // 개인정보처리방침 개정 공지(2026-12-01 시행) — 노출 기간은 lib/legal/privacy-schedule.ts.
-    privacyNotice: {
-      message: '本隐私政策将于 2026 年 12 月 1 日起变更。我们具体列明了付费付款时保存的信息，收集范围及使用目的不变。',
-      cta: '查看详情',
-      close: '关闭',
-    },
     ads: {
       label: '广告',
       close: '关闭广告',
@@ -2684,12 +2666,6 @@ export const translations = {
       desc: '無制限のチャンネル · 精密な要約 · 30分速報通知',
       cta: '詳しく見る →',
       ctaShort: 'もっと見る →',
-    },
-    // 개인정보처리방침 개정 공지(2026-12-01 시행) — 노출 기간은 lib/legal/privacy-schedule.ts.
-    privacyNotice: {
-      message: 'プライバシーポリシーを2026年12月1日に改定します。有料決済時に保管する情報を具体的に記載しました。収集範囲と利用目的に変更はありません。',
-      cta: '詳しく見る',
-      close: '閉じる',
     },
     ads: {
       label: '広告',
