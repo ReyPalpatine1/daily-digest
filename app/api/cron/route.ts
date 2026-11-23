@@ -35,6 +35,9 @@ export const maxDuration = 60
 // cron이 1~5시간 밀려도 발송되도록 충분히 크게, 단 "엉뚱한 시간대 발송"은 막을 만큼 작게.
 const MAX_LATE_HOURS = 6
 
+// 광고 동의 2년 재확인 통지를 보내는 KST 시각(하루 1번).
+const AD_RECONFIRM_KST_HOUR = 10
+
 export async function GET(req: Request) {
   try {
     // === 진단 1: cron route 진입 자체 확인 (인증 전) ===
@@ -69,8 +72,13 @@ export async function GET(req: Request) {
     // 자동 갱신 재결제 + 실패 대응(재시도·안내·강등) — 실패해도 다이제스트 발송을 막지 않는다
     try { await runRenewals() } catch (e) { console.error('[cron] 정기 갱신 실패(무시):', e) }
 
-    // 광고성 정보 수신 동의 2년 재확인 통지 — 선점 후 1회 발송. 실패해도 다이제스트 발송을 막지 않는다
-    try { await runAdReconfirmNotices() } catch (e) { console.error('[cron] 광고 동의 재확인 통지 실패(무시):', e) }
+    // 광고성 정보 수신 동의 2년 재확인 통지 — 하루 1번만: KST 10시대 첫 실행(00~14분)에서만 돈다.
+    // (cron이 15분 간격이라 이 창에는 하루 한 번만 들어온다. 그 실행을 놓친 날은 다음 날 처리 —
+    //  대상 조건이 "2년 경과 이후"라 하루 늦어도 빠지지 않는다. 중복 발송은 선점 UPDATE가 막는다.)
+    // 실패해도 다이제스트 발송을 막지 않는다.
+    if (zoned.hour === AD_RECONFIRM_KST_HOUR && zoned.minute < 15) {
+      try { await runAdReconfirmNotices() } catch (e) { console.error('[cron] 광고 동의 재확인 통지 실패(무시):', e) }
+    }
 
     const { data: allSettings, error } = await supabase
       .from('settings')

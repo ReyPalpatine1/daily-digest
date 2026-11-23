@@ -221,6 +221,11 @@ export default function Dashboard() {
   const [shareTarget, setShareTarget] = useState<null | { videoId: string; title: string; tldr: string; summary: string; timeline: { time: string; content: string }[]; keyPoints: string[] }>(null)
 
   const [newChannel, setNewChannel] = useState({ url: '', alias: '', emoji: '📺', category_id: '' })
+  // 채널 추가 폼 이름 칸 미리보기 — 입력한 주소를 /api/channels/resolve로 해석해 받은 채널 제목.
+  // 이름 칸의 placeholder로만 쓴다(값은 넣지 않는다). 주소가 바뀌면 그 주소의 결과만 보여 준다.
+  const [aliasHint, setAliasHint] = useState<{ url: string; title: string } | null>(null)
+  // 주소별 조회 결과 캐시(실패는 null) — 같은 주소는 다시 조회하지 않는다.
+  const aliasHintCacheRef = useRef<Map<string, string | null>>(new Map())
   const [newCategory, setNewCategory] = useState({ name: '', color: '#4da6ff' })
 
   const [editingCat, setEditingCat] = useState<string | null>(null)
@@ -788,6 +793,35 @@ export default function Dashboard() {
     if (data) setProfile(data as Profile)
     return (data as Profile | null) ?? null
   }
+
+  // 채널 주소 입력을 멈추면(600ms) 채널을 미리 조회해 이름 칸 placeholder에 채널 제목을 보여 준다.
+  // 조회 중 표시는 하지 않는다. 실패해도 안내하지 않는다(추가 버튼을 누르면 서버가 invalid_channel_url로 안내).
+  useEffect(() => {
+    if (!showAddChannel) return
+    const url = newChannel.url.trim()
+    if (!url) return
+    const cache = aliasHintCacheRef.current
+    if (cache.has(url)) {
+      const title = cache.get(url)
+      if (title) setAliasHint({ url, title })
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/channels/resolve?url=${encodeURIComponent(url)}`)
+        // 과다 호출 제한(429)·일시 오류는 캐시하지 않는다(나중에 다시 조회 가능).
+        if (res.status === 429 || res.status >= 500) return
+        const data = await res.json().catch(() => ({}))
+        const title = res.ok && typeof data.title === 'string' && data.title ? data.title as string : null
+        cache.set(url, title)
+        if (!cancelled && title) setAliasHint({ url, title })
+      } catch {
+        // 네트워크 오류 — 조용히 무시
+      }
+    }, 600)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [newChannel.url, showAddChannel])
 
   // Free 플랜 채널 한도 도달 시 업그레이드 유도 (확인 시 /pricing 이동)
   function promptChannelLimit() {
@@ -1713,7 +1747,7 @@ export default function Dashboard() {
                         onChange={e => setNewChannel({ ...newChannel, alias: e.target.value })}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                        placeholder={t('channels.aliasAutoPlaceholder')}
+                        placeholder={aliasHint && aliasHint.url === newChannel.url.trim() ? aliasHint.title : t('common.displayName')}
                         style={inputStyle} />
                     </div>
                     <div>

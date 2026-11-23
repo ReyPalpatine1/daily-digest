@@ -125,7 +125,7 @@ export async function setAdConsent(userId: string, consent: boolean, logTag: str
 const TWO_YEARS_MS = 2 * 365.2425 * 24 * 60 * 60 * 1000
 const RECONFIRM_BATCH = 50
 
-// 2년 재확인 통지 (매 /api/cron 실행마다 호출 — 대상이 없으면 조회 1회로 끝난다).
+// 2년 재확인 통지 — /api/cron에서 하루 1번(KST 10시 첫 실행)만 호출한다(app/api/cron/route.ts).
 // 대상: ad_consent=true AND now() >= COALESCE(ad_reconfirm_notified_at, ad_consent_at) + 2년.
 // ad_reconfirm_notified_at을 조건부 UPDATE로 선점한 뒤 발송한다(중복 발송 금지).
 export async function runAdReconfirmNotices(): Promise<void> {
@@ -162,8 +162,9 @@ export async function runAdReconfirmNotices(): Promise<void> {
       return
     }
     // 선점: 조회 당시 값 그대로일 때만 갱신(동시 실행 시 한 번만 발송).
+    const claimedAt = new Date().toISOString()
     let claim = client.from('profiles')
-      .update({ ad_reconfirm_notified_at: new Date().toISOString() })
+      .update({ ad_reconfirm_notified_at: claimedAt })
       .eq('id', row.id)
       .eq('ad_consent', true)
     claim = row.ad_reconfirm_notified_at
@@ -176,17 +177,29 @@ export async function runAdReconfirmNotices(): Promise<void> {
     }
     if (!claimed || claimed.length === 0) continue
 
+    // 발송하지 못하면 선점을 이전 값으로 되돌려 다음 실행(다음 날)에 다시 시도되게 한다.
+    // 되돌리기는 이번 선점 값 그대로일 때만(그사이 재동의로 null이 된 경우 등은 건드리지 않는다).
+    const releaseClaim = async () => {
+      const { error: releaseError } = await client.from('profiles')
+        .update({ ad_reconfirm_notified_at: row.ad_reconfirm_notified_at ?? null })
+        .eq('id', row.id)
+        .eq('ad_reconfirm_notified_at', claimedAt)
+      if (releaseError) console.error('[ad-reconfirm] 선점 되돌리기 실패:', row.id, releaseError.message)
+    }
+
     const { to, locale } = await recipientOf(client, row.id, (row.email as string | null) ?? null)
     if (!to) {
       console.error('[ad-reconfirm] 수신 주소 없음:', row.id)
+      await releaseClaim()
       continue
     }
     try {
       await sendAdReconfirmEmail(to, new Date(row.ad_consent_at as string), links.unsubscribeUrl, locale, row.id)
       console.log('[ad-reconfirm] 재확인 통지 발송:', row.id)
     } catch (e) {
-      // 선점은 유지한다 — 되돌리면 매 cron마다 재시도로 폭주할 수 있다. 실패는 email_logs에 남는다.
+      // 실패는 sendAdReconfirmEmail이 email_logs('ad_reconfirm', failed)에 남긴다.
       console.error('[ad-reconfirm] 발송 실패:', row.id, e instanceof Error ? e.message : e)
+      await releaseClaim()
     }
   }
 }
