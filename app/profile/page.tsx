@@ -688,6 +688,7 @@ export default function ProfilePage() {
           onConfirm={() => setAutoRenew(true)}
           onCancel={() => setShowCancelRenew(false)}>
           <ModalText>{t('profile.cancelRenewBody', { date: expiresLabel })}</ModalText>
+          <ModalText>{t('profile.cancelRenewCardNotice')}</ModalText>
         </ConfirmModal>
       )}
 

@@ -4,7 +4,7 @@
 import { et, type EmailLocale } from './i18n/email-translations'
 import { nowUtc, toZoned } from './time'
 import { youtubeDeepLink } from '@/lib/video-time'
-import { partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
+import { EMAIL_ADS_ENABLED, partnerBannerByDay, type PartnerBanner } from '@/lib/ads'
 import { boldMarkersToHtml, splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 
@@ -324,7 +324,8 @@ export function buildDigestHtml(
     : `<div style="background:#FFFFFF;border-radius:10px;padding:32px 24px;border:1px solid #E5E5E5;text-align:center;color:#A1A1AA;font-size:13px;">${et(locale, 'digest.noVideos')}</div>`
   // 광고 로테이션: KST 날짜의 일(day of month)이 짝수면 Pro 배너, 홀수면 제휴 슬롯.
   const kstDay = toZoned(nowUtc()).day
-  const ad = isPro ? '' : (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay)))
+  // EMAIL_ADS_ENABLED가 false면 Pro 여부와 무관하게 광고 없음(lib/ads.ts 참고).
+  const ad = (isPro || !EMAIL_ADS_ENABLED) ? '' : (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay)))
   return shell(et(locale, 'digest.subject', { date }), locale, header + body + ad, footerBlock(locale, email))
 }
 
