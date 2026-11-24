@@ -249,6 +249,8 @@ export default function Dashboard() {
   const aliasPastedRef = useRef(false)
   // 진행 중인 조회 — 새 조회를 시작하면 이전 요청을 취소한다.
   const aliasAbortRef = useRef<AbortController | null>(null)
+  // 미리보기 경로 미리 깨우기 마지막 전송 시각(0 = 아직 안 보냄) — 페이지당 최초 1회 + 5분 경과 시 다시 1회.
+  const aliasWarmAtRef = useRef(0)
   // 이름 칸 "채널명 확인 중…" 표시 — 조회 시작 200ms 뒤에만 켠다(usePending과 같은 규칙, 빠른 응답엔 안 보임).
   // 어떤 주소의 조회인지 함께 둬서, 주소가 바뀌면 이전 조회 표시가 남지 않게 한다.
   const [aliasResolvingUrl, setAliasResolvingUrl] = useState<string | null>(null)
@@ -823,6 +825,16 @@ export default function Dashboard() {
     if (data) setProfile(data as Profile)
     return (data as Profile | null) ?? null
   }
+
+  // 채널 추가 폼이 열리면 미리보기 경로를 조용히 미리 깨운다(isolate 기동·JWKS 캐시) — 첫 조회 지연을 줄인다.
+  // 화면 표시 없음, 실패 무시. 마지막 전송 후 5분이 지나지 않았으면 보내지 않는다.
+  useEffect(() => {
+    if (!showAddChannel) return
+    const now = Date.now()
+    if (aliasWarmAtRef.current && now - aliasWarmAtRef.current < 5 * 60_000) return
+    aliasWarmAtRef.current = now
+    fetch('/api/channels/resolve?warm=1').catch(() => {})
+  }, [showAddChannel])
 
   // 채널 주소를 미리 조회해 이름 칸 placeholder에 채널 제목을 보여 준다.
   // - 붙여넣기는 즉시, 직접 타이핑은 입력을 멈추고 300ms 뒤에 조회한다.

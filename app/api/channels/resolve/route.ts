@@ -29,39 +29,58 @@ function allow(userId: string): boolean {
   return true
 }
 
+// 이 isolate의 첫 요청인지 — Server-Timing cold로 노출한다(브라우저 전체 대기 − total = isolate 기동·프레임워크 처리).
+let servedBefore = false
+
 // 구간별 처리 시간(ms) — Server-Timing 헤더로 노출한다(값만, 개인정보 없음).
-function timingHeaders(t: { auth: number; youtube?: number }): HeadersInit {
-  const parts = [`auth;dur=${t.auth.toFixed(1)}`]
+// total: 라우트 핸들러 진입부터 응답 직전까지. (Workers의 performance.now()는 I/O 사이에서만 진행한다)
+type Timing = { start: number; cold: boolean; auth?: number; youtube?: number }
+function timingHeaders(t: Timing): HeadersInit {
+  const parts: string[] = []
+  if (t.auth !== undefined) parts.push(`auth;dur=${t.auth.toFixed(1)}`)
   if (t.youtube !== undefined) parts.push(`youtube;dur=${t.youtube.toFixed(1)}`)
+  parts.push(`total;dur=${(performance.now() - t.start).toFixed(1)}`)
+  parts.push(`cold;desc="${t.cold ? 1 : 0}"`)
   return { 'Server-Timing': parts.join(', ') }
 }
 
 export async function GET(req: Request) {
+  const timing: Timing = { start: performance.now(), cold: !servedBefore }
+  servedBefore = true
+  const params = new URL(req.url).searchParams
+
   // 로그인 확인은 로컬 JWT 검증(getClaims) — 공개 채널 제목만 돌려주는 미리보기라 Auth 서버 왕복을 생략한다.
   const authStart = performance.now()
   const userId = await getAuthedUserIdFast()
-  const auth = performance.now() - authStart
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: timingHeaders({ auth }) })
+  timing.auth = performance.now() - authStart
+
+  // 미리 깨우기(채널 추가 폼을 열 때 대시보드가 보냄): isolate 기동 + JWKS 캐시 채우기만 한다.
+  // YouTube 호출·과다 호출 집계 없음. 로그인 여부와 무관하게 204(정보 노출 없음).
+  if (params.get('warm') === '1') {
+    return new NextResponse(null, { status: 204, headers: timingHeaders(timing) })
   }
 
-  const url = (new URL(req.url).searchParams.get('url') ?? '').trim()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: timingHeaders(timing) })
+  }
+
+  const url = (params.get('url') ?? '').trim()
   if (!url || url.length > 500) {
-    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400, headers: timingHeaders({ auth }) })
+    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400, headers: timingHeaders(timing) })
   }
 
   if (!allow(userId)) {
-    return NextResponse.json({ error: 'rate_limited' }, { status: 429, headers: timingHeaders({ auth }) })
+    return NextResponse.json({ error: 'rate_limited' }, { status: 429, headers: timingHeaders(timing) })
   }
 
   const ytStart = performance.now()
   const resolved = await resolveChannel(url, userId, { deferLog: true })
   if (!resolved) {
-    const youtube = performance.now() - ytStart
-    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400, headers: timingHeaders({ auth, youtube }) })
+    timing.youtube = performance.now() - ytStart
+    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400, headers: timingHeaders(timing) })
   }
   // /channel/UC... 주소는 해석에 API를 쓰지 않아 제목이 없다 — 추가 시(이름 비움)와 같게 제목을 1회 조회한다.
   const title = resolved.title ?? (await channelTitleById(resolved.channelId, userId, { deferLog: true }))
-  const youtube = performance.now() - ytStart
-  return NextResponse.json({ channelId: resolved.channelId, title }, { headers: timingHeaders({ auth, youtube }) })
+  timing.youtube = performance.now() - ytStart
+  return NextResponse.json({ channelId: resolved.channelId, title }, { headers: timingHeaders(timing) })
 }
