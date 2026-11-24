@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthedUser } from '@/lib/route-auth'
+import { getAuthedUserIdFast } from '@/lib/route-auth'
 import { resolveChannel, channelTitleById } from '@/lib/youtube'
 
 // 채널 추가 폼의 이름 칸 미리보기 — 입력한 주소를 채널로 해석해 { channelId, title }을 돌려준다.
@@ -29,26 +29,39 @@ function allow(userId: string): boolean {
   return true
 }
 
+// 구간별 처리 시간(ms) — Server-Timing 헤더로 노출한다(값만, 개인정보 없음).
+function timingHeaders(t: { auth: number; youtube?: number }): HeadersInit {
+  const parts = [`auth;dur=${t.auth.toFixed(1)}`]
+  if (t.youtube !== undefined) parts.push(`youtube;dur=${t.youtube.toFixed(1)}`)
+  return { 'Server-Timing': parts.join(', ') }
+}
+
 export async function GET(req: Request) {
-  const user = await getAuthedUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 로그인 확인은 로컬 JWT 검증(getClaims) — 공개 채널 제목만 돌려주는 미리보기라 Auth 서버 왕복을 생략한다.
+  const authStart = performance.now()
+  const userId = await getAuthedUserIdFast()
+  const auth = performance.now() - authStart
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: timingHeaders({ auth }) })
   }
 
   const url = (new URL(req.url).searchParams.get('url') ?? '').trim()
   if (!url || url.length > 500) {
-    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })
+    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400, headers: timingHeaders({ auth }) })
   }
 
-  if (!allow(user.id)) {
-    return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
+  if (!allow(userId)) {
+    return NextResponse.json({ error: 'rate_limited' }, { status: 429, headers: timingHeaders({ auth }) })
   }
 
-  const resolved = await resolveChannel(url, user.id, { deferLog: true })
+  const ytStart = performance.now()
+  const resolved = await resolveChannel(url, userId, { deferLog: true })
   if (!resolved) {
-    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })
+    const youtube = performance.now() - ytStart
+    return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400, headers: timingHeaders({ auth, youtube }) })
   }
   // /channel/UC... 주소는 해석에 API를 쓰지 않아 제목이 없다 — 추가 시(이름 비움)와 같게 제목을 1회 조회한다.
-  const title = resolved.title ?? (await channelTitleById(resolved.channelId, user.id, { deferLog: true }))
-  return NextResponse.json({ channelId: resolved.channelId, title })
+  const title = resolved.title ?? (await channelTitleById(resolved.channelId, userId, { deferLog: true }))
+  const youtube = performance.now() - ytStart
+  return NextResponse.json({ channelId: resolved.channelId, title }, { headers: timingHeaders({ auth, youtube }) })
 }

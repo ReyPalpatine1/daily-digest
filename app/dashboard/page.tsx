@@ -159,6 +159,15 @@ function summaryBasisKeys(d: Digest): { labelKey: string } | null {
 
 // 채널 추가 폼 이름 칸 미리보기 캐시 키 — 같은 채널 주소의 사소한 표기 차이(앞뒤 공백, 프로토콜,
 // www./m., 끝 슬래시)는 같은 주소로 본다. 경로·쿼리의 대소문자는 의미가 있을 수 있어 그대로 둔다.
+// 입력이 @핸들 주소(youtube.com/@핸들…, m./www. 포함, 또는 "@핸들" 단독)면 "@핸들"을 돌려준다.
+// 조회 응답을 기다리지 않고 이름 칸 placeholder에 바로 보여 주는 용도(저장 이름은 서버가 해석한 실제 채널 제목).
+function aliasHandleOf(url: string): string | null {
+  const key = aliasHintKey(url)
+  const m = /^(?:(?:music\.)?youtube\.com\/)?@([^/?#\s]+)/i.exec(key)
+  if (!m) return null
+  try { return '@' + decodeURIComponent(m[1]) } catch { return '@' + m[1] }
+}
+
 function aliasHintKey(url: string): string {
   return url.trim()
     .replace(/^https?:\/\//i, '')
@@ -245,6 +254,8 @@ export default function Dashboard() {
   const [aliasResolvingUrl, setAliasResolvingUrl] = useState<string | null>(null)
   // 마지막으로 시작한 조회 번호 — 늦게 도착한 이전 조회 결과로 덮어쓰지 않는다.
   const aliasResolveSeqRef = useRef(0)
+  // 조회가 실패(해석 불가·일시 오류)로 끝난 주소 — @핸들 즉시 표시를 거두고 원래 placeholder로 돌린다.
+  const [aliasFailedKey, setAliasFailedKey] = useState<string | null>(null)
   const [newCategory, setNewCategory] = useState({ name: '', color: '#4da6ff' })
 
   const [editingCat, setEditingCat] = useState<string | null>(null)
@@ -835,8 +846,11 @@ export default function Dashboard() {
     if (cache.has(key)) {
       const title = cache.get(key)
       if (title) setAliasHint({ url: key, title })
+      else setAliasFailedKey(key)
       return
     }
+    // @핸들 주소는 placeholder에 "@핸들"을 바로 보여 주므로 "채널명 확인 중…"은 띄우지 않는다.
+    const isHandle = aliasHandleOf(url) !== null
     let pendingTimer: ReturnType<typeof setTimeout> | null = null
     const isLatest = () => aliasResolveSeqRef.current === seq
     const lookup = async () => {
@@ -844,8 +858,9 @@ export default function Dashboard() {
       aliasAbortRef.current = controller
       pendingTimer = setTimeout(() => {
         pendingTimer = null
-        if (isLatest()) setAliasResolvingUrl(key)
+        if (isLatest() && !isHandle) setAliasResolvingUrl(key)
       }, 200)
+      let failed = true
       try {
         const res = await fetch(`/api/channels/resolve?url=${encodeURIComponent(url)}`, { signal: controller.signal })
         // 과다 호출 제한(429)·일시 오류는 캐시하지 않는다(나중에 다시 조회 가능).
@@ -853,11 +868,14 @@ export default function Dashboard() {
         const data = await res.json().catch(() => ({}))
         const title = res.ok && typeof data.title === 'string' && data.title ? data.title as string : null
         cache.set(key, title)
+        if (title) failed = false
         if (isLatest() && title) setAliasHint({ url: key, title })
       } catch {
         // 취소(AbortError)·네트워크 오류 — 조용히 무시(취소된 요청은 캐시하지 않는다)
       } finally {
         if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null }
+        // 실패면 @핸들 즉시 표시를 거둔다(취소된 요청은 isLatest가 아니라 반영되지 않는다).
+        if (isLatest() && failed) setAliasFailedKey(key)
         if (aliasAbortRef.current === controller) aliasAbortRef.current = null
         if (isLatest()) setAliasResolvingUrl(null)
       }
@@ -1796,9 +1814,11 @@ export default function Dashboard() {
                         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                         placeholder={aliasHint && aliasHint.url === aliasHintKey(newChannel.url)
                           ? aliasHint.title
-                          : aliasResolvingUrl && aliasResolvingUrl === aliasHintKey(newChannel.url)
-                            ? t('channels.resolvingName')
-                            : t('common.displayName')}
+                          : aliasHandleOf(newChannel.url) && aliasFailedKey !== aliasHintKey(newChannel.url)
+                            ? (aliasHandleOf(newChannel.url) ?? '')
+                            : aliasResolvingUrl && aliasResolvingUrl === aliasHintKey(newChannel.url)
+                              ? t('channels.resolvingName')
+                              : t('common.displayName')}
                         style={inputStyle} />
                     </div>
                     <div>
