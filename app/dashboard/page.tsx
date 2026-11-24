@@ -226,6 +226,11 @@ export default function Dashboard() {
   const [aliasHint, setAliasHint] = useState<{ url: string; title: string } | null>(null)
   // 주소별 조회 결과 캐시(실패는 null) — 같은 주소는 다시 조회하지 않는다.
   const aliasHintCacheRef = useRef<Map<string, string | null>>(new Map())
+  // 이름 칸 "채널명 확인 중…" 표시 — 조회 시작 200ms 뒤에만 켠다(usePending과 같은 규칙, 빠른 응답엔 안 보임).
+  // 어떤 주소의 조회인지 함께 둬서, 주소가 바뀌면 이전 조회 표시가 남지 않게 한다.
+  const [aliasResolvingUrl, setAliasResolvingUrl] = useState<string | null>(null)
+  // 마지막으로 시작한 조회 번호 — 늦게 도착한 이전 조회 결과로 덮어쓰지 않는다.
+  const aliasResolveSeqRef = useRef(0)
   const [newCategory, setNewCategory] = useState({ name: '', color: '#4da6ff' })
 
   const [editingCat, setEditingCat] = useState<string | null>(null)
@@ -795,8 +800,13 @@ export default function Dashboard() {
   }
 
   // 채널 주소 입력을 멈추면(600ms) 채널을 미리 조회해 이름 칸 placeholder에 채널 제목을 보여 준다.
-  // 조회 중 표시는 하지 않는다. 실패해도 안내하지 않는다(추가 버튼을 누르면 서버가 invalid_channel_url로 안내).
+  // 조회가 200ms 넘게 걸리면 "채널명 확인 중…"을 보여 준다. 실패해도 안내하지 않는다
+  // (추가 버튼을 누르면 서버가 invalid_channel_url로 안내).
+  // 주소가 바뀌면 이전 조회는 무효 — 결과가 늦게 와도 반영하지 않는다(마지막 요청만 반영).
   useEffect(() => {
+    // 입력이 바뀌면 이전 조회는 무의미해진다 → 번호를 올려 늦은 응답을 무시하고 진행 표시도 끈다.
+    const seq = ++aliasResolveSeqRef.current
+    setAliasResolvingUrl(null)
     if (!showAddChannel) return
     const url = newChannel.url.trim()
     if (!url) return
@@ -806,8 +816,13 @@ export default function Dashboard() {
       if (title) setAliasHint({ url, title })
       return
     }
-    let cancelled = false
+    let pendingTimer: ReturnType<typeof setTimeout> | null = null
+    const isLatest = () => aliasResolveSeqRef.current === seq
     const timer = setTimeout(async () => {
+      pendingTimer = setTimeout(() => {
+        pendingTimer = null
+        if (isLatest()) setAliasResolvingUrl(url)
+      }, 200)
       try {
         const res = await fetch(`/api/channels/resolve?url=${encodeURIComponent(url)}`)
         // 과다 호출 제한(429)·일시 오류는 캐시하지 않는다(나중에 다시 조회 가능).
@@ -815,12 +830,18 @@ export default function Dashboard() {
         const data = await res.json().catch(() => ({}))
         const title = res.ok && typeof data.title === 'string' && data.title ? data.title as string : null
         cache.set(url, title)
-        if (!cancelled && title) setAliasHint({ url, title })
+        if (isLatest() && title) setAliasHint({ url, title })
       } catch {
         // 네트워크 오류 — 조용히 무시
+      } finally {
+        if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null }
+        if (isLatest()) setAliasResolvingUrl(null)
       }
     }, 600)
-    return () => { cancelled = true; clearTimeout(timer) }
+    return () => {
+      clearTimeout(timer)
+      if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null }
+    }
   }, [newChannel.url, showAddChannel])
 
   // Free 플랜 채널 한도 도달 시 업그레이드 유도 (확인 시 /pricing 이동)
@@ -1747,7 +1768,11 @@ export default function Dashboard() {
                         onChange={e => setNewChannel({ ...newChannel, alias: e.target.value })}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                        placeholder={aliasHint && aliasHint.url === newChannel.url.trim() ? aliasHint.title : t('common.displayName')}
+                        placeholder={aliasHint && aliasHint.url === newChannel.url.trim()
+                          ? aliasHint.title
+                          : aliasResolvingUrl && aliasResolvingUrl === newChannel.url.trim()
+                            ? t('channels.resolvingName')
+                            : t('common.displayName')}
                         style={inputStyle} />
                     </div>
                     <div>
@@ -3181,8 +3206,17 @@ export default function Dashboard() {
       {!initialLoading && profile && !profile.terms_agreed_at && (
         <OnboardingModal
           t={t}
-          onAgreed={() => {
-            setProfile(p => (p ? { ...p, terms_agreed_at: new Date().toISOString() } : p))
+          onAgreed={(fields) => {
+            // 동의 전에 불러온 profile state를 서버 값으로 맞춘다 — 광고 동의 토글·채널 한도(6)가
+            // 새로고침 없이 바로 맞게 보이도록. 필드를 못 받았으면 프로필을 다시 읽는다.
+            if (fields) {
+              setProfile(p => (p ? { ...p, ...fields } : p))
+            } else {
+              setProfile(p => (p ? { ...p, terms_agreed_at: new Date().toISOString() } : p))
+              if (user) void reloadProfile(user.id)
+            }
+            // 광고 동의로 한도가 늘면 서버가 잠긴 채널을 다시 활성화했을 수 있다 → 채널 목록도 새로 읽는다.
+            if (user && (!fields || fields.ad_consent)) void loadData(user.id)
           }}
           onToast={showPreviewToast}
         />

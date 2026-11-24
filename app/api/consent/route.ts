@@ -110,5 +110,16 @@ export async function POST(req: Request) {
     console.error('[consent] 환영 메일 처리 오류:', user.id, e instanceof Error ? e.message : e)
   }
 
-  return NextResponse.json({ success: true })
+  // 대시보드가 동의 전에 불러온 profile state를 바로 맞출 수 있도록 갱신된 동의 필드를 돌려준다.
+  // (조회 실패 시 생략 — 클라이언트가 프로필을 다시 읽는다)
+  const { data: consentRow, error: consentRowError } = await serviceClient
+    .from('profiles')
+    .select('terms_agreed_at, ad_consent, ad_consent_at, ad_withdrawn_at')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (consentRowError) {
+    console.error('[consent] 갱신 필드 조회 실패:', user.id, consentRowError.message)
+  }
+
+  return NextResponse.json({ success: true, profile: consentRow ?? null })
 }

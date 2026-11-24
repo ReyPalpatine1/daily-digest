@@ -9,10 +9,19 @@ import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
+// /api/consent 응답의 갱신된 동의 필드 — profiles의 같은 이름 컬럼.
+export type ConsentFields = {
+  terms_agreed_at: string | null
+  ad_consent: boolean
+  ad_consent_at: string | null
+  ad_withdrawn_at: string | null
+}
+
 type Props = {
   t: TFn
   // POST /api/consent 성공 — 다음 안내(기존 도움말 팝업)는 호출부가 정한다.
-  onAgreed: () => void
+  // fields: 서버가 돌려준 갱신된 동의 필드(조회 실패 시 null → 호출부가 프로필을 다시 읽는다).
+  onAgreed: (fields: ConsentFields | null) => void
   // 오류 안내는 대시보드의 기존 하단 토스트로.
   onToast: (message: string) => void
 }
@@ -37,7 +46,9 @@ export default function OnboardingModal({ t, onAgreed, onToast }: Props) {
           body: JSON.stringify({ ads: agreeAds }),
         })
         if (!res.ok) throw new Error(`consent ${res.status}`)
-        onAgreed()
+        const data = await res.json().catch(() => null) as { profile?: ConsentFields | null } | null
+        const fields = data?.profile
+        onAgreed(fields && typeof fields.ad_consent === 'boolean' && fields.terms_agreed_at ? fields : null)
       } catch (e) {
         console.error('[OnboardingModal] 동의 실패:', e)
         onToast(t('onboarding.agreeFailed'))

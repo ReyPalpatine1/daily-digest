@@ -92,6 +92,7 @@ export const translations = {
     },
     channels: {
       title: '채널 관리',
+      resolvingName: '채널명 확인 중…',
       empty: '아직 등록된 채널이 없습니다',
       emptyDesc: '관심 있는 유튜브 채널을 추가하면 매일 아침 요약된 영상을 받아볼 수 있습니다.',
       emptyCta: '+ 첫 번째 채널 추가하기',
@@ -1008,6 +1009,7 @@ export const translations = {
     },
     channels: {
       title: 'Channels',
+      resolvingName: 'Checking channel name…',
       empty: 'No channels yet',
       emptyDesc: 'Add YouTube channels you love and get daily summaries every morning.',
       emptyCta: '+ Add your first channel',
@@ -1907,6 +1909,7 @@ export const translations = {
     },
     channels: {
       title: '频道',
+      resolvingName: '正在确认频道名称…',
       empty: '还没有频道',
       emptyDesc: '添加你喜欢的 YouTube 频道，每天早上获取摘要。',
       emptyCta: '+ 添加第一个频道',
@@ -2803,6 +2806,7 @@ export const translations = {
     },
     channels: {
       title: 'チャンネル',
+      resolvingName: 'チャンネル名を確認中…',
       empty: 'まだチャンネルがありません',
       emptyDesc: 'お気に入りのYouTubeチャンネルを追加して、毎朝まとめを受け取りましょう。',
       emptyCta: '+ 最初のチャンネルを追加',
