@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
   // === 입력 주소 → 채널 ID 확정 (채널·@핸들·영상·쇼츠·라이브 주소) ===
   // 해석 실패면 채널을 만들지 않는다(영상 없는 채널로 남는 것 방지).
-  const resolved = await resolveChannel(url, user.id)
+  const resolved = await resolveChannel(url, user.id, { deferLog: true })
   if (!resolved) {
     return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })
   }
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
   // /channel/UC... 주소는 해석에 API를 쓰지 않아 제목이 없다 → 이때만 제목 조회 1회.
   let alias = aliasInput
   if (!alias) {
-    alias = resolved.title ?? (await channelTitleById(channelId, user.id)) ?? ''
+    alias = resolved.title ?? (await channelTitleById(channelId, user.id, { deferLog: true })) ?? ''
   }
   if (!alias) {
     return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })

@@ -4,7 +4,8 @@ import { resolveChannel, channelTitleById } from '@/lib/youtube'
 
 // 채널 추가 폼의 이름 칸 미리보기 — 입력한 주소를 채널로 해석해 { channelId, title }을 돌려준다.
 // 채널 추가 API(/api/channels)와 같은 해석 함수(resolveChannel)를 쓴다. YouTube API 호출은
-// resolveChannel 안에서 호출마다 logApiUsage로 기록된다. 저장은 하지 않는다.
+// 호출마다 logApiUsage로 기록되며, 응답 지연을 줄이려고 기록은 응답 뒤 after()로 실행한다
+// (deferLog — OpenNext/Cloudflare에서 ctx.waitUntil로 완료 보장). 저장은 하지 않는다.
 //
 // 과다 호출 제한: 사용자당 1분에 30회. Workers 인스턴스(isolate) 메모리에 두는 간단한 창 카운터라
 // 인스턴스가 여러 개면 인스턴스별로 센다 — 정밀한 차단이 아니라 폭주 방지용이다.
@@ -43,11 +44,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
   }
 
-  const resolved = await resolveChannel(url, user.id)
+  const resolved = await resolveChannel(url, user.id, { deferLog: true })
   if (!resolved) {
     return NextResponse.json({ error: 'invalid_channel_url' }, { status: 400 })
   }
   // /channel/UC... 주소는 해석에 API를 쓰지 않아 제목이 없다 — 추가 시(이름 비움)와 같게 제목을 1회 조회한다.
-  const title = resolved.title ?? (await channelTitleById(resolved.channelId, user.id))
+  const title = resolved.title ?? (await channelTitleById(resolved.channelId, user.id, { deferLog: true }))
   return NextResponse.json({ channelId: resolved.channelId, title })
 }

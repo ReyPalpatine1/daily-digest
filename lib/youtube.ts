@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { logApiUsage, SYSTEM_USER_ID } from './api-usage'
 
 // 발송/풀에서 공통으로 쓰는 영상 표현 (mailer 등에서 import)
@@ -11,12 +12,19 @@ export type VideoItem = {
 
 // YouTube Data API 공용 GET — 호출마다 api_usage 기록(userId 없으면 시스템 계정 귀속).
 // Cloudflare 호환: env는 함수 내부에서 읽는다. 키 없음·네트워크 오류·비정상 응답이면 null.
-async function youtubeApiGet(path: string, userId?: string): Promise<any | null> {
+// 사용량 기록 방식 — deferLog: 응답을 먼저 보내고 기록은 next/server의 after()로 백그라운드 실행
+// (OpenNext/Cloudflare에서는 ctx.waitUntil로 완료가 보장된다). 요청 처리 중(라우트 핸들러)에서만 쓸 것 —
+// cron·풀 작업 등 요청 범위 밖에서는 기본값(await)으로 둔다.
+export type YoutubeCallOpts = { deferLog?: boolean }
+
+async function youtubeApiGet(path: string, userId?: string, opts?: YoutubeCallOpts): Promise<any | null> {
   const key = process.env.YOUTUBE_API_KEY
   if (!key) return null
   try {
     const res = await fetch(`https://www.googleapis.com/youtube/v3/${path}&key=${key}`)
-    await logApiUsage(userId ?? SYSTEM_USER_ID, 'youtube')
+    const uid = userId ?? SYSTEM_USER_ID
+    if (opts?.deferLog) after(() => logApiUsage(uid, 'youtube'))
+    else await logApiUsage(uid, 'youtube')
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -35,30 +43,30 @@ function channelFromItem(item: any): ResolvedChannel | null {
 }
 
 // @핸들 → 채널 (channels.list forHandle, 할당량 1). search API(할당량 100·부정확)는 쓰지 않는다.
-async function channelByHandle(handle: string, userId?: string): Promise<ResolvedChannel | null> {
+async function channelByHandle(handle: string, userId?: string, opts?: YoutubeCallOpts): Promise<ResolvedChannel | null> {
   const clean = handle.replace(/^@/, '')
   if (!clean) return null
   const data = await youtubeApiGet(
-    `channels?part=id,snippet&forHandle=${encodeURIComponent('@' + clean)}`, userId)
+    `channels?part=id,snippet&forHandle=${encodeURIComponent('@' + clean)}`, userId, opts)
   return channelFromItem(data?.items?.[0])
 }
 
 // 레거시 /user/이름 → 채널 (channels.list forUsername, 할당량 1).
-async function channelByUsername(username: string, userId?: string): Promise<ResolvedChannel | null> {
+async function channelByUsername(username: string, userId?: string, opts?: YoutubeCallOpts): Promise<ResolvedChannel | null> {
   const data = await youtubeApiGet(
-    `channels?part=id,snippet&forUsername=${encodeURIComponent(username)}`, userId)
+    `channels?part=id,snippet&forUsername=${encodeURIComponent(username)}`, userId, opts)
   return channelFromItem(data?.items?.[0])
 }
 
 // 채널 ID → 채널 제목 (channels.list id, 할당량 1). /channel/UC... 주소를 이름 없이 추가할 때만 쓴다.
-export async function channelTitleById(channelId: string, userId?: string): Promise<string | null> {
-  const data = await youtubeApiGet(`channels?part=snippet&id=${encodeURIComponent(channelId)}`, userId)
+export async function channelTitleById(channelId: string, userId?: string, opts?: YoutubeCallOpts): Promise<string | null> {
+  const data = await youtubeApiGet(`channels?part=snippet&id=${encodeURIComponent(channelId)}`, userId, opts)
   return channelFromItem(data?.items?.[0])?.title ?? null
 }
 
 // 영상 ID → 그 영상의 채널 (videos.list, 할당량 1). 제목은 snippet.channelTitle.
-async function channelByVideo(videoId: string, userId?: string): Promise<ResolvedChannel | null> {
-  const data = await youtubeApiGet(`videos?part=snippet&id=${encodeURIComponent(videoId)}`, userId)
+async function channelByVideo(videoId: string, userId?: string, opts?: YoutubeCallOpts): Promise<ResolvedChannel | null> {
+  const data = await youtubeApiGet(`videos?part=snippet&id=${encodeURIComponent(videoId)}`, userId, opts)
   const sn = data?.items?.[0]?.snippet
   const id = sn?.channelId
   if (typeof id !== 'string' || !id) return null
@@ -79,11 +87,11 @@ function safeDecode(v: string): string {
 //  ③ watch?v= / youtu.be / shorts / live → videos.list 의 snippet.channelId·channelTitle
 //  ④ /user/이름 → channels.list forUsername, /c/이름 → 같은 이름의 핸들로 forHandle 시도
 //  (m.youtube.com·music.youtube.com 포함, 프로토콜 없는 입력·"@핸들"·"UC..." 단독 입력도 허용)
-export async function resolveChannel(input: string, userId?: string): Promise<ResolvedChannel | null> {
+export async function resolveChannel(input: string, userId?: string, opts?: YoutubeCallOpts): Promise<ResolvedChannel | null> {
   const raw = (input ?? '').trim()
   if (!raw) return null
   if (CHANNEL_ID_RE.test(raw)) return { channelId: raw, title: null }
-  if (raw.startsWith('@')) return channelByHandle(safeDecode(raw.slice(1).split(/[/?#]/)[0]), userId)
+  if (raw.startsWith('@')) return channelByHandle(safeDecode(raw.slice(1).split(/[/?#]/)[0]), userId, opts)
 
   let u: URL
   try {
@@ -96,23 +104,23 @@ export async function resolveChannel(input: string, userId?: string): Promise<Re
 
   if (host === 'youtu.be') {
     const id = parts[0]
-    return id && VIDEO_ID_RE.test(id) ? channelByVideo(id, userId) : null
+    return id && VIDEO_ID_RE.test(id) ? channelByVideo(id, userId, opts) : null
   }
   if (host !== 'youtube.com') return null
 
   const [first, second] = parts
   if (!first) return null
   if (first === 'channel') return second && CHANNEL_ID_RE.test(second) ? { channelId: second, title: null } : null
-  if (first.startsWith('@')) return channelByHandle(first.slice(1), userId)
+  if (first.startsWith('@')) return channelByHandle(first.slice(1), userId, opts)
   if (first === 'watch') {
     const v = u.searchParams.get('v')
-    return v && VIDEO_ID_RE.test(v) ? channelByVideo(v, userId) : null
+    return v && VIDEO_ID_RE.test(v) ? channelByVideo(v, userId, opts) : null
   }
   if (first === 'shorts' || first === 'live' || first === 'embed') {
-    return second && VIDEO_ID_RE.test(second) ? channelByVideo(second, userId) : null
+    return second && VIDEO_ID_RE.test(second) ? channelByVideo(second, userId, opts) : null
   }
-  if (first === 'user') return second ? channelByUsername(second, userId) : null
-  if (first === 'c') return second ? channelByHandle(second, userId) : null
+  if (first === 'user') return second ? channelByUsername(second, userId, opts) : null
+  if (first === 'c') return second ? channelByHandle(second, userId, opts) : null
   return null
 }
 

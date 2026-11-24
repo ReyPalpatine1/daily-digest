@@ -157,6 +157,15 @@ function summaryBasisKeys(d: Digest): { labelKey: string } | null {
   return null
 }
 
+// 채널 추가 폼 이름 칸 미리보기 캐시 키 — 같은 채널 주소의 사소한 표기 차이(앞뒤 공백, 프로토콜,
+// www./m., 끝 슬래시)는 같은 주소로 본다. 경로·쿼리의 대소문자는 의미가 있을 수 있어 그대로 둔다.
+function aliasHintKey(url: string): string {
+  return url.trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/^(www\.|m\.)/i, '')
+    .replace(/\/+$/, '')
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const { t, locale, changeLocale } = useTranslation()
@@ -224,8 +233,13 @@ export default function Dashboard() {
   // 채널 추가 폼 이름 칸 미리보기 — 입력한 주소를 /api/channels/resolve로 해석해 받은 채널 제목.
   // 이름 칸의 placeholder로만 쓴다(값은 넣지 않는다). 주소가 바뀌면 그 주소의 결과만 보여 준다.
   const [aliasHint, setAliasHint] = useState<{ url: string; title: string } | null>(null)
-  // 주소별 조회 결과 캐시(실패는 null) — 같은 주소는 다시 조회하지 않는다.
+  // 정규화 주소별 조회 결과 캐시(실패는 null) — 같은 주소는 다시 조회하지 않고 저장된 결과를 바로 쓴다.
+  // 화면 안 메모리라 페이지를 떠나면 사라진다.
   const aliasHintCacheRef = useRef<Map<string, string | null>>(new Map())
+  // 붙여넣기로 들어온 입력이면 디바운스 없이 바로 조회한다(onPaste에서 켜고 조회 effect에서 끈다).
+  const aliasPastedRef = useRef(false)
+  // 진행 중인 조회 — 새 조회를 시작하면 이전 요청을 취소한다.
+  const aliasAbortRef = useRef<AbortController | null>(null)
   // 이름 칸 "채널명 확인 중…" 표시 — 조회 시작 200ms 뒤에만 켠다(usePending과 같은 규칙, 빠른 응답엔 안 보임).
   // 어떤 주소의 조회인지 함께 둬서, 주소가 바뀌면 이전 조회 표시가 남지 않게 한다.
   const [aliasResolvingUrl, setAliasResolvingUrl] = useState<string | null>(null)
@@ -799,45 +813,56 @@ export default function Dashboard() {
     return (data as Profile | null) ?? null
   }
 
-  // 채널 주소 입력을 멈추면(600ms) 채널을 미리 조회해 이름 칸 placeholder에 채널 제목을 보여 준다.
-  // 조회가 200ms 넘게 걸리면 "채널명 확인 중…"을 보여 준다. 실패해도 안내하지 않는다
-  // (추가 버튼을 누르면 서버가 invalid_channel_url로 안내).
-  // 주소가 바뀌면 이전 조회는 무효 — 결과가 늦게 와도 반영하지 않는다(마지막 요청만 반영).
+  // 채널 주소를 미리 조회해 이름 칸 placeholder에 채널 제목을 보여 준다.
+  // - 붙여넣기는 즉시, 직접 타이핑은 입력을 멈추고 300ms 뒤에 조회한다.
+  // - 같은 정규화 주소는 화면 안 캐시(성공·실패 모두)를 바로 쓰고 다시 조회하지 않는다.
+  // - 조회가 200ms 넘게 걸리면 "채널명 확인 중…"을 보여 준다(usePending과 같은 규칙).
+  // - 실패해도 안내하지 않는다(추가 버튼을 누르면 서버가 invalid_channel_url로 안내).
+  // - 주소가 바뀌면 이전 요청은 AbortController로 취소하고, 늦게 온 결과도 반영하지 않는다(마지막 요청만 반영).
   useEffect(() => {
     // 입력이 바뀌면 이전 조회는 무의미해진다 → 번호를 올려 늦은 응답을 무시하고 진행 표시도 끈다.
     const seq = ++aliasResolveSeqRef.current
+    aliasAbortRef.current?.abort()
+    aliasAbortRef.current = null
     setAliasResolvingUrl(null)
+    const pasted = aliasPastedRef.current
+    aliasPastedRef.current = false
     if (!showAddChannel) return
     const url = newChannel.url.trim()
-    if (!url) return
+    const key = aliasHintKey(url)
+    if (!key) return
     const cache = aliasHintCacheRef.current
-    if (cache.has(url)) {
-      const title = cache.get(url)
-      if (title) setAliasHint({ url, title })
+    if (cache.has(key)) {
+      const title = cache.get(key)
+      if (title) setAliasHint({ url: key, title })
       return
     }
     let pendingTimer: ReturnType<typeof setTimeout> | null = null
     const isLatest = () => aliasResolveSeqRef.current === seq
-    const timer = setTimeout(async () => {
+    const lookup = async () => {
+      const controller = new AbortController()
+      aliasAbortRef.current = controller
       pendingTimer = setTimeout(() => {
         pendingTimer = null
-        if (isLatest()) setAliasResolvingUrl(url)
+        if (isLatest()) setAliasResolvingUrl(key)
       }, 200)
       try {
-        const res = await fetch(`/api/channels/resolve?url=${encodeURIComponent(url)}`)
+        const res = await fetch(`/api/channels/resolve?url=${encodeURIComponent(url)}`, { signal: controller.signal })
         // 과다 호출 제한(429)·일시 오류는 캐시하지 않는다(나중에 다시 조회 가능).
         if (res.status === 429 || res.status >= 500) return
         const data = await res.json().catch(() => ({}))
         const title = res.ok && typeof data.title === 'string' && data.title ? data.title as string : null
-        cache.set(url, title)
-        if (isLatest() && title) setAliasHint({ url, title })
+        cache.set(key, title)
+        if (isLatest() && title) setAliasHint({ url: key, title })
       } catch {
-        // 네트워크 오류 — 조용히 무시
+        // 취소(AbortError)·네트워크 오류 — 조용히 무시(취소된 요청은 캐시하지 않는다)
       } finally {
         if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null }
+        if (aliasAbortRef.current === controller) aliasAbortRef.current = null
         if (isLatest()) setAliasResolvingUrl(null)
       }
-    }, 600)
+    }
+    const timer = setTimeout(() => { void lookup() }, pasted ? 0 : 300)
     return () => {
       clearTimeout(timer)
       if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null }
@@ -1757,6 +1782,7 @@ export default function Dashboard() {
                       <label style={labelStyle}>{t('common.url')}</label>
                       <input value={newChannel.url}
                         onChange={e => setNewChannel({ ...newChannel, url: e.target.value })}
+                        onPaste={() => { aliasPastedRef.current = true }}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                         placeholder="https://youtube.com/@channelname"
@@ -1768,9 +1794,9 @@ export default function Dashboard() {
                         onChange={e => setNewChannel({ ...newChannel, alias: e.target.value })}
                         onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                        placeholder={aliasHint && aliasHint.url === newChannel.url.trim()
+                        placeholder={aliasHint && aliasHint.url === aliasHintKey(newChannel.url)
                           ? aliasHint.title
-                          : aliasResolvingUrl && aliasResolvingUrl === newChannel.url.trim()
+                          : aliasResolvingUrl && aliasResolvingUrl === aliasHintKey(newChannel.url)
                             ? t('channels.resolvingName')
                             : t('common.displayName')}
                         style={inputStyle} />
