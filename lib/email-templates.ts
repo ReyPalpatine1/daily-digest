@@ -205,6 +205,13 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
   const shareLink = !failKey && item.video.videoId
     ? `<a href="${APP_URL}/dashboard?share=${encodeURIComponent(item.video.videoId)}" style="display:inline-block;padding:7px 14px;border:1px solid #E5E5E5;border-radius:6px;color:#525252;background:#FFFFFF;font-size:12px;font-weight:500;text-decoration:none;margin-left:8px;">${et(locale, 'digest.shareLink')}</a>`
     : ''
+  // pro_only(무료 사용자의 Pro 전용 요약)만 회색 박스 + "Pro 업그레이드" 버튼으로 그린다.
+  // 다른 실패 사유(pending·live·transcript_failed·no_source·temporary)는 아래 기존 블록·버튼 줄 그대로.
+  const isProOnly = item.summary.failReason === 'pro_only'
+  // 스타일은 shareLink와 같다. pro_only는 failKey가 있어 shareLink가 비므로 같은 자리에 들어간다.
+  const proUpgradeLink = isProOnly
+    ? `<a href="${APP_URL}/pricing" style="display:inline-block;padding:7px 14px;border:1px solid #E5E5E5;border-radius:6px;color:#525252;background:#FFFFFF;font-size:12px;font-weight:500;text-decoration:none;margin-left:8px;">${et(locale, 'digest.proUpgrade')}</a>`
+    : ''
   return `
     <div style="background:#FFFFFF;border-radius:10px;padding:20px 24px;border:1px solid #E5E5E5;margin-bottom:12px;">
       ${item.summary.errorInfo ? '' : ''}
@@ -217,7 +224,11 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
       <div style="font-size:11px;color:#A1A1AA;margin-bottom:12px;">
         ${escapeHtml(formatTime(item.video.publishedAt, locale))} ${et(locale, 'digest.uploadedAt')}
       </div>
-      ${failKey ? `
+      ${failKey && isProOnly ? `
+      <div style="background:#F5F5F5;border-radius:8px;padding:14px 15px;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1c;line-height:1.6;">${escapeHtml(et(locale, failKey.labelKey))}</div>
+        <div style="font-size:12px;color:#525252;line-height:1.7;margin-top:5px;">${escapeHtml(et(locale, failKey.noteKey))}</div>
+      </div>` : failKey ? `
       <div style="margin-bottom:12px;">
         <div style="font-size:12px;font-weight:600;color:#1a1a1c;line-height:1.6;">${escapeHtml(et(locale, failKey.labelKey))}</div>
         <div style="font-size:11px;color:#8a8a8e;line-height:1.7;margin-top:3px;">${escapeHtml(et(locale, failKey.noteKey))}</div>
@@ -257,7 +268,7 @@ function digestCard(item: EmailDigestItem, locale: EmailLocale): string {
         </div>` : ''}`}
       <a href="${escapeHtml(item.video.url)}" style="display:inline-block;padding:7px 14px;background:#0A0A0A;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
         ${et(locale, 'digest.watchVideo')}
-      </a>${shareLink}
+      </a>${shareLink}${proUpgradeLink}
       ${basisKey && !failKey ? `
         <div style="font-size:11px;color:#A1A1AA;margin-top:14px;">${escapeHtml(et(locale, basisKey))}</div>` : ''}
     </div>`

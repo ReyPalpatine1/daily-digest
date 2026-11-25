@@ -14,6 +14,8 @@ export const emailTranslations = {
       timeline: '주요 타임라인',
       watchVideo: '▶ 영상 보기',
       shareLink: '공유하기',
+      // pro_only 카드의 "영상 보기" 옆 버튼 — 값은 앱 사전 nav.proUpgrade와 같게 둔다.
+      proUpgrade: 'Pro 업그레이드',
       tagline: '어제의 유튜브를 한눈에',
       manageLink: '알림 설정',
       feedbackLink: '의견 보내기',
@@ -158,6 +160,8 @@ export const emailTranslations = {
       timeline: 'Timeline',
       watchVideo: '▶ Watch Video',
       shareLink: 'Share',
+      // pro_only 카드의 "영상 보기" 옆 버튼 — 값은 앱 사전 nav.proUpgrade와 같게 둔다.
+      proUpgrade: 'Upgrade to Pro',
       tagline: "Yesterday's YouTube at a glance",
       manageLink: 'Notification settings',
       feedbackLink: 'Send feedback',
@@ -291,6 +295,8 @@ export const emailTranslations = {
       timeline: '主要时间线',
       watchVideo: '▶ 观看视频',
       shareLink: '分享',
+      // pro_only 카드의 "영상 보기" 옆 버튼 — 값은 앱 사전 nav.proUpgrade와 같게 둔다.
+      proUpgrade: '升级到 Pro',
       tagline: '一眼看尽昨天的 YouTube',
       manageLink: '通知设置',
       feedbackLink: '反馈意见',
@@ -424,6 +430,8 @@ export const emailTranslations = {
       timeline: '主なタイムライン',
       watchVideo: '▶ 動画を見る',
       shareLink: 'シェア',
+      // pro_only 카드의 "영상 보기" 옆 버튼 — 값은 앱 사전 nav.proUpgrade와 같게 둔다.
+      proUpgrade: 'Proにアップグレード',
       tagline: '昨日のYouTubeをひと目で',
       manageLink: '通知設定',
       feedbackLink: 'ご意見を送る',

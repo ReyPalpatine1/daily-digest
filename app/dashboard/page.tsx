@@ -3020,6 +3020,44 @@ export default function Dashboard() {
                               {(() => {
                                 const status = summaryStatusKeys(digest)
                                 if (!status) return null
+                                // pro_only(무료 사용자의 Pro 전용 요약)만 박스로 그린다. 업그레이드 버튼은 아래 버튼 줄.
+                                // 다른 사유는 아래 기존 모양(11px 회색 라벨) 그대로.
+                                if (digest.fail_reason === 'pro_only') {
+                                  return (
+                                    <>
+                                      <div style={{
+                                        background: 'var(--bg-subtle)', borderRadius: 8,
+                                        padding: '14px 15px', marginBottom: 12,
+                                      }}>
+                                        <div style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                                          fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+                                        }}>
+                                          <Lock size={13} style={{ flexShrink: 0 }} />
+                                          {t(status.labelKey)}
+                                        </div>
+                                        {status.noteKey && (
+                                          <div style={{
+                                            fontSize: 12, color: 'var(--text-secondary)',
+                                            lineHeight: 1.6, marginTop: 5,
+                                          }}>
+                                            {t(status.noteKey)}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {/* 관리자 [debug] 줄은 박스 밖 — 기존처럼 사유 블록 바로 아래. */}
+                                      {isAdmin && digest.fail_detail && (
+                                        <div style={{
+                                          fontSize: 11, color: 'var(--text-muted)',
+                                          fontFamily: 'monospace', marginTop: -9, marginBottom: 12,
+                                          wordBreak: 'break-all',
+                                        }}>
+                                          [debug] {digest.fail_detail}
+                                        </div>
+                                      )}
+                                    </>
+                                  )
+                                }
                                 return (
                                   <div style={{ marginBottom: 12 }}>
                                     <div style={{
@@ -3035,17 +3073,6 @@ export default function Dashboard() {
                                       }}>
                                         {t(status.noteKey)}
                                       </div>
-                                    )}
-                                    {digest.fail_reason === 'pro_only' && (
-                                      <button onClick={() => router.push('/pricing')}
-                                        style={{
-                                          background: 'none', border: 'none', padding: 0,
-                                          marginTop: 4, fontSize: 11, color: 'var(--accent)',
-                                          cursor: 'pointer', textDecoration: 'underline',
-                                          textUnderlineOffset: 2,
-                                        }}>
-                                        {t('nav.proUpgrade')}
-                                      </button>
                                     )}
                                     {isAdmin && digest.fail_detail && (
                                       <div style={{
@@ -3175,6 +3202,21 @@ export default function Dashboard() {
                                       cursor: 'pointer', fontFamily: 'inherit',
                                     }}>
                                     <Share2 size={13} /> 공유
+                                  </button>
+                                )}
+                                {/* pro_only — 공유 자리에 업그레이드 버튼(공유 버튼과 같은 모양, 아이콘 없음) */}
+                                {digest.fail_reason === 'pro_only' && (
+                                  <button
+                                    onClick={() => router.push('/pricing')}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                                      background: 'var(--bg-card)', border: '0.5px solid var(--border)',
+                                      color: 'var(--text-secondary)',
+                                      padding: '8px 14px', borderRadius: 7,
+                                      fontSize: 12, fontWeight: 600,
+                                      cursor: 'pointer', fontFamily: 'inherit',
+                                    }}>
+                                    {t('nav.proUpgrade')}
                                   </button>
                                 )}
                               </div>
