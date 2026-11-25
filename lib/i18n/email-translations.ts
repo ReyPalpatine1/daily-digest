@@ -4,7 +4,7 @@
 export const emailTranslations = {
   ko: {
     digest: {
-      subject: '[Daily Video Digest] {date} 오늘의 유튜브 요약',
+      subject: '{date} 유튜브 요약',
       greeting: '안녕하세요!',
       summary: '오늘 {count}개의 영상을 요약했습니다.',
       openApp: '다이제스트 바로가기',
@@ -50,7 +50,9 @@ export const emailTranslations = {
       adDesc: '자막 없는 영상 AI 요약과 실시간 속보까지. 월 ₩4,900',
       adCta: 'Pro 알아보기',
       adSubjectPrefix: "(광고) ",
-      adNotice: "이 메일은 광고성 정보 수신에 동의하신 분께 발송되었습니다. 전송자: 솔로옵스(Daily Video Digest) · support@dailyvideodigest.com · 광고 수신을 원하지 않으시면 {link}를 눌러 주세요(무료).",
+      adNoticeLine1: "이 메일은 광고성 정보 수신에 동의하신 분께 발송되었습니다.",
+      adNoticeLine2: "전송자: 솔로옵스(Daily Video Digest) · support@dailyvideodigest.com",
+      adNoticeLine3: "광고 수신을 원하지 않으시면 {link}를 눌러 주세요(무료).",
       adUnsubscribe: "수신 거부",
       partnerDisclosure: '이 광고는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.',
       partnerTitle: '쿠팡 오늘의 특가 — 골드박스',
@@ -146,7 +148,7 @@ export const emailTranslations = {
   },
   en: {
     digest: {
-      subject: '[Daily Video Digest] Your YouTube Summary for {date}',
+      subject: 'YouTube Summary for {date}',
       greeting: 'Hello!',
       summary: 'Summarized {count} videos today.',
       openApp: 'Go to Digest',
@@ -181,7 +183,9 @@ export const emailTranslations = {
       adDesc: 'AI summaries for videos without captions, plus breaking alerts. ₩4,900/mo',
       adCta: 'Explore Pro',
       adSubjectPrefix: "(광고) [Ad] ",
-      adNotice: "This email was sent to you because you agreed to receive advertising information. Sender: SoloOps (Daily Video Digest) · support@dailyvideodigest.com · If you no longer wish to receive ads, click {link} (free of charge).",
+      adNoticeLine1: "This email was sent to you because you agreed to receive advertising information.",
+      adNoticeLine2: "Sender: SoloOps (Daily Video Digest) · support@dailyvideodigest.com",
+      adNoticeLine3: "If you no longer wish to receive ads, click {link} (free of charge).",
       adUnsubscribe: "Unsubscribe from ads",
       partnerDisclosure: 'As part of the Coupang Partners program, we receive a commission from purchases made through this ad.',
       partnerTitle: "Coupang Today's Deals — Gold Box",
@@ -277,7 +281,7 @@ export const emailTranslations = {
   },
   zh: {
     digest: {
-      subject: '[Daily Video Digest] {date} 今日 YouTube 摘要',
+      subject: '{date} YouTube 摘要',
       greeting: '你好！',
       summary: '今天已总结 {count} 个视频。',
       openApp: '打开摘要',
@@ -312,7 +316,9 @@ export const emailTranslations = {
       adDesc: '无字幕视频的 AI 摘要与实时快讯一应俱全。每月 ₩4,900',
       adCta: '了解 Pro',
       adSubjectPrefix: "(광고) [广告] ",
-      adNotice: "本邮件发送给已同意接收广告性信息的用户。发送者：SoloOps（Daily Video Digest）· support@dailyvideodigest.com · 如不希望继续接收广告，请点击{link}（免费）。",
+      adNoticeLine1: "本邮件发送给已同意接收广告性信息的用户。",
+      adNoticeLine2: "发送者：SoloOps（Daily Video Digest）· support@dailyvideodigest.com",
+      adNoticeLine3: "如不希望继续接收广告，请点击{link}（免费）。",
       adUnsubscribe: "退订广告",
       partnerDisclosure: '本广告属于 Coupang Partners 推广活动，我们会因此获得一定金额的佣金。',
       partnerTitle: 'Coupang 今日特价 — Gold Box',
@@ -408,7 +414,7 @@ export const emailTranslations = {
   },
   ja: {
     digest: {
-      subject: '[Daily Video Digest] {date} 今日のYouTubeまとめ',
+      subject: '{date}のYouTubeまとめ',
       greeting: 'こんにちは！',
       summary: '今日は{count}本の動画を要約しました。',
       openApp: 'ダイジェストを開く',
@@ -443,7 +449,9 @@ export const emailTranslations = {
       adDesc: '字幕なし動画のAI要約もリアルタイム速報も。月額 ₩4,900',
       adCta: 'Proを詳しく見る',
       adSubjectPrefix: "(광고) [広告] ",
-      adNotice: "このメールは広告性情報の受信に同意された方に送信しています。送信者：SoloOps（Daily Video Digest）・support@dailyvideodigest.com・広告の受信を希望されない場合は{link}を押してください（無料）。",
+      adNoticeLine1: "このメールは広告性情報の受信に同意された方に送信しています。",
+      adNoticeLine2: "送信者：SoloOps（Daily Video Digest）・support@dailyvideodigest.com",
+      adNoticeLine3: "広告の受信を希望されない場合は{link}を押してください（無料）。",
       adUnsubscribe: "受信を拒否",
       partnerDisclosure: 'この広告はクーパンパートナーズ活動の一環であり、当社はこれにより一定額の手数料を受け取ります。',
       partnerTitle: 'クーパン本日の特価 — ゴールドボックス',

@@ -302,18 +302,34 @@ export type EmailAds = {
   unsubscribeUrl: string
 }
 
+// 다이제스트 메일 제목용 날짜 — 연도 없이 월·일만(KST, 회원 언어 형식).
+// 예: ko "11월 25일" / en "November 25" / ja·zh "11月25日". 본문 머리 날짜(연도 포함)와는 따로 쓴다.
+export function formatSubjectDate(date: Date, locale: EmailLocale): string {
+  return date.toLocaleDateString(dateLocaleCode(locale), {
+    timeZone: 'Asia/Seoul',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
 // 다이제스트 메일 제목 — 광고 포함 메일은 맨 앞에 법정 표기 "(광고)"를 붙인다(언어 무관 필수).
+// date는 formatSubjectDate로 만든 월·일 표기를 넘긴다.
 export function digestSubject(locale: EmailLocale, date: string, withAds: boolean): string {
   const base = et(locale, 'digest.subject', { date })
   return withAds ? `${et(locale, 'digest.adSubjectPrefix')}${base}` : base
 }
 
-// 광고 포함 메일 하단(푸터 위) 전송자·수신거부 안내 문단.
+// 광고 포함 메일 하단(광고 블록 아래·푸터 위) 전송자·수신거부 안내 — 세 줄(발송 사유 / 전송자 / 수신 거부).
+// 위 구분선 + 가운데 정렬로 아래 푸터와 정렬을 맞춘다.
 function adNoticeBlock(locale: EmailLocale, unsubscribeUrl: string): string {
   const link = `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#525252;text-decoration:underline;">${escapeHtml(et(locale, 'digest.adUnsubscribe'))}</a>`
-  const text = escapeHtml(et(locale, 'digest.adNotice')).replace('{link}', link)
+  const lines = [
+    escapeHtml(et(locale, 'digest.adNoticeLine1')),
+    escapeHtml(et(locale, 'digest.adNoticeLine2')),
+    escapeHtml(et(locale, 'digest.adNoticeLine3')).replace('{link}', link),
+  ]
   return `
-    <div style="font-size:11px;color:#71717A;line-height:1.7;margin-top:16px;padding:0 4px;">${text}</div>`
+    <div style="border-top:1px solid #E5E5E5;padding-top:14px;margin-top:20px;text-align:center;font-size:11px;color:#71717A;line-height:1.8;">${lines.join('<br>')}</div>`
 }
 
 export function buildDigestHtml(
@@ -351,7 +367,7 @@ export function buildDigestHtml(
   const kstDay = toZoned(nowUtc()).day
   const ad = ads ? (kstDay % 2 === 0 ? adBlock(locale) : partnerBlock(locale, partnerBannerByDay(kstDay))) : ''
   const notice = ads ? adNoticeBlock(locale, ads.unsubscribeUrl) : ''
-  return shell(digestSubject(locale, date, !!ads), locale, header + body + ad + notice, footerBlock(locale, email))
+  return shell(digestSubject(locale, formatSubjectDate(new Date(), locale), !!ads), locale, header + body + ad + notice, footerBlock(locale, email))
 }
 
 export function buildBreakingHtml(

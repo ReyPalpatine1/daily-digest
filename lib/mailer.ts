@@ -16,6 +16,7 @@ import {
   adConsentNoticeSubject,
   buildAdReconfirmHtml,
   digestSubject,
+  formatSubjectDate,
   formatEmailDate,
 } from './email-templates'
 import { getEmailAdsForUser } from './email-ads'
@@ -127,12 +128,8 @@ export async function sendDigestEmail(
   logType: EmailLogType = 'digest'
 ): Promise<void> {
   const lc = normalizeLocale(locale)
-  const date = new Date().toLocaleDateString(dateLocaleByEmailLocale[lc], {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  // 제목용 날짜 — 연도 없이 월·일만(본문 머리 날짜는 buildDigestHtml이 연도 포함으로 따로 만든다).
+  const subjectDate = formatSubjectDate(new Date(), lc)
 
   // 광고 포함 여부 — 판정 실패·시크릿 없음은 광고 없이 보낸다(발송 자체는 막지 않는다).
   const ads = await getEmailAdsForUser(userId)
@@ -141,7 +138,7 @@ export async function sendDigestEmail(
     await sendViaCloudflare({
       from: `"Daily Video Digest" <${process.env.MAIL_FROM}>`,
       to,
-      subject: digestSubject(lc, date, !!ads),
+      subject: digestSubject(lc, subjectDate, !!ads),
       html: buildDigestHtml(items, userName, lc, to, ads ? { unsubscribeUrl: ads.unsubscribeUrl } : null),
       // 광고 메일에만 원클릭 수신거부 헤더(RFC 8058).
       ...(ads ? {
