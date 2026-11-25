@@ -69,8 +69,8 @@ export const translations = {
       days: '일',
       proRetention: 'Pro: 30일',
       maxRetention: '최대 보관',
-      freeLimit: 'Free 한도 {n}개',
-      proLimit: 'Pro 한도 {n}개',
+      // 구독 채널 카드 — 무료 + 광고 동의일 때 숫자 옆 보조 문구(명사구, 마침표 없음)
+      adConsentBonus: '광고 동의 +1',
       accumulated: '누적',
     },
     proBanner: {
@@ -863,8 +863,8 @@ export const translations = {
       paymentFailedLabel: '결제 실패',
       receipt: '영수증',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
-      receiptModalTitle: '영수증 보기',
-      receiptModalBody: '영수증을 열면 토스페이먼츠 본인 확인 화면이 나옵니다. 아래 값을 입력해 주세요.',
+      receiptModalTitle: '영수증',
+      receiptModalBody: '본인 확인 화면에 아래 값을 입력해 주세요.',
       receiptApproveNo: '승인번호',
       receiptAmount: '금액',
       receiptPaidDate: '결제일자',
@@ -1000,8 +1000,8 @@ export const translations = {
       days: 'days',
       proRetention: 'Pro: 30 days',
       maxRetention: 'Max retention',
-      freeLimit: 'Free limit: {n}',
-      proLimit: 'Pro limit: {n}',
+      // 구독 채널 카드 — 무료 + 광고 동의일 때 숫자 옆 보조 문구(명사구, 마침표 없음)
+      adConsentBonus: 'Ad consent +1',
       accumulated: 'total',
     },
     proBanner: {
@@ -1778,8 +1778,8 @@ export const translations = {
       paymentFailedLabel: 'Payment failed',
       receipt: 'Receipt',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
-      receiptModalTitle: 'View receipt',
-      receiptModalBody: 'When you open the receipt, Toss Payments will ask you to confirm it is yours. Enter the values below.',
+      receiptModalTitle: 'Receipt',
+      receiptModalBody: 'Enter the values below on the verification screen.',
       receiptApproveNo: 'Approval number',
       receiptAmount: 'Amount',
       receiptPaidDate: 'Payment date',
@@ -1914,8 +1914,8 @@ export const translations = {
       days: '天',
       proRetention: 'Pro：30 天',
       maxRetention: '最长保留期',
-      freeLimit: '免费上限：{n}',
-      proLimit: 'Pro 上限：{n}',
+      // 구독 채널 카드 — 무료 + 광고 동의일 때 숫자 옆 보조 문구(명사구, 마침표 없음)
+      adConsentBonus: '广告同意 +1',
       accumulated: '累计',
     },
     proBanner: {
@@ -2689,8 +2689,8 @@ export const translations = {
       paymentFailedLabel: '付款失败',
       receipt: '收据',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
-      receiptModalTitle: '查看收据',
-      receiptModalBody: '打开收据时会显示 Toss Payments 身份验证页面，请输入以下信息。',
+      receiptModalTitle: '收据',
+      receiptModalBody: '请在身份验证页面输入以下信息。',
       receiptApproveNo: '批准号',
       receiptAmount: '金额',
       receiptPaidDate: '付款日期',
@@ -2825,8 +2825,8 @@ export const translations = {
       days: '日',
       proRetention: 'Pro：30日',
       maxRetention: '最大保存期間',
-      freeLimit: '無料上限：{n}',
-      proLimit: 'Pro上限：{n}',
+      // 구독 채널 카드 — 무료 + 광고 동의일 때 숫자 옆 보조 문구(명사구, 마침표 없음)
+      adConsentBonus: '広告同意 +1',
       accumulated: '累計',
     },
     proBanner: {
@@ -3600,8 +3600,8 @@ export const translations = {
       paymentFailedLabel: '決済失敗',
       receipt: '領収書',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
-      receiptModalTitle: '領収書を見る',
-      receiptModalBody: '領収書を開くと、Toss Paymentsの本人確認画面が表示されます。以下の値を入力してください。',
+      receiptModalTitle: '領収書',
+      receiptModalBody: '本人確認画面に以下の値を入力してください。',
       receiptApproveNo: '承認番号',
       receiptAmount: '金額',
       receiptPaidDate: '決済日',

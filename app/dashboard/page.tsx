@@ -17,7 +17,7 @@ import OnboardingModal from '@/components/OnboardingModal'
 import { AppHeader } from '@/components/AppHeader'
 import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
-import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X, Search, Sparkles, Tv, AlertTriangle } from 'lucide-react'
+import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X, Search, Sparkles, Tv } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
@@ -1703,9 +1703,36 @@ export default function Dashboard() {
                 {(() => {
                   // 활성 채널이 플랜 한도(Free 5~6 / Pro 20)에 도달하면 빨간색 강조
                   const limitReached = activeChannelCount >= channelLimit
+                  // 사용량 막대 — Pro가 20개를 넘게 갖고 있어도 꽉 찬 상태로만 보인다.
+                  const usage = channelLimit > 0 ? Math.min(activeChannelCount / channelLimit, 1) : 0
+                  // 광고 동의 보너스(+1)는 무료에만 붙는다(lib/channel-limit.ts).
+                  const showAdBonus = !isPro && profile?.ad_consent === true
                   return (
                 <div style={cardStyle}>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.subscribed')}</div>
+                  {/* 제목 줄 — 다른 카드와 높이를 맞추려고 배지는 위아래 음수 여백으로 줄 높이를 늘리지 않는다. */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+                    fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6,
+                  }}>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t('stats.subscribed')}
+                    </span>
+                    {/* 플랜 배지 — 언어 무관 PRO/FREE. VIP도 PRO(isPro). 흑백 반전으로만 구분한다. */}
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', flexShrink: 0,
+                      height: 18, padding: '0 7px', borderRadius: 5, margin: '-3px 0',
+                      boxSizing: 'border-box',
+                      fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em', lineHeight: 1,
+                      ...(isPro
+                        ? { background: 'var(--text-primary)', color: 'var(--bg-card)' }
+                        : {
+                            background: 'var(--bg-card)', color: 'var(--text-tertiary)',
+                            border: '0.5px solid var(--border)',
+                          }),
+                    }}>
+                      {isPro ? 'PRO' : 'FREE'}
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
                     <span style={{
                       fontSize: 22, fontWeight: 600, letterSpacing: -0.5,
@@ -1713,22 +1740,35 @@ export default function Dashboard() {
                     }}>
                       {activeChannelCount}
                     </span>
-                    <span style={{ fontSize: 12, color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)' }}>/ {channelLimit}</span>
+                    <span style={{ fontSize: 12, color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>/ {channelLimit}</span>
+                    {showAdBonus && (
+                      <span style={{
+                        marginLeft: 'auto', paddingLeft: 6, minWidth: 0,
+                        fontSize: 11.5, color: 'var(--text-tertiary)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {t('stats.adConsentBonus')}
+                      </span>
+                    )}
                   </div>
-                  <div style={{
-                    fontSize: 10, marginTop: 4,
-                    fontWeight: limitReached ? 500 : 400,
-                    color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)',
-                    display: 'flex', alignItems: 'center', gap: 3,
-                  }}>
-                    {/* 잠긴 채널은 Free에만 있다(강등 정리). Pro는 20개 초과분도 그대로 활성이다. */}
-                    {!isPro && inactiveChannelCount > 0
-                      ? t('stats.lockedCount', { n: inactiveChannelCount })
-                      : limitReached
-                        ? <><AlertTriangle size={10} style={{ flexShrink: 0 }} />{t('stats.limit')}</>
-                        : isPro
-                          ? <><Sparkles size={10} style={{ flexShrink: 0 }} />{t('stats.proLimit', { n: channelLimit })}</>
-                          : t('stats.freeLimit', { n: channelLimit })}
+                  {/* 아래 한 줄 — 다른 카드 보조 문구(10px 한 줄)와 같은 높이·위치.
+                      폭 0 공백 문자로 글자 한 줄 높이를 확보하고 그 가운데에 막대를 둔다. */}
+                  <div style={{ fontSize: 10, marginTop: 4, display: 'flex', alignItems: 'center' }}>
+                    {'\u200b'}
+                    <div
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={channelLimit}
+                      aria-valuenow={Math.min(activeChannelCount, channelLimit)}
+                      style={{
+                        flex: 1, height: 4, borderRadius: 999,
+                        background: 'var(--bg-subtle)', overflow: 'hidden',
+                      }}>
+                      <div style={{
+                        width: `${usage * 100}%`, height: '100%', borderRadius: 999,
+                        background: isPro ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                      }} />
+                    </div>
                   </div>
                 </div>
                   )
