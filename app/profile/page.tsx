@@ -14,7 +14,8 @@ import HelpPopup from '@/components/HelpPopup'
 import RefundModal from '@/components/RefundModal'
 import ConfirmModal, { ModalText } from '@/components/ConfirmModal'
 import NoticeList from '@/components/NoticeList'
-import { AlertTriangle, CreditCard, ExternalLink } from 'lucide-react'
+import { AlertTriangle, Copy, CreditCard, ExternalLink } from 'lucide-react'
+import { usePending } from '@/lib/use-pending'
 import { requestCardRegistration } from '@/lib/toss-billing'
 
 export default function ProfilePage() {
@@ -43,8 +44,19 @@ export default function ProfilePage() {
   const [cardLabel, setCardLabel] = useState<string | null>(null)
   // 결제 내역(최근 20건). 서버가 done·failed만 내려준다 — 미완료(pending)·청구 없는 취소분은 제외.
   const [payments, setPayments] = useState<
-    { createdAt: string; amount: number; kind: string; status: string; receiptUrl: string | null; refundedAt: string | null }[]
+    { id: string; createdAt: string; amount: number; kind: string; status: string; receiptUrl: string | null; refundedAt: string | null }[]
   >([])
+  // 영수증 확인창. 토스 매출전표는 본인 인증(승인번호+금액+결제일)을 요구하므로
+  // 열기 전에 그 값을 보여준다. 승인번호는 서버가 토스에서 조회만 한다(저장하지 않음).
+  const [receiptInfo, setReceiptInfo] = useState<{
+    approveNo: string | null
+    amount: number
+    paidDate: string
+    receiptUrl: string
+  } | null>(null)
+  // 어느 행의 영수증을 불러오는 중인지 — 누르는 즉시 그 버튼을 비활성으로 둔다(표시는 usePending의 200ms 지연).
+  const [receiptLoadingId, setReceiptLoadingId] = useState<string | null>(null)
+  const { pending: receiptPending, run: runReceipt } = usePending()
   // 자동 갱신 해지 확인 모달 / 중복 클릭 방지
   const [showCancelRenew, setShowCancelRenew] = useState(false)
   const [renewBusy, setRenewBusy] = useState(false)
@@ -186,6 +198,43 @@ export default function ProfilePage() {
   const cardLineAuto = profile?.plan_status === 'active'
   const cardLineDate = isPro && !isVip && !!profile?.plan_expires_at &&
     (profile.plan_status === 'active' || profile.plan_status === 'onetime')
+
+  // 영수증 버튼 — 결제 정보(승인번호·금액·결제일)를 불러와 확인창을 연다.
+  // 실패하면 확인창 없이 토스트만 띄운다.
+  async function openReceipt(paymentId: string) {
+    setReceiptLoadingId(paymentId)
+    await runReceipt(async () => {
+      try {
+        const res = await fetch(`/api/billing/payments/${encodeURIComponent(paymentId)}/receipt-info`)
+        const data = res.ok ? await res.json().catch(() => null) : null
+        if (
+          !data || typeof data.receiptUrl !== 'string' || typeof data.paidDate !== 'string' ||
+          typeof data.amount !== 'number'
+        ) {
+          showToast('profile.receiptInfoFailed')
+          return
+        }
+        setReceiptInfo({
+          approveNo: typeof data.approveNo === 'string' && data.approveNo ? data.approveNo : null,
+          amount: data.amount,
+          paidDate: data.paidDate,
+          receiptUrl: data.receiptUrl,
+        })
+      } catch {
+        showToast('profile.receiptInfoFailed')
+      }
+    })
+    setReceiptLoadingId(null)
+  }
+
+  async function copyText(value: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      showToast('profile.receiptCopied')
+    } catch {
+      showToast('adminUsers.actionFailed')
+    }
+  }
 
   // 토스트 1회 노출. 새 토스트가 뜨면 이전 타이머를 버린다 — 안 그러면 연속 호출 시
   // 이전 타이머가 살아 있어 두 번째 토스트가 제 시간을 못 채우고 일찍 사라진다.
@@ -612,19 +661,23 @@ export default function ProfilePage() {
                       {t('profile.paymentFailedLabel')}
                     </span>
                   )}
-                  {/* receipt_url은 null일 수 있다 — 없으면 링크 자체를 그리지 않는다. */}
+                  {/* receipt_url은 null일 수 있다 — 없으면 버튼 자체를 그리지 않는다.
+                      바로 링크로 열지 않고 확인창을 먼저 띄운다 — 토스 본인 인증에 넣을 값을 보여주기 위해서다. */}
                   {p.receiptUrl && (
-                    <a
-                      href={p.receiptUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => openReceipt(p.id)}
+                      disabled={receiptLoadingId !== null}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 3,
-                        fontSize: 11.5, color: 'var(--text-tertiary)', textDecoration: 'none',
+                        background: 'transparent', border: 'none', padding: 0,
+                        fontSize: 11.5, color: 'var(--text-tertiary)', fontFamily: 'inherit',
+                        cursor: receiptLoadingId !== null ? 'default' : 'pointer',
+                        opacity: receiptLoadingId !== null && receiptLoadingId !== p.id ? 0.55 : 1,
                       }}>
                       <ExternalLink size={12} />
-                      {t('profile.receipt')}
-                    </a>
+                      {receiptPending && receiptLoadingId === p.id ? t('common.loading') : t('profile.receipt')}
+                    </button>
                   )}
                 </div>
               </div>
@@ -659,6 +712,66 @@ export default function ProfilePage() {
           onConfirm={confirmRefund}
           onClose={() => { if (!refundBusy) setRefundModal(null) }}
         />
+      )}
+
+      {/* === 영수증 확인창 === */}
+      {/* 영수증을 연 뒤에도 값을 다시 볼 수 있게 창은 열어 둔다(토스 인증 화면에 옮겨 적어야 한다). */}
+      {receiptInfo && (
+        <ConfirmModal
+          title={t('profile.receiptModalTitle')}
+          cancelLabel={t('common.close')}
+          confirmLabel={t('profile.receiptOpen')}
+          onConfirm={() => window.open(receiptInfo.receiptUrl, '_blank', 'noopener,noreferrer')}
+          onCancel={() => setReceiptInfo(null)}>
+          <ModalText>{t('profile.receiptModalBody')}</ModalText>
+          {receiptInfo.approveNo === null && (
+            <ModalText>{t('profile.receiptNoApproveNo')}</ModalText>
+          )}
+          {/* 정보 묶음 — 환불 확인창의 금액 박스와 같은 모양. 값은 토스 입력칸에 그대로 붙여넣게
+              가공하지 않는다(금액은 쉼표 없는 숫자, 결제일은 YYYY.MM.DD). */}
+          <div style={{
+            background: 'var(--bg-subtle)', border: '0.5px solid var(--border)', borderRadius: 8,
+            padding: '4px 14px', marginTop: 12,
+          }}>
+            {[
+              ...(receiptInfo.approveNo !== null
+                ? [{ label: t('profile.receiptApproveNo'), value: receiptInfo.approveNo }] : []),
+              { label: t('profile.receiptAmount'), value: String(receiptInfo.amount) },
+              { label: t('profile.receiptPaidDate'), value: receiptInfo.paidDate },
+            ].map((row, i, rows) => (
+              <div
+                key={row.label}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+                  borderBottom: i === rows.length - 1 ? 'none' : '0.5px solid var(--border-light)',
+                }}>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                  {row.label}
+                </span>
+                <span style={{
+                  flex: 1, minWidth: 0, textAlign: 'right',
+                  fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
+                  fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere',
+                }}>
+                  {row.value}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyText(row.value)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+                    padding: '4px 8px', borderRadius: 7,
+                    border: '0.5px solid var(--border)', background: 'var(--bg-card)',
+                    color: 'var(--text-secondary)', fontSize: 11.5, fontFamily: 'inherit',
+                    cursor: 'pointer',
+                  }}>
+                  <Copy size={11} />
+                  {t('profile.receiptCopy')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </ConfirmModal>
       )}
 
       {/* === 카드 삭제 확인 모달 === */}
@@ -743,7 +856,8 @@ export default function ProfilePage() {
       {toastKey && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 110, background: 'var(--text-primary)', color: 'var(--bg-card)',
+          // 확인창(zIndex 200) 위 — 영수증 창 안에서 띄우는 복사 토스트가 가려지지 않게.
+          zIndex: 210, background: 'var(--text-primary)', color: 'var(--bg-card)',
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
           boxShadow: 'var(--shadow-lg)',
           // 읽기 전용이라 클릭을 받을 이유가 없다 — 노출 중 아래쪽 버튼을 막지 않게 통과시킨다.

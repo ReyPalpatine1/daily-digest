@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { normalizeChannelUrl } from '@/lib/channel-url'
 import { resolveChannel, channelTitleById, canonicalChannelUrl } from '@/lib/youtube'
-import { freeChannelLimit } from '@/lib/channel-limit'
+import { channelLimitFor } from '@/lib/channel-limit'
 import { consentRequiredResponse } from '@/lib/consent'
 
 // 서버 측 Pro 판정 — DB(profiles)의 plan/plan_expires_at만 따른다(관리자 예외 없음, lib/supabase.ts checkIsPro와 같은 원칙)
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     .eq('user_id', user.id)
   const existingChannels = existing ?? []
 
-  // === Free 사용자 채널 수 제한 (활성 채널 기준) ===
+  // === 플랜별 채널 수 제한 (활성 채널 기준) ===
   // 주소 해석(YouTube API 호출)보다 먼저 끊는다 — 어차피 추가할 수 없는 요청에 할당량을 쓰지 않는다.
   const { data: profile } = await supabase
     .from('profiles')
@@ -80,12 +80,19 @@ export async function POST(request: Request) {
 
   const isPro = isProPlan(profile?.plan, profile?.plan_expires_at)
   const activeCount = existingChannels.filter(ch => ch.is_active !== false).length
-  // 무료 한도 = 5 + 광고성 정보 수신 동의 시 1 (lib/channel-limit.ts)
-  const limit = freeChannelLimit(profile?.ad_consent)
+  // 한도: 무료 = 5 + 광고성 정보 수신 동의 시 1, Pro·VIP = 20 (lib/channel-limit.ts)
+  // Pro가 이미 20개를 넘게 갖고 있어도 기존 채널은 그대로 두고 새 추가만 막는다.
+  const limit = channelLimitFor(isPro, profile?.ad_consent)
 
-  if (!isPro && activeCount >= limit) {
+  if (activeCount >= limit) {
     return NextResponse.json(
-      { error: `무료 플랜은 최대 ${limit}개까지 추가 가능합니다.`, code: 'CHANNEL_LIMIT', limit },
+      {
+        error: isPro
+          ? `Pro는 채널을 최대 ${limit}개까지 추가할 수 있습니다.`
+          : `무료 플랜은 최대 ${limit}개까지 추가 가능합니다.`,
+        code: 'CHANNEL_LIMIT',
+        limit,
+      },
       { status: 403 }
     )
   }

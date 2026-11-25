@@ -4,7 +4,7 @@ import { getAuthedUser } from '@/lib/route-auth'
 
 // 결제 내역 조회 — 본인 것만.
 // ★ payment_key / fail_code / fail_message / order_id 는 어느 응답에도 담지 않는다.
-//   화면에 필요한 건 날짜·금액·구분·성패·영수증 링크뿐이다.
+//   화면에 필요한 건 행 id·날짜·금액·구분·성패·영수증 링크뿐이다.
 //
 // status를 'done'·'failed'로만 한정하는 이유:
 //   · pending  — 사용자가 결제창을 닫으면 그대로 쌓이는 미완료 주문이다. 결제된 적이 없다.
@@ -26,7 +26,7 @@ export async function GET() {
 
   const { data, error } = await serviceClient
     .from('payments')
-    .select('created_at, amount, kind, status, receipt_url, refunded_at')
+    .select('id, created_at, amount, kind, status, receipt_url, refunded_at')
     .eq('user_id', user.id)
     .in('status', ['done', 'failed'])
     .order('created_at', { ascending: false })
@@ -38,6 +38,8 @@ export async function GET() {
   }
 
   const payments = (data ?? []).map((row) => ({
+    // 행 id — 영수증 확인창(receipt-info)이 어느 결제인지 가리키는 데만 쓴다(본인 소유 재확인은 그쪽에서).
+    id: row.id as string,
     createdAt: row.created_at as string,
     amount: row.amount as number,
     kind: row.kind as string,

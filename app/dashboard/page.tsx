@@ -17,12 +17,12 @@ import OnboardingModal from '@/components/OnboardingModal'
 import { AppHeader } from '@/components/AppHeader'
 import AdCard from '@/components/AdCard'
 import { CHANNELS, orderedChannels, type ChannelId } from '@/lib/channels'
-import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X, Search } from 'lucide-react'
+import { Mail, Send, MessageCircle, MessageSquare, Lock, Check, Copy, Share2, X, Search, Sparkles, Tv, AlertTriangle } from 'lucide-react'
 import ShareSheet from '@/components/ShareSheet'
 import { splitBoldSegments, splitKeyPointPrefix } from '@/lib/summary-format'
 import { SUMMARY_BASIS_TRANSCRIPT_FAILED } from '@/lib/summary-basis'
 import { usePending } from '@/lib/use-pending'
-import { freeChannelLimit } from '@/lib/channel-limit'
+import { channelLimitFor } from '@/lib/channel-limit'
 import { TOAST_MS } from '@/lib/toast'
 import { SkeletonList } from '@/components/Skeleton'
 import ScrollTopButton from '@/components/ScrollTopButton'
@@ -332,8 +332,9 @@ export default function Dashboard() {
   // --- Phase 3: 채널 탭 검색 상태 ---
   const [channelSearch, setChannelSearch] = useState('')
   const [showChannelSearch, setShowChannelSearch] = useState(false)
-  // Free 한도 = 5 + 광고성 정보 수신 동의 시 1 (lib/channel-limit.ts). Pro는 한도 없음 → 렌더에서 '무제한' 처리
-  const channelLimit = freeChannelLimit(profile?.ad_consent)
+  // 채널 한도: Free = 5 + 광고성 정보 수신 동의 시 1, Pro·VIP = 20 (lib/channel-limit.ts)
+  // Pro가 이미 20개를 넘게 갖고 있어도 기존 채널은 그대로 두고 새 추가만 막는다.
+  const channelLimit = channelLimitFor(isPro, profile?.ad_consent)
   const retentionDays = isPro ? 30 : 7
   // 보관 기간 판정은 서버 쿼리(historyCutoffIso)로 옮겼다 — 화면에서 다시 자르지 않는다.
   // 이중으로 걸면 서버가 준 페이지가 화면에서 또 사라져 "더 보기"가 헛돌았다.
@@ -911,8 +912,8 @@ export default function Dashboard() {
     }
     // 채널 이름은 선택 — 비워 두면 서버가 유튜브 채널명을 넣는다.
     // 중복 판정은 서버에 맡긴다 — 입력 주소(영상·핸들 등)를 채널 ID로 해석한 뒤에야 정확히 비교할 수 있다.
-    // Free 사용자 채널 수 제한 (활성 채널 기준, 프론트 1차 체크)
-    if (!isPro && activeChannelCount >= channelLimit) {
+    // 플랜별 채널 수 제한 (활성 채널 기준, 프론트 1차 체크)
+    if (activeChannelCount >= channelLimit) {
       promptChannelLimit()
       return
     }
@@ -1635,7 +1636,7 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={() => {
-                      if (!isPro && activeChannelCount >= channelLimit) {
+                      if (activeChannelCount >= channelLimit) {
                         promptChannelLimit()
                         return
                       }
@@ -1643,11 +1644,9 @@ export default function Dashboard() {
                     }}
                     style={primaryBtn}>
                     {t('dashboard.addChannel')}
-                    {!isPro && (
-                      <span style={{ opacity: 0.7, marginLeft: 6, fontWeight: 400 }}>
-                        ({activeChannelCount}/{channelLimit})
-                      </span>
-                    )}
+                    <span style={{ opacity: 0.7, marginLeft: 6, fontWeight: 400 }}>
+                      ({activeChannelCount}/{channelLimit})
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1666,8 +1665,8 @@ export default function Dashboard() {
                     width: 36, height: 36, borderRadius: 8,
                     background: 'var(--accent)', color: 'var(--bg-card)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 18, flexShrink: 0,
-                  }}>✨</div>
+                    flexShrink: 0,
+                  }}><Sparkles size={18} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
                       {t('proBanner.title')}
@@ -1702,8 +1701,8 @@ export default function Dashboard() {
                 marginBottom: 20,
               }}>
                 {(() => {
-                  // Free + 활성 채널이 한도(5)에 도달하면 빨간색 강조
-                  const limitReached = !isPro && activeChannelCount >= channelLimit
+                  // 활성 채널이 플랜 한도(Free 5~6 / Pro 20)에 도달하면 빨간색 강조
+                  const limitReached = activeChannelCount >= channelLimit
                   return (
                 <div style={cardStyle}>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>{t('stats.subscribed')}</div>
@@ -1712,23 +1711,23 @@ export default function Dashboard() {
                       fontSize: 22, fontWeight: 600, letterSpacing: -0.5,
                       color: limitReached ? 'var(--danger)' : 'var(--text-primary)',
                     }}>
-                      {isPro ? channels.length : activeChannelCount}
+                      {activeChannelCount}
                     </span>
-                    {!isPro && (
-                      <span style={{ fontSize: 12, color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)' }}>/ {channelLimit}</span>
-                    )}
+                    <span style={{ fontSize: 12, color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)' }}>/ {channelLimit}</span>
                   </div>
                   <div style={{
                     fontSize: 10, marginTop: 4,
                     fontWeight: limitReached ? 500 : 400,
                     color: limitReached ? 'var(--danger)' : 'var(--text-tertiary)',
+                    display: 'flex', alignItems: 'center', gap: 3,
                   }}>
-                    {isPro
-                      ? t('stats.proUnlimited')
-                      : inactiveChannelCount > 0
-                        ? t('stats.lockedCount', { n: inactiveChannelCount })
-                        : activeChannelCount >= channelLimit
-                          ? t('stats.limit')
+                    {/* 잠긴 채널은 Free에만 있다(강등 정리). Pro는 20개 초과분도 그대로 활성이다. */}
+                    {!isPro && inactiveChannelCount > 0
+                      ? t('stats.lockedCount', { n: inactiveChannelCount })
+                      : limitReached
+                        ? <><AlertTriangle size={10} style={{ flexShrink: 0 }} />{t('stats.limit')}</>
+                        : isPro
+                          ? <><Sparkles size={10} style={{ flexShrink: 0 }} />{t('stats.proLimit', { n: channelLimit })}</>
                           : t('stats.freeLimit', { n: channelLimit })}
                   </div>
                 </div>
@@ -2031,8 +2030,8 @@ export default function Dashboard() {
                     width: 56, height: 56, borderRadius: '50%',
                     background: 'var(--bg-subtle)',
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 24, marginBottom: 16,
-                  }}>📺</div>
+                    marginBottom: 16,
+                  }}><Tv size={24} color="var(--text-secondary)" /></div>
                   <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
                     {t('channels.empty')}
                   </div>
@@ -3314,7 +3313,15 @@ export default function Dashboard() {
       )}
 
       {/* === 확인창 (브라우저 confirm() 대체) === */}
-      {showChannelLimit && (
+      {showChannelLimit && (isPro ? (
+        // Pro 한도(20) — 이미 Pro라 업그레이드 버튼 없이 닫기만 둔다.
+        <ConfirmModal
+          title={t('alerts.proChannelLimitTitle')}
+          cancelLabel={t('common.close')}
+          onCancel={() => setShowChannelLimit(false)}>
+          <ModalText>{t('alerts.proChannelLimitLine', { n: channelLimit })}</ModalText>
+        </ConfirmModal>
+      ) : (
         <ConfirmModal
           title={t('alerts.channelLimitTitle')}
           confirmLabel={t('nav.proUpgrade')}
@@ -3322,7 +3329,7 @@ export default function Dashboard() {
           onCancel={() => setShowChannelLimit(false)}>
           <ModalText>{t('alerts.channelLimitLine', { n: channelLimit })}</ModalText>
         </ConfirmModal>
-      )}
+      ))}
       {channelToDelete && (
         <ConfirmModal
           title={t('alerts.confirmDeleteChannel', { name: channelToDelete.name })}
