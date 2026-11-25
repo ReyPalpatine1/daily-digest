@@ -864,7 +864,7 @@ export const translations = {
       receipt: '영수증',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
       receiptModalTitle: '영수증',
-      receiptModalBody: '본인 확인 화면에 아래 값을 입력해 주세요.',
+      receiptModalBody: '영수증 열기를 누른 뒤 아래 값을 입력해 주세요.',
       receiptApproveNo: '승인번호',
       receiptAmount: '금액',
       receiptPaidDate: '결제일자',
@@ -1779,7 +1779,7 @@ export const translations = {
       receipt: 'Receipt',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
       receiptModalTitle: 'Receipt',
-      receiptModalBody: 'Enter the values below on the verification screen.',
+      receiptModalBody: 'Click Open receipt, then enter the values below.',
       receiptApproveNo: 'Approval number',
       receiptAmount: 'Amount',
       receiptPaidDate: 'Payment date',
@@ -2690,7 +2690,7 @@ export const translations = {
       receipt: '收据',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
       receiptModalTitle: '收据',
-      receiptModalBody: '请在身份验证页面输入以下信息。',
+      receiptModalBody: '点击“打开收据”后，请输入以下信息。',
       receiptApproveNo: '批准号',
       receiptAmount: '金额',
       receiptPaidDate: '付款日期',
@@ -3601,7 +3601,7 @@ export const translations = {
       receipt: '領収書',
       // 영수증 확인창 — 토스 매출전표 본인 인증(승인번호+금액+결제일)에 넣을 값을 보여준다.
       receiptModalTitle: '領収書',
-      receiptModalBody: '本人確認画面に以下の値を入力してください。',
+      receiptModalBody: '「領収書を開く」を押した後、以下の値を入力してください。',
       receiptApproveNo: '承認番号',
       receiptAmount: '金額',
       receiptPaidDate: '決済日',
